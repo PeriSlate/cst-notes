@@ -1,37 +1,89 @@
-CST Notes Proprietary License
+CST Notes, CST App, and PeriSlate Proprietary License
 
-Copyright (c) 2026 PeriSlate. All rights reserved except as expressly granted below.
+Copyright (c) 2026 PeriSlate. All rights reserved except as expressly granted
+below.
 
-1. Grant of license
+1. Limited license to use CST Notes
 
-PeriSlate grants each end user a personal, non-exclusive, non-transferable, revocable license to download, install, and use the unmodified CST Notes plugin obtained from an authorized GitHub Release or the Obsidian Community directory, solely for use with Obsidian.
+PeriSlate grants each end user a personal, non-exclusive, non-transferable,
+revocable license to download, install, and use the unmodified CST Notes plugin
+obtained from an authorized GitHub Release or the Obsidian Community directory,
+solely for use with Obsidian.
 
-PeriSlate grants Obsidian and the Obsidian Community directory a non-exclusive, worldwide, royalty-free license to host, scan, and distribute the unmodified release assets needed to make CST Notes available through the Obsidian Community directory. PeriSlate also grants the Obsidian Community directory permission to access the private source repository through its approved GitHub App, inspect the source, reproduce the build, and compare the build output with public release assets solely for security and directory-review purposes.
+PeriSlate grants Obsidian and the Obsidian Community directory a
+non-exclusive, worldwide, royalty-free license to host, scan, and distribute
+the unmodified release assets needed to make CST Notes available through the
+Obsidian Community directory. PeriSlate also grants the Obsidian Community
+directory permission to access the private source repository through its
+approved GitHub App, inspect the source, reproduce the build, and compare the
+build output with public release assets solely for security and directory-review
+purposes.
 
 2. Restrictions
 
-Except where applicable law prohibits a restriction, you may not copy, modify, adapt, translate, reverse engineer, decompile, disassemble, sublicense, sell, rent, lease, redistribute, or create derivative works from CST Notes or its source code. You may not remove or alter copyright, trademark, or license notices.
+Except where applicable law prohibits a restriction or PeriSlate gives prior
+written permission, you may not copy, reproduce, modify, adapt, translate,
+reverse engineer, decompile, disassemble, sublicense, sell, rent, lease,
+redistribute, publish, display, transmit, create derivative works from, scrape,
+data mine, or otherwise exploit CST Notes, CST App, PeriSlate, or the Materials.
+You may not use the Materials to train, fine-tune, evaluate, or improve an
+artificial-intelligence or machine-learning system. You may not remove or alter
+any copyright, trademark, or license notice.
 
 3. Ownership and reserved rights
 
-CST Notes, its source code, documentation, names, marks, and all related intellectual-property rights remain the exclusive property of PeriSlate. No rights are granted by implication, estoppel, or otherwise.
+CST Notes, CST App, PeriSlate, their names, marks, logos, source code,
+documentation, designs, workflows, databases, text, graphics, audio-visual
+content, confidential information, trade secrets, and all other materials made
+available with this repository (collectively, the "Materials") are proprietary
+to PeriSlate and/or its licensors. All right, title, and interest in the
+Materials and all related intellectual-property rights remain exclusively with
+PeriSlate and/or its licensors. Nothing in this license transfers ownership of
+any intellectual-property right, and no rights are granted by implication,
+estoppel, or otherwise.
 
-4. No support, warranty, or medical use warranty
+4. Names and branding
 
-CST Notes is provided "AS IS" and "AS AVAILABLE," without warranties of any kind, including merchantability, fitness for a particular purpose, non-infringement, accuracy, availability, or uninterrupted operation. CST Notes is an organizational note-taking tool and is not medical advice, a medical device, or a substitute for professional judgment, institutional policy, or clinical documentation systems.
+"CST Notes," "CST App," and "PeriSlate," including associated names, logos,
+and branding, are proprietary identifiers of PeriSlate. They may not be used
+in a way that suggests affiliation, endorsement, sponsorship, or approval
+without PeriSlate's prior written permission.
 
-5. Limitation of liability
+5. Confidential information
 
-To the maximum extent permitted by applicable law, PeriSlate is not liable for indirect, incidental, special, consequential, exemplary, or punitive damages, or for loss of data, profits, goodwill, or business interruption arising from or related to CST Notes.
+Non-public information marked confidential, or that a reasonable person would
+understand to be confidential, must be protected from unauthorized disclosure
+and use. This includes non-public product plans, methods, workflows, data,
+credentials, and technical information.
 
-6. Termination
+6. No support, warranty, or medical-use warranty
 
-This license terminates automatically if you breach its terms. Upon termination, you must stop using and delete all copies of CST Notes in your possession or control, except where retention is required by law.
+CST Notes is provided "AS IS" and "AS AVAILABLE," without warranties of any
+kind, including merchantability, fitness for a particular purpose,
+non-infringement, accuracy, availability, or uninterrupted operation. CST Notes
+is an organizational note-taking tool and is not medical advice, a medical
+device, or a substitute for professional judgment, institutional policy, or
+clinical documentation systems.
 
-7. Governing law
+7. Limitation of liability
 
-This license is governed by the laws applicable in the jurisdiction where PeriSlate is established, without regard to conflict-of-law rules.
+To the maximum extent permitted by applicable law, PeriSlate is not liable for
+indirect, incidental, special, consequential, exemplary, or punitive damages,
+or for loss of data, profits, goodwill, or business interruption arising from
+or related to the Materials or their use.
 
-8. Contact
+8. Termination
 
-For licensing requests, contact PeriSlate through the official repository profile.
+This license terminates automatically if you breach its terms. Upon termination,
+you must stop using and delete all copies of the Materials in your possession or
+control, except where retention is required by law.
+
+9. Governing law
+
+This license is governed by the laws applicable in the jurisdiction where
+PeriSlate is established, without regard to conflict-of-law rules.
+
+10. Contact
+
+For licensing requests, contact PeriSlate through the official repository
+profile.
