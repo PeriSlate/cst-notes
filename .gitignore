@@ -1,0 +1,22 @@
+# Local editor and operating-system files
+.obsidian/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Dependency/build output
+node_modules/
+dist/
+*.map
+
+# Secrets and local configuration
+.env
+.env.*
+*.pem
+*.key
+
+# Release archives and diagnostics
+*.zip
+*.log
+coverage/
