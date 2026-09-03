@@ -14,7 +14,7 @@ const {
   parseYaml
 } = require("obsidian");
 
-const PLUGIN_VERSION = "0.1.4";
+const PLUGIN_VERSION = "0.1.5";
 const SCHEMA_VERSION = 3;
 const GLOVE_SIZES = ["Unknown", "5.5", "6", "6.5", "7", "7.5", "8", "8.5", "9", "9.5"];
 const GLOVE_TYPES = {

@@ -11,7 +11,7 @@
 - [ ] Scan release assets for personal data, credentials, absolute paths, diagnostics, and development-only files.
 - [ ] Confirm no telemetry, undeclared network use, or outside-vault access has been added.
 - [ ] Update `CHANGELOG.md` and `README.md` when user-visible behavior changes.
-- [ ] Create a GitHub release tagged exactly `0.1.4` and attach `main.js`, `manifest.json`, and `styles.css`.
+- [ ] Create a GitHub release tagged exactly `0.1.5` and attach `main.js`, `manifest.json`, and `styles.css`.
 
 ## Before submitting to the Obsidian Community directory
 

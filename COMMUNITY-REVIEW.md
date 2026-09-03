@@ -17,13 +17,13 @@ PeriSlate authorizes the Obsidian Community directory to access the private sour
 
 ## Release asset verification
 
-The private source repository includes a deterministic build script and release verification checks. The source output, the private build output, and the public `main.js` are byte-for-byte identical for v0.1.4.
+The private source repository includes a deterministic build script and release verification checks. The source output, the private build output, and the public `main.js` are byte-for-byte identical for v0.1.5.
 
 ## Maintainer action before submission
 
 1. Push the public distribution repository to GitHub.
 2. Push the private source repository to a separate private GitHub repository.
-3. Create the v0.1.4 public GitHub Release and attach `main.js`, `manifest.json`, and `styles.css`.
+3. Create the v0.1.5 public GitHub Release and attach `main.js`, `manifest.json`, and `styles.css`.
 4. Submit the public repository to the Obsidian Community directory.
 5. Install the official Community Directory GitHub App on the private source repository when prompted.
 6. Run the Community Directory review preview and address any review feedback.

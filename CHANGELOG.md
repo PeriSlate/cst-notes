@@ -1,5 +1,10 @@
 # CST Notes changelog
 
+## 0.1.5
+
+### Initialization
+- Fixed setup failing in new, empty vaults with “Graph rebuild paused: the surgeon registry is missing.” New installations no longer require an existing surgeon or case, and successful initialization prevents setup from reopening whenever CST Notes navigation opens.
+
 ## 0.1.4
 
 ### Public-release preparation
