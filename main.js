@@ -1359,6 +1359,7 @@ class CSTNotesPlugin extends Plugin {
     await this.createAdminNotes();
     await this.ensureSystemManifest();
     await this.ensureLauncherNote();
+    await this.readSurgeonRegistry();
     if (existingVaultConfirmed) await this.reconcileSurgeonRegistryFolders();
 
     await this.migrateV011();
