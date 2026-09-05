@@ -1,5 +1,21 @@
 # CST Notes changelog
 
+## 0.1.6
+
+### App and profiles
+- Opens the CST app automatically after vault launch, with the existing setting available to opt out.
+- Enter now accepts the case title and dismisses the mobile keyboard without creating the case.
+- Adds optional surgeon music preferences, shown in live case headers only when populated.
+- Replaces assisted glove controls with quick lowercase examples and adds configurable O/B/W labels in Admin while preserving stored glove codes.
+
+### Templates and onboarding
+- Adds PA after Position in the General template, consolidates singular Dressing content safely into Dressings, and waits five seconds after editing before recording a template version.
+- Backs up changed templates before the one-time update; existing cases are not modified.
+- Opens Template Admin after initialization with a guided, dismissible template-review step.
+
+### Mobile
+- Moves the iPhone migration close button below the safe area so it remains tappable.
+
 ## 0.1.5
 
 ### Initialization

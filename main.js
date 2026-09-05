@@ -14,15 +14,10 @@ const {
   parseYaml
 } = require("obsidian");
 
-const PLUGIN_VERSION = "0.1.5";
+const PLUGIN_VERSION = "0.1.6";
 const SCHEMA_VERSION = 3;
 const GLOVE_SIZES = ["Unknown", "5.5", "6", "6.5", "7", "7.5", "8", "8.5", "9", "9.5"];
-const GLOVE_TYPES = {
-  "": "None",
-  O: "Ortho",
-  W: "White",
-  B: "Blue"
-};
+const DEFAULT_GLOVE_LABELS = Object.freeze({ O: "Ortho", B: "Blue", W: "White" });
 const GOWNS = ["XL", "XL-Long", "2X", "2X-Long", "Unknown"];
 const CASE_HEADER_LANG = "cst-surgeon-header";
 const CASE_HEADER_BLOCK = "```cst-surgeon-header\n```";
@@ -44,7 +39,11 @@ const DEFAULT_SETTINGS = {
   verificationDebounceMs: 45000,
   schemaVersion: SCHEMA_VERSION,
   pluginVersion: "",
-  autoOpenSidebar: false,
+  autoOpenSidebar: true,
+  autoOpenDefaultVersion: "",
+  gloveLabels: DEFAULT_GLOVE_LABELS,
+  templateDefaultsVersion: "",
+  templateReviewCompleted: false,
   launcherPath: "CST App.md",
   completedMigrations: [],
   migrationFailures: {}
@@ -289,6 +288,15 @@ function makeInput(parent, opts = {}) {
   return input;
 }
 
+function blurOnEnter(input) {
+  input.addEventListener("keydown", event => {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    input.blur();
+  });
+  return input;
+}
+
 function makeSelect(parent, ariaLabel = "") {
   const select = associatePreviousLabel(parent, parent.createEl("select"));
   if (ariaLabel && !select.labels?.length) select.setAttribute("aria-label", ariaLabel);
@@ -384,6 +392,33 @@ function normalizeGloves(input) {
   return normalized.join(" / ");
 }
 
+function normalizeGloveLabels(value) {
+  const source = value && typeof value === "object" ? value : {};
+  return Object.fromEntries(Object.entries(DEFAULT_GLOVE_LABELS).map(([code, fallback]) => [
+    code,
+    String(source[code] || "").trim() || fallback
+  ]));
+}
+
+function formatGloves(value) {
+  return String(value || "Unknown").replace(/x(\d+)/gi, " x$1");
+}
+
+function gloveLegend(value, labels) {
+  const normalized = normalizeGloveLabels(labels);
+  const codes = [...String(value || "").toUpperCase().matchAll(/(?:5\.5|6(?:\.5)?|7(?:\.5)?|8(?:\.5)?|9(?:\.5)?)([OBW])/g)].map(match => match[1]);
+  const used = new Set(codes);
+  return ["O", "B", "W"].filter(code => used.has(code)).map(code => `${code} = ${normalized[code]}`).join(" \u00b7 ");
+}
+
+function addGloveHelp(parent, labels) {
+  const normalized = normalizeGloveLabels(labels);
+  const help = parent.createDiv({ cls: "cst-field-help cst-glove-help" });
+  help.createDiv({ text: `o = ${normalized.O} \u00b7 b = ${normalized.B} \u00b7 w = ${normalized.W}` });
+  help.createDiv({ text: 'Examples: "8b8w" \u2192 8B / 8W \u00b7 "8wx2" \u2192 8W x2' });
+  return help;
+}
+
 function contextFromPath(path, root) {
   path = normalizePath(path);
   root = normalizePath(root);
@@ -411,6 +446,7 @@ function sectionBody(templateName, extras = {}) {
   };
   push("Case", `${templateName} case-specific overview`);
   push("Position");
+  if (templateName === "General") push("PA");
   push("Tips");
   push("Drape");
   push("Mayo");
@@ -418,7 +454,6 @@ function sectionBody(templateName, extras = {}) {
   push("Back Table");
   push("Trays", "", extras);
   push("Sutures");
-  push("Dressing");
   push("Mayo Flow");
   push("Dressings");
   push("Notes");
@@ -464,9 +499,73 @@ function defaultTemplates() {
   };
 }
 
+function upgradeTemplateBodyV016(templatePath, text) {
+  const source = String(text || "");
+  const newline = source.includes("\r\n") ? "\r\n" : "\n";
+  const normalized = source.replace(/\r\n/g, "\n");
+  const hadFinalNewline = normalized.endsWith("\n");
+  const lines = normalized.split("\n");
+  if (hadFinalNewline) lines.pop();
+
+  const sections = [{ label: "", heading: "", lines: [] }];
+  let current = sections[0];
+  for (const line of lines) {
+    const match = /^##\s+(.+?)\s*$/.exec(line);
+    if (match) {
+      current = { label: match[1].trim(), heading: line, lines: [] };
+      sections.push(current);
+    } else {
+      current.lines.push(line);
+    }
+  }
+
+  const labelKey = section => String(section.label || "").toLowerCase();
+  const trimBlankLines = values => {
+    const copy = [...values];
+    while (copy.length && !copy[0].trim()) copy.shift();
+    while (copy.length && !copy[copy.length - 1].trim()) copy.pop();
+    return copy;
+  };
+  const singular = sections.filter(section => labelKey(section) === "dressing");
+  const plural = sections.find(section => labelKey(section) === "dressings");
+  let updated = sections;
+  if (singular.length && plural) {
+    const moved = singular.map(section => trimBlankLines(section.lines)).filter(body => body.length);
+    const existing = trimBlankLines(plural.lines);
+    plural.lines = [
+      "",
+      ...moved.flatMap((body, index) => [...(index ? [""] : []), ...body]),
+      ...(moved.length && existing.length ? [""] : []),
+      ...existing,
+      ""
+    ];
+    updated = sections.filter(section => !singular.includes(section));
+  } else if (singular.length) {
+    const first = singular[0];
+    first.label = "Dressings";
+    first.heading = "## Dressings";
+    for (const extra of singular.slice(1)) {
+      const body = trimBlankLines(extra.lines);
+      if (body.length) first.lines.push("", ...body);
+    }
+    updated = sections.filter(section => !singular.slice(1).includes(section));
+  }
+
+  const isGeneral = /(^|\/)General\.md$/i.test(normalizePath(String(templatePath || "")));
+  if (isGeneral && !updated.some(section => labelKey(section) === "pa")) {
+    const tipsIndex = updated.findIndex(section => labelKey(section) === "tips");
+    const insertAt = tipsIndex >= 0 ? tipsIndex : Math.min(1, updated.length);
+    updated.splice(insertAt, 0, { label: "PA", heading: "## PA", lines: [""] });
+  }
+
+  const output = updated.flatMap(section => section.heading ? [section.heading, ...section.lines] : section.lines).join("\n");
+  return (output + (hadFinalNewline ? "\n" : "")).replace(/\n/g, newline);
+}
 class CSTNotesPlugin extends Plugin {
   async onload() {
-    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+    const loadedSettings = await this.loadData();
+    this.settings = Object.assign({}, DEFAULT_SETTINGS, loadedSettings);
+    this.settings.gloveLabels = normalizeGloveLabels(loadedSettings?.gloveLabels);
     this.unloading = false;
     this.verifyTimers = new Map();
     this.templateVersionTimers = new Map();
@@ -611,7 +710,9 @@ class CSTNotesPlugin extends Plugin {
   }
 
   async onExternalSettingsChange() {
-    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+    const loadedSettings = await this.loadData();
+    this.settings = Object.assign({}, DEFAULT_SETTINGS, loadedSettings);
+    this.settings.gloveLabels = normalizeGloveLabels(loadedSettings?.gloveLabels);
     const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE_CST_SIDEBAR);
     for (const leaf of leaves) {
       if (leaf.view instanceof CSTSidebarView) leaf.view.queueRender();
@@ -1370,6 +1471,9 @@ class CSTNotesPlugin extends Plugin {
     this.settings.initialized = true;
     this.settings.schemaVersion = SCHEMA_VERSION;
     this.settings.pluginVersion = PLUGIN_VERSION;
+    this.settings.autoOpenSidebar = true;
+    this.settings.autoOpenDefaultVersion = "0.1.6";
+    this.settings.templateDefaultsVersion = "0.1.6";
     await this.saveSettings();
     await this.appendLog("Initialize", `CST Notes ${PLUGIN_VERSION} initialized.`);
   }
@@ -1380,6 +1484,27 @@ class CSTNotesPlugin extends Plugin {
       const path = this.p(`_Templates/Cases/${rel}`);
       await this.ensureTextFile(path, body);
     }
+  }
+
+  async upgradeTemplateDefaultsV016() {
+    if (this.settings.templateDefaultsVersion === "0.1.6") return 0;
+    const prefix = this.p("_Templates/Cases") + "/";
+    const files = this.app.vault.getMarkdownFiles()
+      .filter(file => file.path.startsWith(prefix) && this.isTemplatePath(file.path))
+      .sort((a, b) => a.path.localeCompare(b.path));
+    const plans = [];
+    for (const file of files) {
+      const original = await this.app.vault.read(file);
+      const next = upgradeTemplateBodyV016(file.path, original);
+      if (next !== original) plans.push({ file, path: file.path, original, next });
+    }
+    if (plans.length) {
+      await this.snapshotFiles("v0.1.6-template-update", plans.map(plan => plan.file));
+      await this.applyExpectedTextPlans(plans, "v0.1.6 template update");
+      for (const plan of plans) await this.ensureTemplateVersion(plan.file, false, plan.path);
+    }
+    this.settings.templateDefaultsVersion = "0.1.6";
+    return plans.length;
   }
 
   async createAdminNotes() {
@@ -1653,7 +1778,7 @@ Machine-managed installation information.
       if (!(current instanceof TFile)) return;
       try { await this.ensureTemplateVersion(current, true, path); }
       catch (e) { console.error("CST template versioning", e); }
-    }, 2500);
+    }, 5000);
     this.templateVersionTimers.set(path, timer);
   }
 
@@ -1726,6 +1851,7 @@ Machine-managed installation information.
       Array.isArray(data.aliases) ? data.aliases : [],
       data.gloves || "Unknown",
       data.gown || "Unknown",
+      data.music || "",
       Number(data.schema_version) || 0,
       data.created || "",
       data.last_verified || ""
@@ -1742,6 +1868,7 @@ Machine-managed installation information.
       aliases: Array.isArray(data.aliases) ? [...data.aliases] : [],
       gloves: data.gloves || "Unknown",
       gown: data.gown || "Unknown",
+      music: String(data.music || data.music_preferences || "").trim(),
       schema_version: Number(data.schema_version) || SCHEMA_VERSION,
       created: data.created || "",
       last_verified: data.last_verified || ""
@@ -1884,6 +2011,7 @@ Machine-managed installation information.
         aliases: Array.isArray(data.aliases) ? data.aliases : (Array.isArray(previous.aliases) ? previous.aliases : []),
         gloves: data.gloves || previous.gloves || "Unknown",
         gown: GOWNS.includes(data.gown) ? data.gown : (GOWNS.includes(previous.gown) ? previous.gown : this.settings.defaultGown),
+        music: String(data.music ?? data.music_preferences ?? previous.music ?? "").trim(),
         schema_version: SCHEMA_VERSION,
         created: data.created || previous.created || nowISO(),
         last_verified: data.last_verified || previous.last_verified || nowISO()
@@ -1969,6 +2097,7 @@ Machine-managed installation information.
         aliases: fm.aliases,
         gloves: fm.gloves,
         gown: fm.gown,
+        music: fm.music || fm.music_preferences,
         created: fm.created,
         last_verified: fm.last_verified
       };
@@ -1982,10 +2111,11 @@ Machine-managed installation information.
             parseFrontmatterObject(await this.app.vault.read(graph))
           )
         : null;
-      if (fm && (fm.gloves || fm.gown || fm.surgeon_id)) data = {
+      if (fm && (fm.gloves || fm.gown || fm.music || fm.music_preferences || fm.surgeon_id)) data = {
         cst_id: fm.surgeon_id,
         gloves: fm.gloves,
         gown: fm.gown,
+        music: fm.music || fm.music_preferences,
         created: fm.created,
         last_verified: fm.last_verified
       };
@@ -2003,6 +2133,7 @@ Machine-managed installation information.
       aliases: Array.isArray(data?.aliases) ? data.aliases : [],
       gloves,
       gown,
+      music: String(initial.music ?? data?.music ?? data?.music_preferences ?? "").trim(),
       schema_version: SCHEMA_VERSION,
       created: data?.created || nowISO(),
       last_verified: data?.last_verified || nowISO()
@@ -2015,6 +2146,7 @@ Machine-managed installation information.
       aliases: Array.isArray(state.data.aliases) ? state.data.aliases : [],
       gloves: state.data.gloves,
       gown: state.data.gown,
+      music: String(state.data.music || state.data.music_preferences || "").trim(),
       schema_version: state.data.schema_version,
       created: state.data.created,
       last_verified: state.data.last_verified
@@ -2037,6 +2169,7 @@ Machine-managed installation information.
       specialty: d.specialty || specialty,
       gloves: d.gloves || "Unknown",
       gown: d.gown || "Unknown",
+      music: String(d.music || d.music_preferences || "").trim(),
       last_verified: d.last_verified || "",
       aliases: Array.isArray(d.aliases) ? d.aliases : [],
       created: d.created || "",
@@ -2056,6 +2189,7 @@ Machine-managed installation information.
         specialty,
         gloves: "Unknown",
         gown: "Unknown",
+        music: "",
         last_verified: "",
         aliases: [],
         created: "",
@@ -2086,7 +2220,9 @@ Machine-managed installation information.
   async updateSurgeonProfileExpected(specialty, surgeon, updates, expectedFingerprint) {
     const dirtyGloves = !!updates?.dirtyGloves;
     const dirtyGown = !!updates?.dirtyGown;
+    const dirtyMusic = !!updates?.dirtyMusic;
     const canonicalGloves = dirtyGloves ? normalizeGloves(updates.gloves) : "";
+    const music = dirtyMusic ? String(updates.music || "").trim() : "";
     if (dirtyGown && !GOWNS.includes(updates.gown)) throw new Error("Invalid gown.");
     const key = this.surgeonKey(specialty, surgeon);
     const result = await this.mutateSurgeonRegistry(registry => {
@@ -2098,6 +2234,7 @@ Machine-managed installation information.
       const next = JSON.parse(JSON.stringify(current));
       if (dirtyGloves) next.gloves = canonicalGloves;
       if (dirtyGown) next.gown = updates.gown;
+      if (dirtyMusic) next.music = music;
       next.last_verified = nowISO();
       next.schema_version = SCHEMA_VERSION;
       registry.surgeons[key] = next;
@@ -2130,6 +2267,7 @@ surgeon: ${yamlString(surgeon)}
 surgeon_id: ${yamlString(surgeonId)}
 gloves: ${yamlString(sd.gloves || "Unknown")}
 gown: ${yamlString(sd.gown || this.settings.defaultGown)}
+music_preferences: ${yamlString(sd.music || "")}
 last_verified: ${yamlString(sd.last_verified || "")}
 graph_parent: ${yamlString(`[[${this.specialtyGraphPath(specialty).replace(/\.md$/,"")}|${specialty}]]`)}
 schema_version: ${SCHEMA_VERSION}
@@ -2858,9 +2996,22 @@ ${t.body.trim()}
       new Notice("CST Notes upgrade is ready. After Sync finishes, run it explicitly from Admin → Migrations.");
       return false;
     }
+    let settingsChanged = false;
+    if (this.settings.autoOpenDefaultVersion !== "0.1.6") {
+      this.settings.autoOpenSidebar = true;
+      this.settings.autoOpenDefaultVersion = "0.1.6";
+      settingsChanged = true;
+    }
+    if (this.settings.templateDefaultsVersion !== "0.1.6") {
+      await this.upgradeTemplateDefaultsV016();
+      settingsChanged = true;
+    }
     if (this.settings.pluginVersion !== PLUGIN_VERSION || Number(this.settings.schemaVersion) !== SCHEMA_VERSION) {
       this.settings.pluginVersion = PLUGIN_VERSION;
       this.settings.schemaVersion = SCHEMA_VERSION;
+      settingsChanged = true;
+    }
+    if (settingsChanged) {
       await this.saveSettings();
     }
     return true;
@@ -3818,7 +3969,7 @@ ${t.body.trim()}
       for (const surgeon of this.getSurgeons(specialty)) {
         surgeonCount++;
         const data = await this.getSurgeonData(specialty, surgeon, { createIfMissing: false });
-        const gloves = data?.gloves || "Unknown";
+        const gloves = formatGloves(data?.gloves || "Unknown");
         const gown = data?.gown || "Unknown";
         if (gloves === "Unknown") missingGloves++;
         else {
@@ -4654,13 +4805,27 @@ ${text.replace(/\`\`\`/g, "~~~")}
   }
 
   refreshSurgeonHeaderDisplays(specialty, surgeon, data = null) {
-    const gloves = data?.gloves || "Unknown";
+    const gloves = formatGloves(data?.gloves || "Unknown");
     const gown = data?.gown || "Unknown";
+    const legend = gloveLegend(data?.gloves, this.settings.gloveLabels);
+    const music = String(data?.music || "").trim();
     for (const doc of this.workspaceDocuments()) {
       doc.querySelectorAll(".cst-live-header").forEach(el => {
         if (el.dataset.cstSpecialty === specialty && el.dataset.cstSurgeon === surgeon) {
           const row = el.querySelector(".cst-live-header-row");
           if (row) row.textContent = `${surgeon} · ${gloves} · ${gown}`;
+          const syncLine = (selector, text, className) => {
+            let line = el.querySelector(selector);
+            if (!text) { line?.remove(); return; }
+            if (!line) {
+              line = doc.createElement("div");
+              line.className = className;
+              el.insertBefore(line, el.querySelector(".cst-actions"));
+            }
+            line.textContent = text;
+          };
+          syncLine(".cst-live-header-glove-key", legend, "cst-live-header-meta cst-live-header-glove-key");
+          syncLine(".cst-live-header-music", music ? `Music: ${music}` : "", "cst-live-header-meta cst-live-header-music");
         }
       });
     }
@@ -4671,12 +4836,16 @@ ${text.replace(/\`\`\`/g, "~~~")}
     const available = !!data?.cst_id && !data?.unavailable;
     el.dataset.cstSpecialty = available ? ctx.specialty : "";
     el.dataset.cstSurgeon = available ? ctx.surgeon : "";
-    const gloves = data?.gloves || "Unknown";
+    const gloves = formatGloves(data?.gloves || "Unknown");
     const gown = data?.gown || "Unknown";
+    const legend = available ? gloveLegend(data?.gloves, this.settings.gloveLabels) : "";
+    const music = available ? String(data?.music || "").trim() : "";
     const row = el.createDiv({
       cls: `cst-live-header-row${available ? "" : " cst-warning"}`,
       text: available ? `${ctx.surgeon} · ${gloves} · ${gown}` : `${ctx.surgeon} · profile unavailable (Sync pending)`
     });
+    if (legend) el.createDiv({ cls: "cst-live-header-meta cst-live-header-glove-key", text: legend });
+    if (music) el.createDiv({ cls: "cst-live-header-meta cst-live-header-music", text: `Music: ${music}` });
     if (!available) {
       el.createEl("p", {
         text: "The surgeon registry record is not available on this device. Profile actions are paused; the case note has not been changed.",
@@ -4739,19 +4908,24 @@ ${text.replace(/\`\`\`/g, "~~~")}
     }
 
     el.addClass("cst-profile-card");
-    const title = el.createDiv({ cls: "cst-profile-title", text: `${surgeon} · ${data.gloves} · ${data.gown}` });
+    const title = el.createDiv({ cls: "cst-profile-title", text: `${surgeon} · ${formatGloves(data.gloves)} · ${data.gown}` });
     const grid = el.createDiv({ cls: "cst-modal-grid" });
     grid.createEl("label", { text: "Gloves" });
     const glove = makeInput(grid, { value: data.gloves });
+    addGloveHelp(grid, this.settings.gloveLabels);
     grid.createEl("label", { text: "Gown" });
     const gown = makeSelect(grid, "Gown");
     for (const g of GOWNS) addOption(gown, g);
     gown.value = data.gown;
+    grid.createEl("label", { text: "Music preferences" });
+    const music = makeInput(grid, { value: data.music || "", placeholder: "Optional" });
     let expectedFingerprint = this.surgeonRecordFingerprint(data);
     let dirtyGloves = false;
     let dirtyGown = false;
+    let dirtyMusic = false;
     glove.oninput = () => { dirtyGloves = true; };
     gown.onchange = () => { dirtyGown = true; };
+    music.oninput = () => { dirtyMusic = true; };
 
     const actions = el.createDiv({ cls: "cst-actions" });
     const save = actions.createEl("button", { text: "Save profile" });
@@ -4760,22 +4934,26 @@ ${text.replace(/\`\`\`/g, "~~~")}
       save.disabled = true;
       try {
         if (this.settings.initialized && !(await this.quickStructureCheck())) throw new Error("Profile editing is paused until Sync finishes.");
-        if (!dirtyGloves && !dirtyGown) {
+        if (!dirtyGloves && !dirtyGown && !dirtyMusic) {
           new Notice("No profile changes to save.");
           return;
         }
         const updated = await this.updateSurgeonProfileExpected(specialty, surgeon, {
           gloves: glove.value,
           gown: gown.value,
+          music: music.value,
           dirtyGloves,
-          dirtyGown
+          dirtyGown,
+          dirtyMusic
         }, expectedFingerprint);
         expectedFingerprint = this.surgeonRecordFingerprint(updated);
         dirtyGloves = false;
         dirtyGown = false;
-        title.setText(`${surgeon} · ${updated.gloves} · ${updated.gown}`);
+        dirtyMusic = false;
+        title.setText(`${surgeon} · ${formatGloves(updated.gloves)} · ${updated.gown}`);
         glove.value = updated.gloves;
         gown.value = updated.gown;
+        music.value = updated.music || "";
         new Notice(`${surgeon} profile saved.`);
       } catch (e) { new Notice(e.message || String(e)); }
       finally { if (save.isConnected) save.disabled = false; }
@@ -4919,7 +5097,7 @@ ${text.replace(/\`\`\`/g, "~~~")}
       const graph=this.surgeonGraphPath(row.specialty,row.surgeon);
       const a=li.createEl("a",{text:`${row.specialty} — ${row.surgeon}`,href:"#"});
       a.onclick=e=>{e.preventDefault();this.navigateFromUI(`Open ${surgeon} graph`,()=>this.openPath(graph));};
-      li.createSpan({text:` · ${data?.gloves||"Unknown"} · ${data?.gown||"Unknown"}`,cls:"cst-muted"});
+      li.createSpan({text:` · ${formatGloves(data?.gloves||"Unknown")} · ${data?.gown||"Unknown"}`,cls:"cst-muted"});
     }
     const dups=this.duplicateSurgeonCandidates();
     if(dups.length){
@@ -4944,6 +5122,18 @@ ${text.replace(/\`\`\`/g, "~~~")}
   }
 
   async renderTemplateAdmin(el) {
+    if(!this.settings.templateReviewCompleted){
+      const guide=el.createDiv({cls:"cst-onboarding-card"});
+      guide.createEl("h3",{text:"Getting started: review templates"});
+      guide.createEl("p",{text:"Templates control the starting sections for new cases. Open any template below, review or edit it, then return here and mark this step complete. Existing cases are not changed."});
+      const complete=guide.createEl("button",{text:"Mark template review complete",cls:"mod-cta"});
+      complete.onclick=async()=>{
+        this.settings.templateReviewCompleted=true;
+        await this.saveSettings();
+        guide.remove();
+        new Notice("Template review completed.");
+      };
+    }
     const prefix=this.p("_Templates/Cases")+"/";
     const files=this.app.vault.getMarkdownFiles().filter(f=>f.path.startsWith(prefix) && this.isTemplatePath(f.path)).sort((a,b)=>a.path.localeCompare(b.path));
     const table=el.createEl("table",{cls:"cst-table"});
@@ -5116,6 +5306,7 @@ ${text.replace(/\`\`\`/g, "~~~")}
   }
 
   async renderConfig(el) {
+    const labels = normalizeGloveLabels(this.settings.gloveLabels);
     const table=el.createEl("table",{cls:"cst-table"});
     const values=[
       ["Content root",this.contentRoot],
@@ -5123,12 +5314,49 @@ ${text.replace(/\`\`\`/g, "~~~")}
       ["Default gown",this.settings.defaultGown],
       ["Verification debounce",`${Math.round(this.settings.verificationDebounceMs/1000)} sec`],
       ["Glove sizes",GLOVE_SIZES.join(", ")],
-      ["Glove types","O = Ortho, W = White, B = Blue"]
+      ["Glove types",["O","B","W"].map(code=>`${code} = ${labels[code]}`).join(", ")]
     ];
     for(const [k,v] of values){const tr=table.createEl("tr");tr.createEl("th",{text:k});tr.createEl("td",{text:String(v)});}
+
+    el.createEl("h3",{text:"Glove labels"});
+    el.createEl("p",{text:"Change what O, B, and W mean. Stored glove codes stay compatible; guidance and live headers update automatically.",cls:"cst-muted"});
+    const grid=el.createDiv({cls:"cst-modal-grid"});
+    const inputs={};
+    for(const code of ["O","B","W"]){
+      grid.createEl("label",{text:code});
+      inputs[code]=makeInput(grid,{value:labels[code],ariaLabel:`${code} glove label`});
+    }
+    const save=el.createEl("button",{text:"Save glove labels",cls:"mod-cta"});
+    save.onclick=async()=>{
+      if(save.disabled)return;
+      save.disabled=true;
+      try{
+        const next=normalizeGloveLabels(Object.fromEntries(["O","B","W"].map(code=>[code,inputs[code].value])));
+        this.settings.gloveLabels=next;
+        await this.saveSettings();
+        for(const doc of this.workspaceDocuments()){
+          doc.querySelectorAll(".cst-glove-help").forEach(help=>{
+            const lines=help.querySelectorAll("div");
+            if(lines[0])lines[0].textContent=`o = ${next.O} \u00b7 b = ${next.B} \u00b7 w = ${next.W}`;
+          });
+          const visible=new Map();
+          doc.querySelectorAll(".cst-live-header").forEach(header=>{
+            const specialty=header.dataset.cstSpecialty;
+            const surgeon=header.dataset.cstSurgeon;
+            if(specialty&&surgeon)visible.set(`${specialty}\u0000${surgeon}`,{specialty,surgeon});
+          });
+          for(const item of visible.values()){
+            const data=await this.getSurgeonData(item.specialty,item.surgeon,{createIfMissing:false});
+            if(data&&!data.unavailable)this.refreshSurgeonHeaderDisplays(item.specialty,item.surgeon,data);
+          }
+        }
+        new Notice("Glove labels updated.");
+      }catch(error){new Notice(error.message||String(error));}
+      finally{if(save.isConnected)save.disabled=false;}
+    };
   }
 
-  async createSurgeon({ specialty, surgeon, gloves = "Unknown", gown = "" }) {
+  async createSurgeon({ specialty, surgeon, gloves = "Unknown", gown = "", music = "" }) {
     return await this.serializedAdminMutation(async () => {
       if (this.settings.initialized && !(await this.quickStructureCheck())) {
         throw new Error("Surgeon creation is paused until this device has a complete CST vault.");
@@ -5154,6 +5382,7 @@ ${text.replace(/\`\`\`/g, "~~~")}
         aliases: [],
         gloves,
         gown,
+        music: String(music || "").trim(),
         schema_version: SCHEMA_VERSION,
         created: nowISO(),
         last_verified: nowISO()
@@ -5598,6 +5827,7 @@ ${text.replace(/\`\`\`/g, "~~~")}
     const mergedCandidate = JSON.parse(JSON.stringify(targetRecord));
     if ((!mergedCandidate.gloves || mergedCandidate.gloves === "Unknown") && sourcePortable.gloves) mergedCandidate.gloves = sourcePortable.gloves;
     if ((!mergedCandidate.gown || mergedCandidate.gown === "Unknown") && sourcePortable.gown) mergedCandidate.gown = sourcePortable.gown;
+    if (!String(mergedCandidate.music || "").trim() && sourcePortable.music) mergedCandidate.music = sourcePortable.music;
     mergedCandidate.aliases = [...new Set([...(Array.isArray(mergedCandidate.aliases) ? mergedCandidate.aliases : []), ...sourcePortable.aliases, sourceSurgeon])];
     mergedCandidate.last_verified = nowISO();
     mergedCandidate.schema_version = SCHEMA_VERSION;
@@ -5715,7 +5945,7 @@ ${text.replace(/\`\`\`/g, "~~~")}
       "back table": "Back Table", "backtable": "Back Table", "back table setup": "Back Table",
       "trays": "Trays", "tray": "Trays", "sets": "Trays", "set": "Trays", "instrument trays": "Trays", "instrument sets": "Trays", "instruments": "Trays",
       "sutures": "Sutures", "suture": "Sutures", "closure": "Sutures", "closures": "Sutures", "closing": "Sutures",
-      "dressing": "Dressing", "bandage": "Dressing",
+      "dressing": "Dressings", "bandage": "Dressings",
       "mayo flow": "Mayo Flow", "mayo sequence": "Mayo Flow", "mayo order": "Mayo Flow", "procedure order": "Mayo Flow", "procedure flow": "Mayo Flow",
       "dressings": "Dressings",
       "notes": "Notes", "note": "Notes", "misc": "Notes", "miscellaneous": "Notes", "other": "Notes", "other notes": "Notes"
@@ -5862,7 +6092,7 @@ ${text.replace(/\`\`\`/g, "~~~")}
     if (/tray|set|instrument|equipment|implant|retractor|kerrison|karlin|special.*setup|setup/.test(key)) return prefer("Trays");
     if (/sutur|clos(?:ing|ure)/.test(key)) return prefer("Sutures");
     if (/dressings/.test(key)) return prefer("Dressings");
-    if (/dressing|bandage/.test(key)) return prefer("Dressing");
+    if (/dressing|bandage/.test(key)) return prefer("Dressings");
     return prefer("Notes");
   }
 
@@ -7533,7 +7763,7 @@ class CSTSidebarView extends ItemView {
       row.createSpan({ text: surgeon, cls: "cst-app-row-title" });
       row.createSpan({
         text: available
-          ? `${d.gloves || "Unknown"} · ${d.gown || "Unknown"} · ${count} case${count === 1 ? "" : "s"}`
+          ? `${formatGloves(d.gloves || "Unknown")} · ${d.gown || "Unknown"} · ${count} case${count === 1 ? "" : "s"}`
           : `Profile unavailable · Sync pending · ${count} case${count === 1 ? "" : "s"}`,
         cls: available ? "cst-muted" : "cst-warning"
       });
@@ -7577,7 +7807,7 @@ class CSTSidebarView extends ItemView {
     const card = el.createDiv({ cls: "cst-profile-card" });
     card.createEl("div", { text: surgeon, cls: "cst-app-title" });
     card.createEl("div", {
-      text: available ? `${d.gloves || "Unknown"} · ${d.gown || "Unknown"}` : "Profile unavailable · Sync pending",
+      text: available ? `${formatGloves(d.gloves || "Unknown")} · ${d.gown || "Unknown"}` : "Profile unavailable · Sync pending",
       cls: available ? "cst-profile-title" : "cst-warning"
     });
     if (!available) {
@@ -7634,7 +7864,7 @@ class CSTSidebarView extends ItemView {
         row.createSpan({ text: surgeon, cls: "cst-app-row-title" });
         row.createSpan({
           text: available
-            ? `${specialty} · ${d.gloves || "Unknown"} · ${d.gown || "Unknown"}`
+            ? `${specialty} · ${formatGloves(d.gloves || "Unknown")} · ${d.gown || "Unknown"}`
             : `${specialty} · profile unavailable · Sync pending`,
           cls: available ? "cst-muted" : "cst-warning"
         });
@@ -7745,10 +7975,10 @@ class SetupModal extends Modal {
       new Notice("CST Notes initialized.");
       this.close();
       try{
-        await this.plugin.openAdmin();
+        await this.plugin.openPath(this.plugin.p("Admin/Backend/Templates.md"));
       }catch(e){
         console.error(e);
-        new Notice(`CST Notes initialized, but Admin could not open: ${e.message||e}`);
+        new Notice(`CST Notes initialized, but Template Admin could not open: ${e.message||e}`);
       }
     };
   }
@@ -7782,27 +8012,15 @@ class NewSurgeonModal extends Modal {
     const name=makeInput(grid,{placeholder:"Surgeon name"});
     grid.createEl("label",{text:"Gloves"});
     const gloves=makeInput(grid,{placeholder:"7.5 white / 8 ortho x3"});
+    addGloveHelp(grid,this.plugin.settings.gloveLabels);
     grid.createEl("label",{text:"Gown"});
     const gown=makeSelect(grid,"Gown");for(const g of GOWNS)addOption(gown,g);gown.value=this.plugin.settings.defaultGown;
 
-    el.createEl("h4",{text:"Assisted glove entry"});
-    const assist=el.createDiv({cls:"cst-modal-grid"});
-    assist.createEl("label",{text:"Size"});
-    const size=makeSelect(assist,"Glove size");for(const s of GLOVE_SIZES)addOption(size,s);size.value="7.5";
-    assist.createEl("label",{text:"Type"});
-    const type=makeSelect(assist,"Glove type");for(const [v,t] of Object.entries(GLOVE_TYPES))addOption(type,v,t);
-    assist.createEl("label",{text:"Quantity"});
-    const qty=makeInput(assist,{type:"number",value:"1"});qty.min="1";qty.max="99";
-    const add=el.createEl("button",{text:"Add glove"});
-    add.onclick=()=>{
-      if(size.value==="Unknown"){gloves.value=gloves.value?`${gloves.value} / Unknown`:"Unknown";return;}
-      const q=Math.max(1,Number(qty.value)||1);
-      const token=`${size.value}${type.value}${q>1?`x${q}`:""}`;
-      gloves.value=gloves.value?`${gloves.value} / ${token}`:token;
-    };
+    grid.createEl("label",{text:"Music preferences"});
+    const music=makeInput(grid,{placeholder:"Optional"});
 
     const preview=el.createDiv({cls:"cst-preview"});
-    const update=()=>{try{preview.setText(`Stored: ${normalizeGloves(gloves.value||"Unknown")} · ${gown.value}`);}catch(e){preview.setText(e.message);}};
+    const update=()=>{try{preview.setText(`Stored: ${formatGloves(normalizeGloves(gloves.value||"Unknown"))} · ${gown.value}`);}catch(e){preview.setText(e.message);}};
     gloves.oninput=update;gown.onchange=update;update();
 
     const actions=el.createDiv({cls:"cst-actions"});
@@ -7816,7 +8034,7 @@ class NewSurgeonModal extends Modal {
         const collision=this.plugin.getSurgeons(this.specialty).find(s=>s.normalize("NFC").toLocaleLowerCase()===n.normalize("NFC").toLocaleLowerCase());
         if(collision)throw new Error(`${collision} already exists in ${this.specialty}.`);
         const canon=normalizeGloves(gloves.value||"Unknown");
-        await this.plugin.createSurgeon({specialty:this.specialty,surgeon:n,gloves:canon,gown:gown.value});
+        await this.plugin.createSurgeon({specialty:this.specialty,surgeon:n,gloves:canon,gown:gown.value,music:music.value});
         new Notice(`${n} added to ${this.specialty}.`);
         this.close();if(this.onCreated)await this.onCreated(n,this.specialty);
       }catch(e){new Notice(e.message||String(e));}
@@ -7853,7 +8071,7 @@ class NewCaseModal extends Modal {
     surgeon.value=this.surgeon;surgeon.onchange=()=>{this.surgeon=surgeon.value;queuePreview();};
 
     grid.createEl("label",{text:"Case"});
-    const title=makeInput(grid,{value:this.title,placeholder:"Case name"});title.oninput=()=>{this.title=title.value;queuePreview();};
+    const title=blurOnEnter(makeInput(grid,{value:this.title,placeholder:"Case name"}));title.oninput=()=>{this.title=title.value;queuePreview();};
 
     const createTools=el.createDiv({cls:"cst-actions"});
     const addSurgeon=createTools.createEl("button",{text:"+ New Surgeon"});
@@ -7871,7 +8089,7 @@ class NewCaseModal extends Modal {
       const n=safeFileName(titleText||"Case name");
       const header=surgeonName?await this.plugin.getSurgeonData(specialty,surgeonName,{createIfMissing:false}):null;
       if(nonce!==this.previewNonce||preview.isConnected===false)return;
-      const h=header?`${surgeonName} · ${header.gloves} · ${header.gown}`:"Select a surgeon";
+      const h=header?`${surgeonName} · ${formatGloves(header.gloves)} · ${header.gown}`:"Select a surgeon";
       const template=specialty.toLowerCase()==="spine"?`Spine / ${variantName}`:specialty;
       preview.setText(`${h}\nTemplate: ${template}\n${cleanPath(this.plugin.contentRoot,specialty,surgeonName||"Surgeon",`${n}.md`)}`);
     };
@@ -7939,14 +8157,14 @@ class QuickCaseModal extends Modal {
     }
 
     grid.createEl("label",{text:"Case"});
-    const title=makeInput(grid,{placeholder:"Case name",value:this.title});
+    const title=blurOnEnter(makeInput(grid,{placeholder:"Case name",value:this.title}));
     title.oninput=()=>this.title=title.value;
 
     const preview=el.createDiv({cls:"cst-preview"});
     const previewNonce=++this.previewNonce;
     this.plugin.getSurgeonData(selected.specialty,selected.surgeon,{createIfMissing:false}).then(d=>{
       if(previewNonce!==this.previewNonce||preview.isConnected===false)return;
-      preview.setText(`${selected.surgeon} · ${d?.gloves||"Unknown"} · ${d?.gown||"Unknown"}\n${selected.specialty.toLowerCase()==="spine"?`Template: Spine / ${this.variant}`:`Template: ${selected.specialty}`}`);
+      preview.setText(`${selected.surgeon} · ${formatGloves(d?.gloves||"Unknown")} · ${d?.gown||"Unknown"}\n${selected.specialty.toLowerCase()==="spine"?`Template: Spine / ${this.variant}`:`Template: ${selected.specialty}`}`);
     }).catch(console.error);
 
     const actions=el.createDiv({cls:"cst-actions"});
@@ -8773,7 +8991,7 @@ class LegacyTemplateMigrationModal extends Modal {
       const warning = el.createDiv({ cls: "cst-warning cst-glove-conflict" });
       warning.setAttribute("role", "alert");
       warning.createEl("p", { text: "This surgeon's glove profile changed outside the migration workspace. Choose which glove value to keep before saving." });
-      warning.createEl("div", { text: `Current profile: ${sd.gloves || "Unknown"} · Your draft: ${working.pendingGloves ?? "Unknown"}`, cls: "cst-muted" });
+      warning.createEl("div", { text: `Current profile: ${formatGloves(sd.gloves || "Unknown")} · Your draft: ${formatGloves(working.pendingGloves ?? "Unknown")}`, cls: "cst-muted" });
       const resolution = warning.createDiv({ cls: "cst-actions" });
       const useCurrentProfile = resolution.createEl("button", { text: "Use Current Profile" });
       this.bindMigrationAction(useCurrentProfile, "Use current surgeon profile", async () => {
@@ -8991,7 +9209,7 @@ class LegacyTemplateMigrationModal extends Modal {
     if (working.gloveConflict && working.legacyMdGloves) {
       const conflict = destPane.createDiv({ cls: "cst-glove-conflict" });
       conflict.createEl("strong", { text: "Legacy MD glove conflict" });
-      conflict.createEl("div", { text: `Current surgeon: ${sd.gloves || "Unknown"} · Legacy MD: ${working.legacyMdGloves}`, cls: "cst-muted" });
+      conflict.createEl("div", { text: `Current surgeon: ${formatGloves(sd.gloves || "Unknown")} · Legacy MD: ${formatGloves(working.legacyMdGloves)}`, cls: "cst-muted" });
       const buttons = conflict.createDiv({ cls: "cst-actions" });
       const keep = buttons.createEl("button", { text: "Keep Current" });
       this.bindMigrationAction(keep, "Keep current glove profile", async () => {

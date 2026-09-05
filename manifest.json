@@ -1,7 +1,7 @@
 {
   "id": "cst-notes",
   "name": "CST Notes",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "minAppVersion": "1.7.2",
   "description": "Cross-platform surgical technologist case notes with specialty, surgeon, and case organization.",
   "author": "PeriSlate",

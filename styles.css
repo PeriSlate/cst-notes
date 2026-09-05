@@ -969,3 +969,38 @@ body.cst-platform-phone .cst-unmapped-focus .cst-unmapped-actions {
     grid-template-columns: minmax(0, 1fr) 44px;
   }
 }
+
+/* v0.1.6 profile guidance and onboarding */
+.cst-field-help {
+  grid-column: 2;
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  line-height: 1.45;
+  margin-top: -4px;
+}
+.cst-live-header-meta {
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  margin-top: 4px;
+}
+.cst-onboarding-card {
+  padding: 12px;
+  margin-bottom: 14px;
+  border: 1px solid var(--interactive-accent);
+  border-radius: var(--radius-m);
+  background: var(--background-secondary);
+}
+.cst-onboarding-card h3 {
+  margin-top: 0;
+}
+body.cst-platform-phone .cst-field-help {
+  grid-column: 1;
+  margin-top: 0;
+}
+body.cst-platform-phone .cst-migration-modal .modal-close-button {
+  top: calc(env(safe-area-inset-top, 0px) + 8px) !important;
+  right: calc(env(safe-area-inset-right, 0px) + 8px) !important;
+}
+body.cst-platform-phone .cst-migration-modal .modal-content {
+  padding-top: max(64px, calc(env(safe-area-inset-top, 0px) + 54px));
+}
