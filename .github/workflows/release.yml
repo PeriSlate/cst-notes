@@ -7,6 +7,8 @@ on:
 
 permissions:
   contents: write
+  id-token: write
+  attestations: write
 
 jobs:
   release:
@@ -21,6 +23,15 @@ jobs:
           test "$GITHUB_REF_NAME" = "$(node -p "require('./manifest.json').version")"
           test "$(node -p "require('./versions.json')[require('./manifest.json').version]")" = "$(node -p "require('./manifest.json').minAppVersion")"
           node --check main.js
+
+      # Attests distribution bytes from this public tag, not a private-source build.
+      - name: Attest release assets
+        uses: actions/attest@v4
+        with:
+          subject-path: |
+            ${{ github.workspace }}/main.js
+            ${{ github.workspace }}/manifest.json
+            ${{ github.workspace }}/styles.css
 
       - name: Publish required Obsidian assets
         env:

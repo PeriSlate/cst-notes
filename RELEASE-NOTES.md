@@ -1,18 +1,17 @@
-# CST Notes 0.1.6
+# CST Notes 0.1.7
 
-CST Notes 0.1.6 improves everyday case entry, surgeon profiles, templates, onboarding, and iPhone migration controls.
+### Navigation and onboarding
+- Moved Home above search and removed duplicate specialty cards from the home page.
+- Added surgeon and case totals inside each specialty.
+- Improved alphabetical sorting in name-based lists.
+- Added a getting-started checklist with saved progress and hide/resume controls.
 
-## What's new
+### Templates and migration
+- General templates now begin with a `PA` heading. Existing template content is preserved, and existing case notes remain unchanged.
+- Removed migration Auto-fill while preserving saved migration drafts.
+- Improved Needs Review to include substantive leftover content, even under recognized headings.
 
-- The CST app opens automatically with the vault. You can opt out in CST Notes settings.
-- Pressing Enter in a case-title field now accepts the title and dismisses the mobile keyboard without creating the case.
-- Surgeon profiles support optional music preferences. Music appears in live case headers only when entered.
-- Glove entry now includes fast lowercase examples such as `"8b8w"` and `"8wx2"`. Admin can redefine the O/B/W labels without rewriting stored profile codes.
-- The General template adds PA after Position. The obsolete singular Dressing heading is consolidated into Dressings.
-- Template version capture waits five seconds after the final edit.
-- New installations open Template Admin with a guided template-review step.
-- The iPhone migration close button stays below the status-bar safe area.
-
-## Upgrade safety
-
-Before updating existing templates, CST Notes creates a backup. Any content under the former Dressing heading is preserved under Dressings. Existing cases are not changed.
+### Maintenance
+- Cleaned up CSS warnings while preserving mobile layouts.
+- Limited routine file discovery to relevant CST Notes folders.
+- Added release-asset attestations and clarified contribution and privacy documentation.

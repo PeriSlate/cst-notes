@@ -14,7 +14,7 @@ const {
   parseYaml
 } = require("obsidian");
 
-const PLUGIN_VERSION = "0.1.6";
+const PLUGIN_VERSION = "0.1.7";
 const SCHEMA_VERSION = 3;
 const GLOVE_SIZES = ["Unknown", "5.5", "6", "6.5", "7", "7.5", "8", "8.5", "9", "9.5"];
 const DEFAULT_GLOVE_LABELS = Object.freeze({ O: "Ortho", B: "Blue", W: "White" });
@@ -44,6 +44,8 @@ const DEFAULT_SETTINGS = {
   gloveLabels: DEFAULT_GLOVE_LABELS,
   templateDefaultsVersion: "",
   templateReviewCompleted: false,
+  onboardingCompleted: {},
+  onboardingDismissed: false,
   launcherPath: "CST App.md",
   completedMigrations: [],
   migrationFailures: {}
@@ -193,6 +195,7 @@ function parseFrontmatterObject(text) {
   return parsed;
 }
 
+// Write only, called by explicit Copy diagnostic buttons. Never read the clipboard.
 async function copyText(text) {
   const value = String(text ?? "");
   try {
@@ -444,9 +447,9 @@ function sectionBody(templateName, extras = {}) {
       for (const h of extra) lines.push(`### ${h}`, "", "");
     }
   };
+  if (templateName === "General") lines.push("#### PA", "");
   push("Case", `${templateName} case-specific overview`);
   push("Position");
-  if (templateName === "General") push("PA");
   push("Tips");
   push("Drape");
   push("Mayo");
@@ -561,12 +564,48 @@ function upgradeTemplateBodyV016(templatePath, text) {
   const output = updated.flatMap(section => section.heading ? [section.heading, ...section.lines] : section.lines).join("\n");
   return (output + (hadFinalNewline ? "\n" : "")).replace(/\n/g, newline);
 }
+// Only the General template is changed; source notes and other templates stay intact.
+function generalPAFirst(templatePath, text) {
+  if (!/(?:^|\/)General\.md$/i.test(templatePath)) return text;
+  const newline = text.includes("\r\n") ? "\r\n" : "\n";
+  const normalized = text.replace(/\r\n/g, "\n");
+  const fm = normalized.match(/^---\n[\s\S]*?\n---(?:\n|$)/)?.[0] || "";
+  const lines = normalized.slice(fm.length).split("\n");
+  const kept = [], content = [];
+  let inPA = false, paDepth = 0, fence = null;
+  for (const line of lines) {
+    const token = line.match(/^\s{0,3}(`{3,}|~{3,})/)?.[1];
+    if (token) {
+      if (!fence) fence = token;
+      else if (token[0] === fence[0] && token.length >= fence.length && line.trim() === token) fence = null;
+      (inPA ? content : kept).push(line);
+      continue;
+    }
+    const heading = !fence && line.match(/^(#{1,6})\s+(.+?)\s*#*\s*$/);
+    if (heading && inPA && heading[1].length <= paDepth) inPA = false;
+    if (heading && /^PA\s*:?$/i.test(heading[2])) {
+      inPA = true;
+      paDepth = heading[1].length;
+      continue;
+    }
+    (inPA ? content : kept).push(line);
+  }
+  const body = content.join("\n").trim();
+  return (fm + "#### PA\n\n" + (body ? body + "\n\n" : "") + kept.join("\n").replace(/^\n+/, "")).replace(/\n/g, newline);
+}
+
+function compareCSTNames(a, b) {
+  const left = String(a), right = String(b);
+  return left.localeCompare(right, "en", { sensitivity: "base", numeric: false }) || left.localeCompare(right, "en");
+}
+
 class CSTNotesPlugin extends Plugin {
   async onload() {
     const loadedSettings = await this.loadData();
     this.settings = Object.assign({}, DEFAULT_SETTINGS, loadedSettings);
     this.settings.gloveLabels = normalizeGloveLabels(loadedSettings?.gloveLabels);
     this.unloading = false;
+    this.onboardingCaseBodies = new Map();
     this.verifyTimers = new Map();
     this.templateVersionTimers = new Map();
     this.templateVersionQueues = new Map();
@@ -661,6 +700,9 @@ class CSTNotesPlugin extends Plugin {
 
 
     this.registerEvent(this.app.workspace.on("file-open", () => this.updateManagedBodyClass()));
+    this.registerEvent(this.app.workspace.on("file-open", file => {
+      this.trackOnboardingFile(file).catch(error => console.error("CST onboarding", error));
+    }));
     this.registerEvent(this.app.workspace.on("active-leaf-change", () => this.updateManagedBodyClass()));
     this.registerEvent(this.app.workspace.on("layout-change", () => this.updateManagedBodyClass()));
 
@@ -723,6 +765,68 @@ class CSTNotesPlugin extends Plugin {
     await this.saveData(this.settings);
   }
 
+  completeOnboarding(key) {
+    if (this.settings.onboardingCompleted?.[key]) return;
+    this.settings.onboardingCompleted = { ...this.settings.onboardingCompleted, [key]: true };
+    this.onboardingSave = (this.onboardingSave || Promise.resolve()).catch(() => {}).then(() => this.saveSettings());
+    this.onboardingSave.catch(error => console.error("CST onboarding progress could not be saved", error));
+  }
+
+  async trackOnboardingFile(file, modified = false) {
+    if (!(file instanceof TFile) || file.extension !== "md") return;
+    if (!modified && this.isTemplatePath(file.path)) this.completeOnboarding("template");
+    if (!modified && file.path === this.p("Admin/Admin.md")) this.completeOnboarding("admin");
+    if (this.settings.onboardingCompleted?.edit) return;
+    if (!this.caseContext(file)) return;
+    const path = file.path;
+    const text = await this.app.vault.read(file);
+    if (file.path !== path) return;
+    const body = this.stripFrontmatter(text).replace(/<!--[\s\S]*?-->/g, "");
+    const previous = this.onboardingCaseBodies.get(path);
+    if (modified && previous !== undefined && previous !== body) {
+      this.completeOnboarding("edit");
+      this.onboardingCaseBodies.clear();
+      return;
+    }
+    if (this.onboardingCaseBodies.size >= 100) this.onboardingCaseBodies.delete(this.onboardingCaseBodies.keys().next().value);
+    this.onboardingCaseBodies.set(path, body);
+  }
+
+  renderOnboarding(el) {
+    const card = el.createDiv({ cls: "cst-onboarding-card" });
+    if (this.settings.onboardingDismissed) {
+      const resume = card.createEl("button", { text: "Show getting-started checklist" });
+      resume.onclick = () => {
+        this.settings.onboardingDismissed = false;
+        this.navigateFromUI("Show checklist", async () => { await this.saveSettings(); card.empty(); this.renderOnboarding(card); });
+      };
+      return;
+    }
+    const tasks = [
+      ["home", "Open CST workspace"], ["hierarchy", "Explore a specialty and surgeon"],
+      ["profile", "View a surgeon profile"], ["template", "View a template"],
+      ["create", "Create a case"], ["edit", "Save a case edit"], ["admin", "Explore Admin"]
+    ];
+    const completed = this.settings.onboardingCompleted || {};
+    const count = tasks.filter(([key]) => completed[key]).length;
+    card.createEl("h3", { text: `Getting started — ${count} of ${tasks.length} complete` });
+    const progress = card.createEl("progress");
+    progress.max = tasks.length;
+    progress.value = count;
+    progress.setAttribute("aria-label", "Getting started progress");
+    card.createEl("p", { text: "Reopen CST using the ribbon or the CST: Open CST app command. Steps complete as you use the app; viewing a screen does not mean its content was reviewed.", cls: "cst-muted" });
+    const list = card.createEl("ul");
+    for (const [key, label] of tasks) list.createEl("li", { text: `${completed[key] ? "✓" : "○"} ${label}` });
+    const actions = card.createDiv({ cls: "cst-actions" });
+    const template = actions.createEl("button", { text: "Explore templates" });
+    template.onclick = () => this.navigateFromUI("Open templates", () => this.openPath(this.p("Admin/Backend/Templates.md")));
+    const dismiss = actions.createEl("button", { text: "Hide checklist" });
+    dismiss.onclick = () => {
+      this.settings.onboardingDismissed = true;
+      this.navigateFromUI("Hide checklist", async () => { await this.saveSettings(); card.empty(); this.renderOnboarding(card); });
+    };
+  }
+
   p(rel = "") {
     return cleanPath(this.settings.backendRoot, rel);
   }
@@ -748,6 +852,8 @@ class CSTNotesPlugin extends Plugin {
     for (const path of candidates) {
       if (path && this.app.vault.getAbstractFileByPath(path)) paths.push(path);
     }
+    // Initialization safety: find prior CST records even after their roots were moved.
+    // Inspect cached metadata only; do not read unrelated note bodies.
     for (const file of this.app.vault.getMarkdownFiles()) {
       const type = String(this.app.metadataCache.getFileCache(file)?.frontmatter?.cst_type || "");
       if (type && (type === "case" || type.startsWith("surgeon") || type.startsWith("specialty") || type.startsWith("legacy-migration"))) {
@@ -1473,7 +1579,7 @@ class CSTNotesPlugin extends Plugin {
     this.settings.pluginVersion = PLUGIN_VERSION;
     this.settings.autoOpenSidebar = true;
     this.settings.autoOpenDefaultVersion = "0.1.6";
-    this.settings.templateDefaultsVersion = "0.1.6";
+    await this.upgradeTemplateDefaultsV016();
     await this.saveSettings();
     await this.appendLog("Initialize", `CST Notes ${PLUGIN_VERSION} initialized.`);
   }
@@ -1487,23 +1593,23 @@ class CSTNotesPlugin extends Plugin {
   }
 
   async upgradeTemplateDefaultsV016() {
-    if (this.settings.templateDefaultsVersion === "0.1.6") return 0;
+    if (this.settings.templateDefaultsVersion === "0.1.7") return 0;
     const prefix = this.p("_Templates/Cases") + "/";
-    const files = this.app.vault.getMarkdownFiles()
+    const files = this.filesWithin(this.p("_Templates/Cases"), "md")
       .filter(file => file.path.startsWith(prefix) && this.isTemplatePath(file.path))
       .sort((a, b) => a.path.localeCompare(b.path));
     const plans = [];
     for (const file of files) {
       const original = await this.app.vault.read(file);
-      const next = upgradeTemplateBodyV016(file.path, original);
+      const next = generalPAFirst(file.path, upgradeTemplateBodyV016(file.path, original));
       if (next !== original) plans.push({ file, path: file.path, original, next });
     }
     if (plans.length) {
-      await this.snapshotFiles("v0.1.6-template-update", plans.map(plan => plan.file));
-      await this.applyExpectedTextPlans(plans, "v0.1.6 template update");
+      await this.snapshotFiles("v0.1.7-template-update", plans.map(plan => plan.file));
+      await this.applyExpectedTextPlans(plans, "v0.1.7 template update");
       for (const plan of plans) await this.ensureTemplateVersion(plan.file, false, plan.path);
     }
-    this.settings.templateDefaultsVersion = "0.1.6";
+    this.settings.templateDefaultsVersion = "0.1.7";
     return plans.length;
   }
 
@@ -1784,7 +1890,7 @@ Machine-managed installation information.
 
   async ensureAllTemplateVersions() {
     const root = this.p("_Templates/Cases") + "/";
-    for (const file of this.app.vault.getMarkdownFiles()) {
+    for (const file of this.filesWithin(this.p("_Templates/Cases"), "md")) {
       if (file.path.startsWith(root) && this.isTemplatePath(file.path)) await this.ensureTemplateVersion(file, false);
     }
   }
@@ -1795,7 +1901,7 @@ Machine-managed installation information.
     return root.children
       .filter(x => x instanceof TFolder && !x.name.startsWith(".") && !x.name.startsWith("_"))
       .map(x => x.name)
-      .sort((a,b) => a.localeCompare(b));
+      .sort(compareCSTNames);
   }
 
   getSurgeons(specialty) {
@@ -1804,11 +1910,30 @@ Machine-managed installation information.
     return folder.children
       .filter(x => x instanceof TFolder && !x.name.startsWith(".") && !x.name.startsWith("_"))
       .map(x => x.name)
-      .sort((a,b) => a.localeCompare(b));
+      .sort(compareCSTNames);
+  }
+
+  // Enumerate only the requested managed subtree, never unrelated vault folders.
+  filesWithin(rootPath, extension = "") {
+    const path = normalizePath(String(rootPath || ""));
+    if (!path || path === "/" || path === ".") return [];
+    const root = this.app.vault.getAbstractFileByPath(path);
+    if (!(root instanceof TFolder)) return [];
+    const files = [];
+    const pending = [...root.children];
+    const seen = new Set();
+    while (pending.length) {
+      const item = pending.pop();
+      if (!item || seen.has(item) || !item.path.startsWith(path + "/")) continue;
+      seen.add(item);
+      if (item instanceof TFolder) pending.push(...item.children);
+      else if (item instanceof TFile && (!extension || item.extension === extension)) files.push(item);
+    }
+    return files;
   }
 
   allCaseFiles() {
-    return this.app.vault.getMarkdownFiles().filter(f => !!this.caseContext(f));
+    return this.filesWithin(this.contentRoot, "md").filter(f => !!this.caseContext(f));
   }
 
   specialtyGraphPath(specialty) {
@@ -2453,9 +2578,7 @@ schema_version: ${SCHEMA_VERSION}
       throw new Error("Graph rebuild paused because surgeon folders or registry data changed while the graph was being generated. Retry after Sync completes.");
     }
 
-    const loadedFiles = typeof this.app.vault.getFiles === "function"
-      ? this.app.vault.getFiles()
-      : this.app.vault.getAllLoadedFiles().filter(item => item instanceof TFile);
+    const loadedFiles = this.filesWithin(graphRootPath);
     const graphPrefix = graphRootPath + "/";
     const generatedTypes = new Set(["graph-root", "specialty-node", "surgeon-node"]);
     for (const file of loadedFiles) {
@@ -2640,6 +2763,7 @@ ${t.body.trim()}
       catch (openError) { console.error("CST could not open the Sync-winning case.", openError); }
       throw new Error(`"${title}" was created by another window or device. The winning case was preserved and opened; review it after Sync finishes.`);
     }
+    this.completeOnboarding("create");
     const warnings = [];
     try {
       await this.ensureSpecialtyNode(specialty);
@@ -2809,13 +2933,12 @@ ${t.body.trim()}
   }
 
   getLegacySurgeonDataFiles() {
-    const prefix = this.p("_Data/Surgeons") + "/";
-    return this.app.vault.getMarkdownFiles().filter(f => f.path.startsWith(prefix));
+    return this.filesWithin(this.p("_Data/Surgeons"), "md");
   }
 
   getSurgeonDataFiles() {
     const prefix = this.p("_Data/Surgeons") + "/";
-    const files = typeof this.app.vault.getFiles === "function" ? this.app.vault.getFiles() : this.app.vault.getAllLoadedFiles().filter(x => x instanceof TFile);
+    const files = this.filesWithin(this.p("_Data/Surgeons"), "json");
     return files.filter(f => f instanceof TFile && f.extension === "json" && f.path.startsWith(prefix));
   }
 
@@ -3002,7 +3125,7 @@ ${t.body.trim()}
       this.settings.autoOpenDefaultVersion = "0.1.6";
       settingsChanged = true;
     }
-    if (this.settings.templateDefaultsVersion !== "0.1.6") {
+    if (this.settings.templateDefaultsVersion !== "0.1.7") {
       await this.upgradeTemplateDefaultsV016();
       settingsChanged = true;
     }
@@ -3578,6 +3701,7 @@ ${t.body.trim()}
     }
     if (!this.isManagedPath(modifiedPath)) return;
     if ((this.ignoreModifyUntil.get(modifiedPath) || 0) > Date.now()) return;
+    this.trackOnboardingFile(file, true).catch(error => console.error("CST onboarding edit", error));
     const old = this.verifyTimers.get(modifiedPath);
     if (old) window.clearTimeout(old);
     const timer = window.setTimeout(async () => {
@@ -4983,7 +5107,7 @@ ${text.replace(/\`\`\`/g, "~~~")}
     const cases = (await this.caseEntries())
       .filter(entry => entry.usable && entry.context.specialty === specialty && entry.context.surgeon === surgeon)
       .map(entry => entry.file)
-      .sort((a,b) => a.basename.localeCompare(b.basename));
+      .sort((a,b) => compareCSTNames(a.basename, b.basename));
     if (!cases.length) {
       el.createEl("em", { text: "No cases yet." });
       return;
@@ -5135,7 +5259,7 @@ ${text.replace(/\`\`\`/g, "~~~")}
       };
     }
     const prefix=this.p("_Templates/Cases")+"/";
-    const files=this.app.vault.getMarkdownFiles().filter(f=>f.path.startsWith(prefix) && this.isTemplatePath(f.path)).sort((a,b)=>a.path.localeCompare(b.path));
+    const files=this.filesWithin(this.p("_Templates/Cases"),"md").filter(f=>this.isTemplatePath(f.path)).sort((a,b)=>compareCSTNames(a.path,b.path));
     const table=el.createEl("table",{cls:"cst-table"});
     const hr=table.createEl("tr");["Template","Current version","Action"].forEach(x=>hr.createEl("th",{text:x}));
     for(const f of files){
@@ -5154,7 +5278,7 @@ ${text.replace(/\`\`\`/g, "~~~")}
     const stats=el.createDiv({cls:"cst-admin-summary"});
     if(root instanceof TFolder){
       for(const child of root.children.filter(x=>x instanceof TFolder)){
-        const count=this.app.vault.getMarkdownFiles().filter(f=>f.path.startsWith(child.path+"/")).length;
+        const count=this.filesWithin(child.path,"md").length;
         this.addStat(stats,child.name,count);
       }
     }
@@ -6276,28 +6400,6 @@ ${text.replace(/\`\`\`/g, "~~~")}
     return this.insertMigrationSection(destination || "", heading, body);
   }
 
-  autoFillMigration(sourceText, baseDestination, templateBody, ignored = []) {
-    const parsed = this.parseLegacyMigrationBlocks(sourceText, templateBody);
-    const headings = this.migrationTemplateHeadings(templateBody);
-    let destination = baseDestination;
-    const autoMapped = [];
-    for (const block of parsed.blocks) {
-      if ((ignored || []).includes(block.id)) continue;
-      if (block.special === "pa" || String(block.canonical).startsWith("__")) continue;
-      const directCanonical = String(block.canonical || "").toLowerCase();
-      const suggestedCanonical = this.canonicalCaseHeading(block.suggested || "").toLowerCase();
-      const target = headings.find(h => {
-        const canonical = h.canonical.toLowerCase();
-        return canonical === directCanonical || canonical === suggestedCanonical;
-      });
-      if (!target) continue;
-      const body = this.extractMigrationSectionBody(block, target.label);
-      destination = this.insertMigrationSection(destination, target.label, body);
-      autoMapped.push(block.id);
-    }
-    return { destination, autoMapped, parsed };
-  }
-
   migrationUnresolved(sourceText, destinationText, templateBody, working = {}) {
     const parsed = this.parseLegacyMigrationBlocks(sourceText, templateBody);
     let remainingDestination = this.normalizeComparable(destinationText);
@@ -6306,6 +6408,7 @@ ${text.replace(/\`\`\`/g, "~~~")}
     for (const block of parsed.blocks) {
       if (ignored.has(block.id)) continue;
       const blockNorm = this.normalizeComparable(this.extractMigrationSectionBody(block, block.suggested));
+      if (!blockNorm) continue;
       const matchAt = blockNorm ? remainingDestination.indexOf(blockNorm) : -1;
       if (matchAt >= 0) {
         remainingDestination = remainingDestination.slice(0, matchAt)
@@ -6319,13 +6422,8 @@ ${text.replace(/\`\`\`/g, "~~~")}
   }
 
   migrationUnmapped(sourceText, destinationText, templateBody, working = {}) {
-    const unresolved = this.migrationUnresolved(sourceText, destinationText, templateBody, working);
-    const available = new Set(this.migrationTemplateHeadings(templateBody).map(h => h.canonical.toLowerCase()));
-    return unresolved.filter(block => {
-      const canonical = String(block.canonical || "").toLowerCase();
-      const suggested = this.canonicalCaseHeading(block.suggested || "").toLowerCase();
-      return !available.has(canonical) && !available.has(suggested);
-    });
+    // Review all substantive leftovers, even when their old heading is recognized.
+    return this.migrationUnresolved(sourceText, destinationText, templateBody, working);
   }
 
   migrationSessionPath() {
@@ -6939,17 +7037,8 @@ ${CASE_HEADER_BLOCK}
       working.templateVersion = t.version;
       working.templateDriftAccepted = false;
     }
-    if (working.autoFill && !hasWorking("destination")) {
-      // Rebuild only a missing destination. Existing enabled sessions may contain
-      // manual PA/custom-heading moves layered over Auto-fill and must stay intact.
-      if (!hasWorking("preAutoFillDestination")) working.preAutoFillDestination = working.baseDestination;
-      const sourceForFill = hasWorking("sourceWorking") ? String(working.sourceWorking ?? "") : String(working.sourceOriginal ?? "");
-      const destinationForFill = hasWorking("preAutoFillDestination") ? String(working.preAutoFillDestination ?? "") : String(working.baseDestination ?? "");
-      const filled = this.autoFillMigration(sourceForFill, destinationForFill, t.body, working.ignored || []);
-      working.destination = filled.destination;
-      working.autoMapped = filled.autoMapped;
-      working.autoFillEngineVersion = MIGRATION_AUTOFILL_ENGINE_VERSION;
-    }
+    // Retire Auto-fill without resetting source/destination drafts from old sessions.
+    working.autoFill = false;
     return { file, context: c, working, template: t, source: hasWorking("sourceWorking") ? working.sourceWorking : working.sourceOriginal, raw };
   }
 
@@ -7572,6 +7661,9 @@ class CSTSidebarView extends ItemView {
     this.makeAction(actions, "Quick Case", () => new QuickCaseModal(this.plugin).open());
     this.makeAction(actions, "+ Surgeon", () => this.plugin.openNewSurgeon());
 
+    const home = el.createDiv({ cls: "cst-app-home-nav" });
+    this.homeButton = this.makeAction(home, "Home", () => this.navigateHome());
+
     this.searchInput = makeInput(el, { value: this.query, placeholder: "Search surgeon or case…" });
     this.searchInput.addClass("cst-app-search");
     this.searchInput.setAttribute("autocapitalize", "off");
@@ -7601,9 +7693,7 @@ class CSTSidebarView extends ItemView {
     const scrollLeft = this.chipsEl.scrollLeft;
     const route = this.routeSnapshot();
     const stage = document.createElement("div");
-    const all = stage.createEl("button", { text: "Home" });
-    if (!route.specialty && !route.surgeon) all.addClass("is-active");
-    all.onclick = () => this.navigateHome();
+    this.homeButton?.classList.toggle("is-active", !route.query && !route.specialty && !route.surgeon);
     for (const specialty of this.plugin.getSpecialties()) {
       const b = stage.createEl("button", { text: specialty });
       if (route.specialty === specialty && !route.surgeon) b.addClass("is-active");
@@ -7700,6 +7790,16 @@ class CSTSidebarView extends ItemView {
     const chipScrollLeft = this.chipsEl?.scrollLeft || 0;
     el.replaceChildren(...Array.from(stage.childNodes));
     this.renderedRouteKey = routeKey;
+    if (!q && !route.specialty && !route.surgeon) {
+      this.plugin.completeOnboarding("home");
+      const checklist = el.querySelector(".cst-home-checklist");
+      if (checklist) { checklist.empty(); this.plugin.renderOnboarding(checklist); }
+    }
+    if (!q && route.specialty && route.surgeon) {
+      this.plugin.completeOnboarding("hierarchy");
+      // The surgeon view displays the available profile alongside its cases.
+      if (stage.dataset.profileAvailable === "true") this.plugin.completeOnboarding("profile");
+    }
     if (preserveScroll) {
       this.restoreScroll(generation, routeKey, scrollTop, chipScrollLeft);
       if (typeof window.requestAnimationFrame === "function") {
@@ -7712,8 +7812,8 @@ class CSTSidebarView extends ItemView {
   }
 
   async renderHome(el) {
+    this.plugin.renderOnboarding(el.createDiv({ cls: "cst-home-checklist" }));
     const entries = (await this.plugin.caseEntries()).sort((a,b) => b.file.stat.mtime - a.file.stat.mtime);
-    const usable = entries.filter(entry => entry.usable);
     el.createEl("h3", { text: "Recent cases" });
     const recent = el.createDiv({ cls: "cst-app-list" });
     if (!entries.length) recent.createEl("p", { text: "No cases yet.", cls: "cst-muted" });
@@ -7728,16 +7828,6 @@ class CSTSidebarView extends ItemView {
       row.onclick = () => this.plugin.navigateFromUI(`Open ${file.basename}`, () => this.plugin.openFile(file));
     }
 
-    el.createEl("h3", { text: "Specialties" });
-    const grid = el.createDiv({ cls: "cst-specialty-grid" });
-    for (const specialty of this.plugin.getSpecialties()) {
-      const surgeons = this.plugin.getSurgeons(specialty);
-      const count = usable.filter(entry => entry.context.specialty === specialty).length;
-      const card = grid.createEl("button", { cls: "cst-specialty-card" });
-      card.createEl("strong", { text: specialty });
-      card.createSpan({ text: `${surgeons.length} surgeons · ${count} cases`, cls: "cst-muted" });
-      card.onclick = () => this.navigateSpecialty(specialty);
-    }
   }
 
   async renderSpecialty(el, specialty) {
@@ -7751,6 +7841,7 @@ class CSTSidebarView extends ItemView {
     const cases = (await this.plugin.caseEntries())
       .filter(entry => entry.usable && entry.context.specialty === specialty)
       .map(entry => entry.file);
+    left.createEl("p", { text: `${surgeons.length} surgeons - ${cases.length} cases`, cls: "cst-muted" });
     const registryState = await this.plugin.readSurgeonRegistry({ create: false });
     const list = el.createDiv({ cls: "cst-app-list" });
     for (const surgeon of surgeons) {
@@ -7790,10 +7881,11 @@ class CSTSidebarView extends ItemView {
   async renderSurgeon(el, specialty, surgeon) {
     const d = await this.plugin.getSurgeonData(specialty, surgeon, { createIfMissing: false });
     const available = !!d?.cst_id && !d?.unavailable;
+    el.dataset.profileAvailable = String(available);
     const cases = (await this.plugin.caseEntries())
       .filter(entry => entry.usable && entry.context.specialty === specialty && entry.context.surgeon === surgeon)
       .map(entry => entry.file)
-      .sort((a,b) => a.basename.localeCompare(b.basename));
+      .sort((a,b) => compareCSTNames(a.basename, b.basename));
 
     const nav = el.createDiv({ cls: "cst-surgeon-nav" });
     const back = nav.createEl("button", { text: `← ${specialty}` });
@@ -8765,28 +8857,6 @@ class LegacyTemplateMigrationModal extends Modal {
     await this.render();
   }
 
-  async setAutoFill(enabled) {
-    this.captureInputs();
-    const w = this.current.working;
-    if (enabled && !w.autoFill) {
-      w.preAutoFillDestination = Object.prototype.hasOwnProperty.call(w, "destination") ? String(w.destination ?? "") : String(w.baseDestination ?? "");
-      const source = Object.prototype.hasOwnProperty.call(w, "sourceWorking") ? String(w.sourceWorking ?? "") : String(w.sourceOriginal ?? "");
-      const filled = this.plugin.autoFillMigration(source, w.preAutoFillDestination, this.current.template.body, w.ignored || []);
-      w.destination = filled.destination;
-      w.autoMapped = filled.autoMapped;
-      w.autoFill = true;
-      w.autoFillEngineVersion = MIGRATION_AUTOFILL_ENGINE_VERSION;
-    } else if (!enabled && w.autoFill) {
-      w.destination = String(w.preAutoFillDestination ?? w.baseDestination ?? "");
-      w.autoMapped = [];
-      w.autoFill = false;
-      w.autoFillEngineVersion = MIGRATION_AUTOFILL_ENGINE_VERSION;
-      w.preAutoFillDestination = null;
-    }
-    await this.plugin.saveMigrationSession(this.state);
-    await this.render(true);
-  }
-
   unresolved() {
     if (!this.current) return [];
     this.captureInputs();
@@ -9056,9 +9126,6 @@ class LegacyTemplateMigrationModal extends Modal {
         new Notice(`Could not open the template editor: ${error.message||error}`);
       }
     };
-    const auto = toolbar.createEl("button", { text: `Auto-fill: ${working.autoFill ? "ON" : "OFF"}`, cls: working.autoFill ? "mod-cta" : "" });
-    auto.setAttribute("aria-pressed", String(!!working.autoFill));
-    this.bindMigrationAction(auto, "Toggle auto-fill", () => this.setAutoFill(!working.autoFill), { nonce });
     const compare = toolbar.createEl("button", { text: `Compare: ${this.compareMode ? "ON" : "OFF"}` });
     compare.setAttribute("aria-pressed", String(!!this.compareMode));
     this.bindMigrationAction(compare, "Toggle comparison mode", async () => {

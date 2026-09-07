@@ -93,11 +93,11 @@
 .cst-warning { color: var(--text-warning); }
 .cst-success { color: var(--text-success); }
 .cst-muted { color: var(--text-muted); }
-.cst-delete-confirm-modal {
-  width: min(92vw, 520px) !important;
-  max-width: min(92vw, 520px) !important;
+.modal-container .modal.cst-delete-confirm-modal {
+  width: min(92vw, 520px);
+  max-width: min(92vw, 520px);
 }
-.cst-delete-confirm-modal code {
+.modal-container .modal.cst-delete-confirm-modal code {
   display: block;
   max-width: 100%;
   margin-top: 10px;
@@ -113,8 +113,8 @@
 
 /* Hide Obsidian's property editor only in the active managed CST note.
    Raw YAML remains available in Source mode. */
-.workspace-leaf.cst-managed-leaf .metadata-container {
-  display: none !important;
+body .workspace .workspace-leaf.cst-managed-leaf .view-content .metadata-container {
+  display: none;
 }
 
 /* v0.1.2 CST app view */
@@ -294,17 +294,17 @@ body.is-mobile .cst-case-delete,
 body.is-mobile .cst-specialty-chips button {
   min-height: 44px;
 }
-body.cst-platform-phone .cst-delete-confirm-modal {
-  width: calc(100vw - max(20px, env(safe-area-inset-left, 0px) + env(safe-area-inset-right, 0px))) !important;
-  max-width: calc(100vw - max(20px, env(safe-area-inset-left, 0px) + env(safe-area-inset-right, 0px))) !important;
+body.cst-platform-phone .modal-container .modal.cst-delete-confirm-modal {
+  width: calc(100vw - max(20px, env(safe-area-inset-left, 0px) + env(safe-area-inset-right, 0px)));
+  max-width: calc(100vw - max(20px, env(safe-area-inset-left, 0px) + env(safe-area-inset-right, 0px)));
 }
 body.is-mobile .cst-modal-grid input,
 body.is-mobile .cst-modal-grid select,
 body.is-mobile .cst-app-view input,
 body.is-mobile .cst-app-view select,
-body.is-mobile .cst-migration-modal input,
-body.is-mobile .cst-migration-modal select,
-body.is-mobile .cst-migration-modal button {
+body.is-mobile .modal-container .modal.cst-migration-modal input,
+body.is-mobile .modal-container .modal.cst-migration-modal select,
+body.is-mobile .modal-container .modal.cst-migration-modal button {
   min-height: 44px;
 }
 body.is-mobile .cst-modal-grid + button,
@@ -318,9 +318,9 @@ body.cst-platform-phone .cst-modal-grid textarea,
 body.cst-platform-phone .cst-app-view input,
 body.cst-platform-phone .cst-app-view select,
 body.cst-platform-phone .cst-app-view textarea,
-body.cst-platform-phone .cst-migration-modal input,
-body.cst-platform-phone .cst-migration-modal select,
-body.cst-platform-phone .cst-migration-modal textarea {
+body.cst-platform-phone .modal-container .modal.cst-migration-modal input,
+body.cst-platform-phone .modal-container .modal.cst-migration-modal select,
+body.cst-platform-phone .modal-container .modal.cst-migration-modal textarea {
   font-size: 16px;
 }
 @media (max-width: 700px) {
@@ -362,8 +362,8 @@ body.cst-platform-phone .cst-migration-modal textarea {
 }
 
 /* v0.1.3 — CST app polish, launcher, and migration workspace */
-.workspace-leaf.cst-managed-leaf .inline-title {
-  display: none !important;
+body .workspace .workspace-leaf.cst-managed-leaf .view-content .inline-title {
+  display: none;
 }
 
 .cst-launcher-card {
@@ -419,13 +419,13 @@ body.cst-platform-phone .cst-migration-modal textarea {
 }
 
 /* Full migration workspace */
-.cst-migration-modal {
-  width: min(96vw, 1500px) !important;
-  max-width: min(96vw, 1500px) !important;
-  height: min(94vh, 980px) !important;
-  max-height: 94vh !important;
+.modal-container .modal.cst-migration-modal {
+  width: min(96vw, 1500px);
+  max-width: min(96vw, 1500px);
+  height: min(94vh, 980px);
+  max-height: 94vh;
 }
-.cst-migration-modal .modal-content {
+.modal-container .modal.cst-migration-modal .modal-content {
   height: 100%;
   min-height: 0;
   overflow: auto;
@@ -700,16 +700,14 @@ body.cst-platform-phone .cst-launcher-card {
 body.is-mobile .cst-launcher-open {
   min-height: 54px;
 }
-body.cst-platform-phone .cst-migration-modal {
-  width: 100% !important;
-  max-width: 100% !important;
-  height: 100% !important;
-  max-height: 100% !important;
-  height: 100dvh !important;
-  max-height: 100dvh !important;
-  border-radius: 0 !important;
+body.cst-platform-phone .modal-container .modal.cst-migration-modal {
+  width: 100%;
+  max-width: 100%;
+  height: var(--cst-mobile-viewport-height, 100vh);
+  max-height: var(--cst-mobile-viewport-height, 100vh);
+  border-radius: 0;
 }
-body.cst-platform-phone .cst-migration-modal .modal-content {
+body.cst-platform-phone .modal-container .modal.cst-migration-modal .modal-content {
   padding: max(10px, env(safe-area-inset-top, 0px)) max(10px, env(safe-area-inset-right, 0px)) max(10px, env(safe-area-inset-bottom, 0px)) max(10px, env(safe-area-inset-left, 0px));
   overflow-y: auto;
   overscroll-behavior-y: contain;
@@ -752,10 +750,8 @@ body.cst-platform-phone .cst-migration-pane.is-mobile-hidden {
   display: none;
 }
 body.cst-platform-phone .cst-migration-editor {
-  min-height: 38vh;
-  height: 38vh;
-  min-height: clamp(260px, 38dvh, 520px);
-  height: clamp(260px, 38dvh, 520px);
+  min-height: var(--cst-mobile-editor-height, clamp(260px, 38vh, 520px));
+  height: var(--cst-mobile-editor-height, clamp(260px, 38vh, 520px));
   resize: none;
 }
 body.cst-platform-phone .cst-unmapped-row {
@@ -777,13 +773,13 @@ body.cst-platform-phone .cst-migration-bottom {
 }
 
 /* iPad keeps the two-pane workspace while retaining touch-sized controls. */
-body.cst-platform-tablet .cst-migration-modal {
-  width: min(96vw, 1500px) !important;
-  max-width: min(96vw, 1500px) !important;
-  height: min(92dvh, 1000px) !important;
-  max-height: 92dvh !important;
+body.cst-platform-tablet .modal-container .modal.cst-migration-modal {
+  width: min(96vw, 1500px);
+  max-width: min(96vw, 1500px);
+  height: min(92dvh, 1000px);
+  max-height: 92dvh;
 }
-body.cst-platform-tablet .cst-migration-modal .modal-content {
+body.cst-platform-tablet .modal-container .modal.cst-migration-modal .modal-content {
   padding-right: max(12px, env(safe-area-inset-right, 0px));
   padding-bottom: max(12px, env(safe-area-inset-bottom, 0px));
   padding-left: max(12px, env(safe-area-inset-left, 0px));
@@ -804,7 +800,7 @@ body.cst-platform-tablet .cst-migration-panes {
   .cst-migration-panes { grid-template-columns: 1fr; }
 }
 @media (max-height: 850px) and (min-width: 701px) {
-  .cst-migration-modal .modal-content {
+  .modal-container .modal.cst-migration-modal .modal-content {
     overflow-y: auto;
   }
   .cst-migration-workspace {
@@ -871,11 +867,11 @@ body.cst-platform-phone .cst-migration-surgeon-controls .cst-glove-error {
 body.cst-platform-phone .cst-diagnostic-text { min-height: 42vh; }
 
 /* v0.1.3.2 — larger migration workspace, integrated unmapped review */
-.cst-migration-modal {
-  width: min(98vw, 1720px) !important;
-  max-width: min(98vw, 1720px) !important;
-  height: min(96vh, 1060px) !important;
-  max-height: 96vh !important;
+.modal-container .modal.cst-migration-modal {
+  width: min(98vw, 1720px);
+  max-width: min(98vw, 1720px);
+  height: min(96vh, 1060px);
+  max-height: 96vh;
 }
 .cst-unmapped-integrated {
   max-height: min(38vh, 390px);
@@ -997,10 +993,18 @@ body.cst-platform-phone .cst-field-help {
   grid-column: 1;
   margin-top: 0;
 }
-body.cst-platform-phone .cst-migration-modal .modal-close-button {
-  top: calc(env(safe-area-inset-top, 0px) + 8px) !important;
-  right: calc(env(safe-area-inset-right, 0px) + 8px) !important;
+body.cst-platform-phone .modal-container .modal.cst-migration-modal .modal-close-button {
+  top: calc(env(safe-area-inset-top, 0px) + 8px);
+  right: calc(env(safe-area-inset-right, 0px) + 8px);
 }
-body.cst-platform-phone .cst-migration-modal .modal-content {
+body.cst-platform-phone .modal-container .modal.cst-migration-modal .modal-content {
   padding-top: max(64px, calc(env(safe-area-inset-top, 0px) + 54px));
+}
+
+/* Dynamic viewport sizing with a separate fallback for older WebViews. */
+@supports (height: 100dvh) {
+  body.cst-platform-phone .modal-container .modal.cst-migration-modal {
+    --cst-mobile-viewport-height: 100dvh;
+    --cst-mobile-editor-height: clamp(260px, 38dvh, 520px);
+  }
 }
