@@ -32,6 +32,10 @@ GitHub releases attach these files:
 
 `versions.json` is tracked in the repository for version compatibility metadata. This repository intentionally does not contain user vault data, local settings, source code, or build tooling.
 
+## New in 0.1.9
+
+Portable CST Notes case sharing, guided external-note sorting, local resource collection with editable terminology, improved Admin and recovery, protected CST-only reset, and previewed image organization. AI remains disconnected. See the release notes for details.
+
 ## Support
 
 Use the repository’s issue tracker for reproducible bugs and include only redacted diagnostics. Do not attach real patient, case, surgeon, hospital, or credential information.

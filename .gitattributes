@@ -1,0 +1,6 @@
+# Keep downloadable asset bytes identical on Windows and GitHub's Linux runner.
+main.js text eol=lf
+manifest.json text eol=lf
+styles.css text eol=lf
+versions.json text eol=lf
+RELEASE-NOTES.md text eol=lf
