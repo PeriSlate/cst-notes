@@ -154,6 +154,25 @@ body .workspace .workspace-leaf.cst-managed-leaf .view-content .metadata-contain
 .cst-app-actions button:first-child {
   grid-column: 1 / -1;
 }
+.cst-app-home-nav {
+  margin-bottom: 10px;
+}
+body .cst-app-home-nav > button {
+  display: block;
+  width: 100%;
+  min-height: 38px;
+  background-color: var(--interactive-accent);
+  color: var(--text-on-accent);
+}
+body .cst-app-home-nav > button:hover,
+body .cst-app-home-nav > button:active {
+  background-color: var(--interactive-accent-hover);
+}
+
+.cst-live-header .cst-actions .cst-app-home-nav {
+  flex: 1;
+  margin-bottom: 0;
+}
 .cst-app-search {
   width: 100%;
   min-height: 38px;
@@ -244,6 +263,10 @@ body .workspace .workspace-leaf.cst-managed-leaf .view-content .metadata-contain
 .cst-case-delete:focus-visible {
   color: var(--text-on-accent);
   background: var(--background-modifier-error);
+}
+body .cst-live-header .cst-danger-button {
+  background-color: var(--color-red);
+  color: #fff;
 }
 .cst-app-section-head {
   display: flex;

@@ -14,7 +14,7 @@ const {
   parseYaml
 } = require("obsidian");
 
-const PLUGIN_VERSION = "0.1.7";
+const PLUGIN_VERSION = "0.1.8";
 const SCHEMA_VERSION = 3;
 const GLOVE_SIZES = ["Unknown", "5.5", "6", "6.5", "7", "7.5", "8", "8.5", "9", "9.5"];
 const DEFAULT_GLOVE_LABELS = Object.freeze({ O: "Ortho", B: "Blue", W: "White" });
@@ -599,6 +599,7 @@ function compareCSTNames(a, b) {
   return left.localeCompare(right, "en", { sensitivity: "base", numeric: false }) || left.localeCompare(right, "en");
 }
 
+
 class CSTNotesPlugin extends Plugin {
   async onload() {
     const loadedSettings = await this.loadData();
@@ -674,6 +675,20 @@ class CSTNotesPlugin extends Plugin {
 
     this.addSettingTab(new CSTSettingsTab(this.app, this));
 
+    this.registerMarkdownCodeBlockProcessor("cst-onboarding", async (_src, el) => this.renderOnboardingAdmin(el));
+    this.registerMarkdownPostProcessor((el, ctx) => {
+      const path = normalizePath(ctx.sourcePath || "");
+      if (!path.startsWith(this.p("Admin") + "/") || path.startsWith(this.p("Admin/Backups") + "/")) return;
+      const section = ctx.getSectionInfo?.(el);
+      if (section?.lineStart !== 0 || el.querySelector(".cst-admin-home")) return;
+      const nav = el.createDiv({ cls: "cst-admin-home" });
+      el.prepend(nav);
+      this.addHomeButton(nav);
+      if (path === this.p("Admin/Admin.md")) {
+        const onboarding = nav.createEl("button", { text: "Onboarding" });
+        onboarding.onclick = () => this.navigateFromUI("Onboarding", () => this.openPath(this.p("Admin/Onboarding.md")));
+      }
+    });
     this.registerMarkdownCodeBlockProcessor(CASE_HEADER_LANG, async (_src, el, ctx) => this.renderCaseHeaderBlock(el, ctx));
     this.registerMarkdownCodeBlockProcessor(LAUNCHER_LANG, async (_src, el) => this.renderLauncher(el));
     this.registerMarkdownCodeBlockProcessor("cst-registry-data", async (_src, el) => {
@@ -716,6 +731,14 @@ class CSTNotesPlugin extends Plugin {
       this.registerEvent(this.app.vault.on("delete", file =>
         this.dispatchVaultEvent("delete", () => this.onDeleted(file))));
 
+      const refreshExample = file => {
+        if (file === this.exampleFile || (!this.exampleCase() && file instanceof TFile && this.isCasePath(file.path))) {
+          if (this.exampleRefreshTimer) window.clearTimeout(this.exampleRefreshTimer);
+          this.exampleRefreshTimer = window.setTimeout(() => this.dispatchVaultEvent("example presence", () => this.findExampleCase()), 300);
+        }
+        this.refreshOnboarding();
+      };
+      for (const event of ["create", "delete", "rename", "modify"]) this.registerEvent(this.app.vault.on(event, refreshExample));
       this.startupTimer = window.setTimeout(async () => {
         this.startupTimer = null;
         if (this.unloading) return;
@@ -725,6 +748,7 @@ class CSTNotesPlugin extends Plugin {
             const ready = await this.quickStructureCheck({ allowMissingRegistryForMigration: true });
             if (!ready || this.unloading) return;
             await this.runUpgradeMigrations();
+            await this.findExampleCase();
             if (!this.unloading && this.settings.autoOpenSidebar) await this.activateSidebar();
           }
         } catch (error) {
@@ -741,6 +765,8 @@ class CSTNotesPlugin extends Plugin {
       doc.body?.classList.remove("cst-managed-active", "cst-platform-phone", "cst-platform-tablet");
       doc.querySelectorAll?.(".cst-managed-leaf").forEach(el => el.classList.remove("cst-managed-leaf"));
     }
+    if (this.onboardingTimer) window.clearTimeout(this.onboardingTimer);
+    if (this.exampleRefreshTimer) window.clearTimeout(this.exampleRefreshTimer);
     if (this.startupTimer) window.clearTimeout(this.startupTimer);
     if (this.graphRebuildTimer) window.clearTimeout(this.graphRebuildTimer);
     if (this.registryBacklogTimer) window.clearTimeout(this.registryBacklogTimer);
@@ -765,66 +791,181 @@ class CSTNotesPlugin extends Plugin {
     await this.saveData(this.settings);
   }
 
+  exampleCase() {
+    const file = this.exampleFile;
+    return file instanceof TFile && this.isCasePath(file.path) &&
+      this.app.vault.getAbstractFileByPath(file.path) === file ? file : null;
+  }
+
+  onboardingTasks() {
+    return [["home", "Open CST workspace"], ["hierarchy", "Explore a specialty and surgeon"],
+      ["profile", "View a surgeon profile"], ["templateEdit", "View and edit a template"],
+      ["caseEdit", "Create and edit a case"], ["admin", "Open Admin"]];
+  }
+
+  onboardingDone() {
+    return this.onboardingTasks().every(([key]) => this.settings.onboardingCompleted?.[key]);
+  }
+
+  async findExampleCase() {
+    const revision = this.exampleLookupRevision = (this.exampleLookupRevision || 0) + 1;
+    let found = null;
+    for (const file of this.allCaseFiles()) {
+      const path = file.path;
+      let text;
+      try { text = await this.app.vault.read(file); }
+      catch (error) {
+        if (this.app.vault.getAbstractFileByPath(path) !== file) continue;
+        throw error;
+      }
+      if (file.path !== path || this.app.vault.getAbstractFileByPath(path) !== file) continue;
+      const fm = parseFrontmatterObject(text);
+      if (fm.cst_example === true && fm.cst_id === "cst-example-lumbar-v1" && this.isCasePath(file.path)) {
+        found = file;
+        break;
+      }
+    }
+    if (revision !== this.exampleLookupRevision) return;
+    this.exampleFile = found;
+    this.refreshOnboarding();
+  }
+
   completeOnboarding(key) {
-    if (this.settings.onboardingCompleted?.[key]) return;
+    if (!this.exampleCase() || this.onboardingDone() || this.settings.onboardingCompleted?.[key]) return;
     this.settings.onboardingCompleted = { ...this.settings.onboardingCompleted, [key]: true };
     this.onboardingSave = (this.onboardingSave || Promise.resolve()).catch(() => {}).then(() => this.saveSettings());
     this.onboardingSave.catch(error => console.error("CST onboarding progress could not be saved", error));
+    this.refreshOnboarding();
+  }
+
+  refreshOnboarding() {
+    const present = !!this.exampleCase();
+    const done = this.onboardingDone();
+    for (const card of this.onboardingCards || []) {
+      if (!card.isConnected) { this.onboardingCards.delete(card); continue; }
+      card.hidden = !present || this.settings.onboardingDismissed || (done && !this.showCompletedOnboarding);
+      const count = this.onboardingTasks().filter(([key]) => this.settings.onboardingCompleted?.[key]).length;
+      const heading = card.querySelector("h3");
+      if (heading) heading.textContent = `Getting started — ${count} of 6 complete`;
+      const progress = card.querySelector("progress");
+      if (progress) progress.value = count;
+      for (const [key, label] of this.onboardingTasks()) {
+        const row = card.querySelector(`[data-onboarding-task="${key}"]`);
+        if (row) row.textContent = `${this.settings.onboardingCompleted?.[key] ? "✓" : "○"} ${label}`;
+      }
+    }
+    if (this.onboardingTimer) window.clearTimeout(this.onboardingTimer);
+    this.onboardingTimer = null;
+    if (!present || done || this.settings.onboardingDismissed || this.unloading) return;
+    this.onboardingTimer = window.setTimeout(async () => {
+      this.onboardingTimer = null;
+      try { await this.trackOnboardingFile(this.app.workspace.getActiveFile(), true); }
+      catch (error) { console.error("CST onboarding refresh", error); }
+      this.refreshOnboarding();
+    }, 1500);
   }
 
   async trackOnboardingFile(file, modified = false) {
+    if (!this.exampleCase() || this.onboardingDone() || this.settings.onboardingDismissed) return;
     if (!(file instanceof TFile) || file.extension !== "md") return;
-    if (!modified && this.isTemplatePath(file.path)) this.completeOnboarding("template");
     if (!modified && file.path === this.p("Admin/Admin.md")) this.completeOnboarding("admin");
-    if (this.settings.onboardingCompleted?.edit) return;
-    if (!this.caseContext(file)) return;
+    const template = this.isTemplatePath(file.path);
+    if (!template && !this.caseContext(file)) return;
     const path = file.path;
     const text = await this.app.vault.read(file);
-    if (file.path !== path) return;
+    if (file.path !== path || !this.exampleCase()) return;
     const body = this.stripFrontmatter(text).replace(/<!--[\s\S]*?-->/g, "");
+    this.onboardingCaseBodies ||= new Map();
     const previous = this.onboardingCaseBodies.get(path);
-    if (modified && previous !== undefined && previous !== body) {
-      this.completeOnboarding("edit");
-      this.onboardingCaseBodies.clear();
-      return;
+    if (previous !== undefined && previous !== body && modified && !((this.ignoreModifyUntil?.get(path) || 0) > Date.now())) {
+      if (template) this.completeOnboarding("templateEdit");
+      else {
+        const fm = parseFrontmatterObject(text);
+        if (this.settings.onboardingCreatedCases?.includes(fm.cst_id)) this.completeOnboarding("caseEdit");
+      }
     }
     if (this.onboardingCaseBodies.size >= 100) this.onboardingCaseBodies.delete(this.onboardingCaseBodies.keys().next().value);
     this.onboardingCaseBodies.set(path, body);
   }
 
   renderOnboarding(el) {
+    if (!this.exampleCase() || this.settings.onboardingDismissed || (this.onboardingDone() && !this.showCompletedOnboarding)) return;
     const card = el.createDiv({ cls: "cst-onboarding-card" });
-    if (this.settings.onboardingDismissed) {
-      const resume = card.createEl("button", { text: "Show getting-started checklist" });
-      resume.onclick = () => {
-        this.settings.onboardingDismissed = false;
-        this.navigateFromUI("Show checklist", async () => { await this.saveSettings(); card.empty(); this.renderOnboarding(card); });
-      };
-      return;
-    }
-    const tasks = [
-      ["home", "Open CST workspace"], ["hierarchy", "Explore a specialty and surgeon"],
-      ["profile", "View a surgeon profile"], ["template", "View a template"],
-      ["create", "Create a case"], ["edit", "Save a case edit"], ["admin", "Explore Admin"]
-    ];
-    const completed = this.settings.onboardingCompleted || {};
-    const count = tasks.filter(([key]) => completed[key]).length;
-    card.createEl("h3", { text: `Getting started — ${count} of ${tasks.length} complete` });
+    this.onboardingCards ||= new Set();
+    this.onboardingCards.add(card);
+    card.createEl("h3");
     const progress = card.createEl("progress");
-    progress.max = tasks.length;
-    progress.value = count;
+    progress.max = 6;
     progress.setAttribute("aria-label", "Getting started progress");
-    card.createEl("p", { text: "Reopen CST using the ribbon or the CST: Open CST app command. Steps complete as you use the app; viewing a screen does not mean its content was reviewed.", cls: "cst-muted" });
+    card.createEl("p", { text: 'Reopen CST Notes using the Home buttons or swipe down and click the "CST Notes: Open CST app" command.' });
+    card.createEl("p", { text: "Steps complete as you use the app.", cls: "cst-muted" });
     const list = card.createEl("ul");
-    for (const [key, label] of tasks) list.createEl("li", { text: `${completed[key] ? "✓" : "○"} ${label}` });
+    for (const [key] of this.onboardingTasks()) list.createEl("li").setAttribute("data-onboarding-task", key);
     const actions = card.createDiv({ cls: "cst-actions" });
     const template = actions.createEl("button", { text: "Explore templates" });
     template.onclick = () => this.navigateFromUI("Open templates", () => this.openPath(this.p("Admin/Backend/Templates.md")));
     const dismiss = actions.createEl("button", { text: "Hide checklist" });
-    dismiss.onclick = () => {
-      this.settings.onboardingDismissed = true;
-      this.navigateFromUI("Hide checklist", async () => { await this.saveSettings(); card.empty(); this.renderOnboarding(card); });
-    };
+    dismiss.onclick = () => new OnboardingHideModal(this).open();
+    this.refreshOnboarding();
+  }
+
+  addHomeButton(el) {
+    const nav = el.createDiv({ cls: "cst-app-home-nav" });
+    const home = nav.createEl("button", { text: "Home" });
+    home.onclick = () => this.navigateFromUI("Home", () => this.activateSidebar({ specialty: "", surgeon: "", query: "" }));
+    return home;
+  }
+
+  async renderOnboardingAdmin(el) {
+    el.createEl("h2", { text: "Onboarding" });
+    el.createEl("p", { text: "The checklist is available while the example case is in your CST Notes library." });
+    const add = el.createEl("button", { text: "Add example case" });
+    add.disabled = !!this.exampleCase();
+    add.onclick = () => this.navigateFromUI("Add example case", async () => {
+      add.disabled = true;
+      try { await this.addExampleCase(); await this.openFile(this.exampleCase()); }
+      finally { add.disabled = !!this.exampleCase(); show.disabled = !this.exampleCase(); }
+    });
+    const show = el.createEl("button", { text: "Show onboarding checklist" });
+    show.disabled = !this.exampleCase();
+    show.onclick = () => this.navigateFromUI("Show onboarding checklist", async () => {
+      if (!this.exampleCase()) return;
+      this.settings.onboardingDismissed = false;
+      this.showCompletedOnboarding = this.onboardingDone();
+      await this.saveSettings();
+      await this.activateSidebar({ specialty: "", surgeon: "", query: "" });
+      this.refreshOnboarding();
+    });
+  }
+
+  async addExampleCase() {
+    if (this.exampleCreation) return this.exampleCreation;
+    this.exampleCreation = (async () => {
+      await this.findExampleCase();
+      if (this.exampleCase()) return this.exampleCase();
+      const specialty = "Spine", surgeon = "Morgan Example";
+      const folder = cleanPath(this.contentRoot, specialty, surgeon);
+      const path = validatePortableVaultPath(cleanPath(folder, "Example - Lumbar Decompression.md"), "Example case");
+      if (this.app.vault.getAbstractFileByPath(path)) throw new Error("The example path is occupied. No note was changed.");
+      await this.ensureFolder(folder);
+      const record = await this.ensureSurgeonData(specialty, surgeon, { gloves: "8B/8W", gown: "XL" });
+      const content = "---\ncst_type: case\ncst_example: true\ncst_id: cst-example-lumbar-v1\nspecialty: Spine\nsurgeon: Morgan Example\nsurgeon_id: " +
+        yamlString(record.data.cst_id) + "\ngraph_parent: " + yamlString("[[" + this.surgeonGraphPath(specialty, surgeon).replace(/\.md$/, "") + "|" + surgeon + "]]") +
+        "\nschema_version: 3\ntemplate: manual\ntemplate_initialized: true\n---\n\n" + "# Example — Lumbar Decompression\n\n```cst-surgeon-header\n```\n\n> Example case for learning CST Notes. This is a sample setup, not a clinical protocol. Customize it for your team.\n\n## Case\nMicrodiscectomy:\nRemoval of herniated disc. Usually in addition to a laminectomy or foraminotomy.\n\nLaminectomy:\nA complete removal of the spinous process and lamina.\n\nForaminotomy:\nAn excision of portions of bone from the foramina of the level. The foramen is the canal where nerve roots branch from the spinal cord. Has laterality.\n\nImages can be added here using Obsidian's normal attachment tools.\n\n## Tips\nToss Bovie tip and sleeve.\nKeep Phase 1 Mayo on the back table.\n\n## Drape\n4 towels + stapler\nLarge sheet x4\nC-arm drape + Mayo cover\nSplit sheet x2\nIoban\n\n## Mayo\nSet up:\n- Suction x2 with 11F tip\n- Bovie\n- Bipolar with green forceps\n- Light handle covers\n- Instrument pouch\n- TPX spine burr\n- RT x2\n\n## Basin\nC-arm drape\nMayo cover\nSplit x2\nLarge sheet x4\n4 towels\n\n## Back Table\nAdd your own back-table photo here.\n\n## Trays\nLami kit\nSpine TPX\nLumbar Karlins (1 & 2)\n\n### Retractors\nMcCullough retractor\nPhantom in the room if high BMI\n\n### Kerrisons\n3 mm\n4 mm\n5 mm\nPistol grip\n2 mm pituitary straight\n2 mm pituitary up-biter\nMicro pituitary straight\nMicro pituitary up-biter\nForaminotomy Kerrisons 2 & 3 mm on back table\n\n### Karlins\n0s x4\n1 x4\nWoodson (probe)\n\n### Power\nTPX\n\n### Fluoro / Navigation\nC-arm\n\n## Sutures\n0 Vicryl CT-1 pop-offs\n2-0 Vicryl CT-2 pop-offs\n4-0 Monocryl PS-2\n\n## Mayo Flow\nPhase 1:\n- Kerrisons 3–5\n- Penfield family + nerve root retractor\n- Pituitaries\n- Karlins\n- Pattie towel\n  - 1/2 x 1 x10\n  - 1/2 x 1/2 x10\n  - Surgiflow\n  - Saline irrigation syringe with Angiocath\n  - Smaller bayonet forceps\n\n## Dressings\nDermabond\nTelfa\nMedium Tegaderm\n\n## Notes\n";
+      this.markInternalCreate(path);
+      const file = await this.app.vault.create(path, content);
+      this.exampleFile = file;
+      this.settings.onboardingCompleted = {};
+      this.settings.onboardingCreatedCases = [];
+      this.settings.onboardingDismissed = false;
+      this.showCompletedOnboarding = false;
+      await this.saveSettings();
+      this.scheduleGraphRebuild(250);
+      this.refreshOnboarding();
+      return file;
+    })();
+    try { return await this.exampleCreation; }
+    finally { this.exampleCreation = null; }
   }
 
   p(rel = "") {
@@ -1482,6 +1623,7 @@ class CSTNotesPlugin extends Plugin {
 
   async initializeSystem({ existingVaultConfirmed = false } = {}) {
     const existing = this.detectExistingCSTArtifacts();
+    const freshInstall = !this.settings.initialized && !existing.exists;
     if ((this.settings.initialized || existing.exists) && !existingVaultConfirmed) {
       throw new Error("Existing CST data was detected. Verify that Sync is complete before running Initialize / Repair.");
     }
@@ -1580,6 +1722,7 @@ class CSTNotesPlugin extends Plugin {
     this.settings.autoOpenSidebar = true;
     this.settings.autoOpenDefaultVersion = "0.1.6";
     await this.upgradeTemplateDefaultsV016();
+    if (freshInstall) await this.addExampleCase();
     await this.saveSettings();
     await this.appendLog("Initialize", `CST Notes ${PLUGIN_VERSION} initialized.`);
   }
@@ -1615,6 +1758,7 @@ class CSTNotesPlugin extends Plugin {
 
   async createAdminNotes() {
     const pages = {
+      "Admin/Onboarding.md": "# Onboarding\n\n```cst-onboarding\n```\n",
       "Admin/Admin.md": `# CST Notes Admin
 
 ## Database
@@ -2246,6 +2390,7 @@ Machine-managed installation information.
       };
     }
 
+    if (!data && options.restoreIdentity && initial.cst_id) data = { ...initial };
     let gloves = initial.gloves || data?.gloves || "Unknown";
     try { gloves = normalizeGloves(gloves); } catch (_) { gloves = String(gloves || "Unknown"); }
     const gownCandidate = initial.gown || data?.gown || this.settings.defaultGown;
@@ -2763,7 +2908,10 @@ ${t.body.trim()}
       catch (openError) { console.error("CST could not open the Sync-winning case.", openError); }
       throw new Error(`"${title}" was created by another window or device. The winning case was preserved and opened; review it after Sync finishes.`);
     }
-    this.completeOnboarding("create");
+    if (this.exampleCase() && !this.onboardingDone()) {
+      this.settings.onboardingCreatedCases = [...new Set([...(this.settings.onboardingCreatedCases || []), caseId])];
+      await this.saveSettings();
+    }
     const warnings = [];
     try {
       await this.ensureSpecialtyNode(specialty);
@@ -3132,6 +3280,12 @@ ${t.body.trim()}
     if (this.settings.pluginVersion !== PLUGIN_VERSION || Number(this.settings.schemaVersion) !== SCHEMA_VERSION) {
       this.settings.pluginVersion = PLUGIN_VERSION;
       this.settings.schemaVersion = SCHEMA_VERSION;
+      settingsChanged = true;
+    }
+    if (this.settings.navigationUpgradeVersion !== "0.1.8") {
+      await this.createAdminNotes();
+      await this.repairLiveHeaders(true);
+      this.settings.navigationUpgradeVersion = "0.1.8";
       settingsChanged = true;
     }
     if (settingsChanged) {
@@ -3696,6 +3850,7 @@ ${t.body.trim()}
       return;
     }
     if (this.isTemplatePath(file.path)) {
+      this.trackOnboardingFile(file, true).catch(error => console.error("CST onboarding template edit", error));
       this.scheduleTemplateVersion(file);
       return;
     }
@@ -4524,9 +4679,16 @@ ${text.replace(/\`\`\`/g, "~~~")}
     ) {
       throw new Error("Case deletion stopped because its unique archive transaction already exists.");
     }
+    const context = this.caseContext(file);
+    const surgeonRecord = context ? await this.getSurgeonData(context.specialty, context.surgeon, { createIfMissing: false }) : null;
+    const session = await this.loadMigrationSession();
+    const migrationState = session ? { queued: session.order?.includes(originalPath),
+      status: session.status?.[originalPath], working: session.working?.[originalPath] } : null;
     const preparedAt = nowISO();
     const manifestBase = {
       version: 1,
+      surgeon_record: surgeonRecord,
+      migration_state: migrationState,
       transaction_id: nonce,
       state: "prepared",
       prepared_at: preparedAt,
@@ -4626,6 +4788,125 @@ ${text.replace(/\`\`\`/g, "~~~")}
     }
   }
 
+  async archivedCaseInfo(file) {
+    const root = this.p("Admin/Backups/Deleted Cases") + "/";
+    if (!(file instanceof TFile) || !file.path.startsWith(root) || file.path.slice(root.length).includes("/")) return null;
+    const archivePath = file.path;
+    const manifestFile = this.app.vault.getAbstractFileByPath(archivePath.replace(/\.md$/, ".json"));
+    if (!(manifestFile instanceof TFile)) return null;
+    const manifestText = await this.app.vault.read(manifestFile);
+    const manifest = JSON.parse(manifestText);
+    if (manifest.state !== "archived" || manifest.archive_path !== archivePath || !this.isCasePath(manifest.original_path)) return null;
+    validatePortableVaultPath(manifest.original_path, "Restore destination");
+    this.assertVaultFilePath(file, archivePath, "Archive moved during recovery lookup.");
+    return { file, archivePath, manifestFile, manifestText, manifest };
+  }
+
+  async restoreArchivedCase(file) {
+    const run = async () => {
+      const info = await this.archivedCaseInfo(file);
+      if (!info) throw new Error("This archive has no valid recovery manifest.");
+      if (!(await this.quickStructureCheck())) throw new Error("Wait for Sync before restoring.");
+      const { archivePath, manifestFile, manifestText, manifest } = info;
+      const target = manifest.original_path;
+      const original = await this.app.vault.read(file);
+      if (this.app.vault.getAbstractFileByPath(target)) throw new Error("The original case path is occupied. Both notes were preserved; rename the active case before restoring.");
+      const fm = parseFrontmatterObject(original);
+      const relative = target.slice(this.contentRoot.length + 1).split("/");
+      const [specialty, surgeon] = relative;
+      if (fm.specialty !== specialty || fm.surgeon !== surgeon || !fm.cst_id || !fm.surgeon_id) throw new Error("Archive identity does not match its original folder. Review it before restoring.");
+      const data = await this.getSurgeonData(specialty, surgeon, { createIfMissing: false });
+      if (data?.cst_id && data.cst_id !== fm.surgeon_id) throw new Error("The recipient surgeon identity differs. No case was restored.");
+      if (!data?.cst_id && manifest.surgeon_record?.cst_id !== fm.surgeon_id) throw new Error("The original surgeon profile is unavailable. Restore the profile or wait for Sync first.");
+      await this.ensureFolder(cleanPath(this.contentRoot, specialty, surgeon));
+      if (!data?.cst_id) await this.ensureSurgeonData(specialty, surgeon, manifest.surgeon_record, { restoreIdentity: true });
+      const restoredProfile = await this.getSurgeonData(specialty, surgeon, { createIfMissing: false });
+      if (restoredProfile?.cst_id !== fm.surgeon_id) throw new Error("Surgeon identity changed during restoration. The archive was retained.");
+      if (await this.app.vault.read(manifestFile) !== manifestText) throw new Error("Recovery manifest changed. Retry after Sync.");
+      this.assertVaultFilePath(file, archivePath, "Archive moved before restoration.");
+      if (await this.app.vault.read(file) !== original) throw new Error("Archive changed before restoration. Retry.");
+      const restored = await this.renameVaultItem(file, target, archivePath);
+      if (await this.app.vault.read(restored) !== original) throw new Error("Restored note changed concurrently. Its content was retained; review before continuing.");
+      try {
+        await this.restoreCaseSession(manifest);
+        await this.applyExpectedTextPlans([{ file: manifestFile, path: manifestFile.path, original: manifestText,
+          next: JSON.stringify({ ...manifest, state: "restored", restored_at: nowISO() }, null, 2) + "\n" }], "Case restoration");
+      } catch (error) {
+        new Notice("Case restored; recovery bookkeeping needs review. The recovery manifest was retained.");
+        console.error("CST restoration bookkeeping", error);
+      }
+      this.scheduleGraphRebuild(250);
+      await this.findExampleCase();
+      await this.openFile(restored);
+      new Notice("Case restored.");
+      return restored;
+    };
+    const operation = (this.archiveRestoreQueue || Promise.resolve()).catch(() => {}).then(run);
+    this.archiveRestoreQueue = operation.catch(() => {});
+    return operation;
+  }
+
+  async restoreCaseSession(manifest) {
+    const saved = manifest.migration_state;
+    if (!saved) return;
+    const state = await this.loadMigrationSession();
+    if (!state) return;
+    const path = manifest.original_path;
+    state.order ||= [];
+    state.status ||= {};
+    state.working ||= {};
+    if (saved.queued && !state.order.includes(path)) state.order.push(path);
+    if (saved.status !== undefined && state.status[path] === undefined) state.status[path] = saved.status;
+    if (saved.working !== undefined && state.working[path] === undefined) state.working[path] = saved.working;
+    this.reconcileMigrationSessionState(state);
+    await this.saveMigrationSession(state);
+  }
+
+  async renderArchivedHeader(el, file) {
+    const info = await this.archivedCaseInfo(file);
+    if (!info) return false;
+    el.empty();
+    el.addClass("cst-live-header");
+    el.dataset.cstSpecialty = "";
+    el.dataset.cstSurgeon = "";
+    el.createEl("p", { text: "Case deleted.", cls: "cst-muted" });
+    el.createEl("p", { text: "Archived safely. Restore returns this case to its original location.", cls: "cst-muted" });
+    const restore = el.createEl("button", { text: "Restore", cls: "mod-cta" });
+    restore.onclick = () => this.navigateFromUI("Restore case", async () => {
+      restore.disabled = true;
+      try { await this.restoreArchivedCase(file); }
+      finally { restore.disabled = false; }
+    });
+    this.addHomeButton(el);
+    return true;
+  }
+
+  addCaseDeleteButton(el, actions, file) {
+    this.addHomeButton(actions);
+    const remove = actions.createEl("button", { text: "Delete", cls: "cst-danger-button" });
+    let confirmation = null;
+    remove.onclick = () => this.navigateFromUI("Delete case", async () => {
+      if (!confirmation) {
+        const path = file.path;
+        const text = await this.app.vault.read(file);
+        this.assertVaultFilePath(file, path, "Case moved before confirmation.");
+        confirmation = { file, path, text, until: Date.now() + 10000 };
+        remove.textContent = "Are you sure?";
+        return;
+      }
+      const approved = confirmation;
+      confirmation = null;
+      remove.textContent = "Delete";
+      if (Date.now() > approved.until) return;
+      remove.disabled = true;
+      try {
+        if (await this.deleteCase(file, approved)) await this.renderArchivedHeader(el, file);
+      } finally { remove.disabled = false; }
+    });
+    remove.onblur = () => { confirmation = null; remove.textContent = "Delete"; };
+    return remove;
+  }
+
   async confirmCaseDeletion(file, expectedPath) {
     return await new Promise((resolve, reject) => {
       try {
@@ -4636,7 +4917,7 @@ ${text.replace(/\`\`\`/g, "~~~")}
     });
   }
 
-  async deleteCase(file) {
+  async deleteCase(file, inlineConfirmation = null) {
     if (this.settings.initialized && !(await this.quickStructureCheck())) {
       throw new Error("Case deletion is paused until this device has a complete CST vault.");
     }
@@ -4648,7 +4929,11 @@ ${text.replace(/\`\`\`/g, "~~~")}
     this.assertVaultFilePath(current, path, "Case deletion stopped because the selected case moved or was replaced.");
     const initialText = await this.app.vault.read(current);
     this.assertVaultFilePath(current, path, "Case deletion stopped because the selected case moved or was replaced.");
-    const confirmed = await this.confirmCaseDeletion(current, path);
+    if (inlineConfirmation && (inlineConfirmation.file !== current || inlineConfirmation.path !== path || inlineConfirmation.text !== initialText)) {
+      new Notice("Case changed since confirmation. Review it and retry.");
+      return false;
+    }
+    const confirmed = inlineConfirmation ? true : await this.confirmCaseDeletion(current, path);
     if (!confirmed) return false;
     const confirmedFile = this.app.vault.getAbstractFileByPath(path);
     if (confirmedFile !== current || normalizePath(String(current.path || "")) !== path || !this.isCasePath(path)) {
@@ -4883,6 +5168,7 @@ ${text.replace(/\`\`\`/g, "~~~")}
   async renderCaseHeaderBlock(el, ctx) {
     const file = this.app.vault.getAbstractFileByPath(ctx.sourcePath);
     if (!(file instanceof TFile)) return;
+    if (await this.renderArchivedHeader(el, file)) return;
     const identity = await this.caseIdentityStatus(file);
     if (!identity) return;
     const c = identity.context;
@@ -4905,22 +5191,7 @@ ${text.replace(/\`\`\`/g, "~~~")}
       const actions = el.createDiv({ cls: "cst-actions" });
       const review = actions.createEl("button", { text: "Open Pending Reviews" });
       review.onclick = () => this.navigateFromUI("Open Pending Reviews", () => this.openPath(this.p("Admin/Data/Pending Review.md")));
-      const remove = actions.createEl("button", { text: "Delete Case", cls: "cst-danger-button" });
-      remove.setAttribute("aria-label", `Delete ${file.basename}`);
-      remove.onclick = async () => {
-        remove.disabled = true;
-        try {
-          const deleted = await this.deleteCase(file);
-          if (deleted) {
-            el.empty();
-            el.createEl("p", { text: "Case deleted.", cls: "cst-muted" });
-          }
-        } catch (error) {
-          new Notice(error.message || String(error));
-        } finally {
-          if (remove.isConnected) remove.disabled = false;
-        }
-      };
+      this.addCaseDeleteButton(el, actions, file);
       return;
     }
     el.dataset.cstSpecialty = c.specialty;
@@ -4988,23 +5259,7 @@ ${text.replace(/\`\`\`/g, "~~~")}
     add.onclick = () => this.openNewCase(ctx.specialty, ctx.surgeon);
     add.disabled = !available;
     if (!available) add.setAttribute("title", "Wait for the surgeon registry record to sync before creating another case.");
-    const remove = actions.createEl("button", { text: "Delete Case", cls: "cst-danger-button" });
-    remove.setAttribute("aria-label", `Delete ${ctx.file.basename}`);
-    remove.onclick = async () => {
-      remove.disabled = true;
-      try {
-        const deleted = await this.deleteCase(ctx.file);
-        if (deleted) {
-          el.empty();
-          el.createEl("p", { text: "Case deleted.", cls: "cst-muted" });
-          await this.activateSidebarAt(ctx.specialty, ctx.surgeon);
-        }
-      } catch (error) {
-        new Notice(error.message || String(error));
-      } finally {
-        if (remove.isConnected) remove.disabled = false;
-      }
-    };
+    this.addCaseDeleteButton(el, actions, ctx.file);
   }
 
   async renderSurgeonProfile(el, ctx) {
@@ -5246,10 +5501,10 @@ ${text.replace(/\`\`\`/g, "~~~")}
   }
 
   async renderTemplateAdmin(el) {
-    if(!this.settings.templateReviewCompleted){
+    if(this.exampleCase() && !this.settings.templateReviewCompleted){
       const guide=el.createDiv({cls:"cst-onboarding-card"});
       guide.createEl("h3",{text:"Getting started: review templates"});
-      guide.createEl("p",{text:"Templates control the starting sections for new cases. Open any template below, review or edit it, then return here and mark this step complete. Existing cases are not changed."});
+      guide.createEl("p",{text:"Templates control the starting sections for new cases. Open any template below, review or edit it, then return here and mark this step complete."});
       const complete=guide.createEl("button",{text:"Mark template review complete",cls:"mod-cta"});
       complete.onclick=async()=>{
         this.settings.templateReviewCompleted=true;
@@ -7557,6 +7812,23 @@ class CaseDeletionModal extends Modal {
   }
 }
 
+class OnboardingHideModal extends Modal {
+  constructor(plugin) { super(plugin.app); this.plugin = plugin; }
+  onOpen() {
+    const el = this.contentEl;
+    el.createEl("h2", { text: "Hide onboarding checklist?" });
+    el.createEl("p", { text: "You can show it again from Admin → Onboarding → Show onboarding checklist, while the example case is present." });
+    el.createEl("button", { text: "Cancel" }).onclick = () => this.close();
+    el.createEl("button", { text: "Hide checklist", cls: "mod-cta" }).onclick = () => this.plugin.navigateFromUI("Hide checklist", async () => {
+      this.plugin.settings.onboardingDismissed = true;
+      await this.plugin.saveSettings();
+      this.plugin.refreshOnboarding();
+      this.close();
+    });
+  }
+  onClose() { this.contentEl.empty(); }
+}
+
 class CSTSidebarView extends ItemView {
   constructor(leaf, plugin) {
     super(leaf);
@@ -7658,7 +7930,7 @@ class CSTSidebarView extends ItemView {
 
     const actions = el.createDiv({ cls: "cst-app-actions" });
     this.makeAction(actions, "+ New Case", () => this.plugin.openNewCase(), true);
-    this.makeAction(actions, "Quick Case", () => new QuickCaseModal(this.plugin).open());
+    this.makeAction(actions, "Templates", () => this.plugin.navigateFromUI("Templates", () => this.plugin.openPath(this.plugin.p("Admin/Backend/Templates.md"))));
     this.makeAction(actions, "+ Surgeon", () => this.plugin.openNewSurgeon());
 
     const home = el.createDiv({ cls: "cst-app-home-nav" });
