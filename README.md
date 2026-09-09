@@ -4,7 +4,7 @@ CST Notes organizes surgical technologist notes in Obsidian with a Specialty →
 
 ## Privacy and data
 
-CST Notes is designed for local, offline vault use. It does not use network services or telemetry, and it does not require access outside the active Obsidian vault. No surgeon records, cases, clinical notes, backups, diagnostics, or other user data are included in this repository or release.
+CST Notes is designed for local, offline vault use. It does not use network services or telemetry, and it does not require access outside the active Obsidian vault. No real surgeon records, cases, clinical notes, backups, diagnostics, or other user data are included in this repository or release. The onboarding example is fictional teaching content.
 
 CST Notes is proprietary software; see [LICENSE](LICENSE) for the permitted end-user and distribution rights.
 

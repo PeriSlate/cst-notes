@@ -1,26 +1,22 @@
-# CST Notes 0.1.9
+# CST Notes 0.1.10
 
-## Sharing and importing
+## Getting started
 
-- Share cases between CST Notes users with portable surgeon information, template content, and supported local images.
-- Preview imports, choose their destination, and compare existing surgeon profiles before applying changes. Missing specialties and surgeons can be created from the sender's information.
-- Added a separate external-notes import workflow with Obsidian Importer setup guidance and a sorting queue. Original notes and saved migration drafts are preserved.
+- Fresh setup opens the CST Notes app. The onboarding checklist appears consistently when returning to Home.
+- Clearer checklist tasks include hints for where to begin. Completion offers Start fresh to remove the examples or Continue from here to keep them, followed by a short welcome message.
+- New installations include a General example: Laparoscopic Cholecystectomy with Dr. Example and an editable Example template. Existing users can add the example from Admin → Onboarding.
 
-## Resources
+## Navigation and Admin
 
-- Added local background resource collection with source-note links, resource kinds, duplicate-source protection, and verification from multiple current notes.
-- Keep collected resources after edits while marking older evidence unverified until it is checked again.
-- Added editable terminology and shorthand mappings, quantity-aware parsing, and needle-aware suture recognition.
-- Added a separate interface for possible future AI support. AI remains disconnected; resource collection and terminology tools work locally.
+- Home buttons are easier to find on surgeon profiles and CST Notes pages.
+- Export and Delete share one row. Delete starts neutral and turns red for confirmation.
+- Admin actions use a two-column layout. Enabling developer mode requires confirmation.
 
-## Admin and recovery
+## Cases, templates, and sharing
 
-- Reorganized Admin around everyday tasks, with metrics and a separate Developer mode for internal tools.
-- Added simplified case, surgeon, and specialty recovery, expanded developer archive views, and conflict-safe recovery names.
-- Added repair previews and backups, plus a protected ten-confirmation reset that archives only the configured CST Notes workspace before rebuilding its base structure.
+- Fixed case deletion failing with a circular-structure error. Deleted cases remain recoverable.
+- Template history keeps the current revision and the five preceding revisions. Case content is unchanged, and creation-template information remains informational.
+- Export no longer requires or bundles the original template. Mobile export dialogs scroll to keep controls reachable.
+- Share using Copy JSON or a file. Recipients can use Admin → Import → Import from CST Notes to paste JSON and review the destination and surgeon profile before importing.
 
-## Images and navigation
-
-- Added image-folder organization with a preview, backups, link checks, and safe handling of shared images.
-- Open the configured CST Notes launcher in its rendered view without requiring an extra tap.
-- Retained accent-colored Home controls, example-gated onboarding, and the existing archive/restore workflow.
+The example is a learning aid for organizing notes, not a clinical protocol. Follow your facility's requirements and the confirmed case preference card.

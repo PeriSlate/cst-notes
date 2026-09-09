@@ -1,10 +1,19 @@
+var __defProp = Object.defineProperty;
+var __getOwnPropNames = Object.getOwnPropertyNames;
+var __esm = (fn, res, err) => function __init() {
+  if (err) throw err[0];
+  try {
+    return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
+  } catch (e) {
+    throw err = [e], e;
+  }
+};
+var __export = (target, all) => {
+  for (var name in all)
+    __defProp(target, name, { get: all[name], enumerable: true });
+};
+
 // src/transfer-core.mjs
-var TRANSFER_LIMITS = Object.freeze({ bytes: 24 * 1024 * 1024, text: 1024 * 1024, images: 32, imageBytes: 5 * 1024 * 1024 });
-var PROFILE_FIELDS = Object.freeze(["gloves", "gown", "music"]);
-var FORMAT = "cst-notes-portable";
-var own = (v, k) => Object.prototype.hasOwnProperty.call(v, k);
-var bytes = (s) => new TextEncoder().encode(s).length;
-var fold = (s) => s.normalize("NFC").toLowerCase();
 function fail(message) {
   throw new Error(message);
 }
@@ -25,9 +34,12 @@ function identifier(value) {
   if (typeof value !== "string" || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(value)) fail("Invalid transfer or case ID.");
   return value;
 }
+function stripReservedTransferComments(text) {
+  return text.replace(/<!--\s*cst-(?:resource-grabbed|example-template):[\s\S]*?-->/g, "");
+}
 function portableMarkdown(text) {
   string(text, "Markdown");
-  return text.replace(/^\uFEFF/, "").replace(/^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/, "").replace(/^([ \t]*)(`{3,}|~{3,})cst-[^\r\n]*\r?\n[\s\S]*?^\1\2[ \t]*$/gm, "").replace(/(`{3,}|~{3,})[^\r\n]*/g, "$1").replace(/`([ \t]*)(?=[=$])/g, "`$1\\").replace(/!\[(?!\[)([^\]\r\n]*)\](?![([])/g, "[$1]").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\]\(\s*(?:javascript|data|vbscript|file|obsidian):[^)]*\)/gi, "](blocked-link)");
+  return stripReservedTransferComments(text).replace(/^\uFEFF/, "").replace(/^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/, "").replace(/^([ \t]*)(`{3,}|~{3,})cst-[^\r\n]*\r?\n[\s\S]*?^\1\2[ \t]*$/gm, "").replace(/(`{3,}|~{3,})[^\r\n]*/g, "$1").replace(/`([ \t]*)(?=[=$])/g, "`$1\\").replace(/!\[(?!\[)([^\]\r\n]*)\](?![([])/g, "[$1]").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\]\(\s*(?:javascript|data|vbscript|file|obsidian):[^)]*\)/gi, "](blocked-link)");
 }
 function imageReferences(markdown) {
   const refs = [], definitions = /* @__PURE__ */ new Map();
@@ -122,15 +134,16 @@ function decodeTransferImage(item) {
 function parseTransfer(raw) {
   string(raw, "portable file", TRANSFER_LIMITS.bytes);
   const data = JSON.parse(raw);
-  if (data?.format === FORMAT && data.version !== 1) {
-    const error = new Error(`Unsupported CST portable version ${String(data.version).slice(0, 40)}. Request a version 1 export, or explicitly save the case text as plain Markdown for manual sorting.`);
+  if (data?.format === FORMAT && ![1, EXPORT_VERSION].includes(data.version)) {
+    const error = new Error(`Unsupported CST Notes portable version ${String(data.version).slice(0, 40)}. Update CST Notes to read this format, or explicitly save the case text as plain Markdown for manual sorting.`);
     error.code = "UNSUPPORTED_TRANSFER_VERSION";
     throw error;
   }
-  object(data, ["format", "version", "id", "case", "sender", "template", "attachments"], "bundle");
-  if (data.format !== FORMAT || data.version !== 1) fail("Not a supported CST Notes portable file.");
+  object(data, ["format", "version", "id", "case", "sender", "attachments", ...data?.version === 1 ? ["template"] : []], "bundle");
+  if (data.format !== FORMAT || ![1, EXPORT_VERSION].includes(data.version)) fail("Not a supported CST Notes portable file.");
   identifier(data.id);
-  object(data.case, ["id", "title", "markdown", "example"], "case");
+  object(data.case, ["id", "title", "markdown", "example", ...data.version === EXPORT_VERSION ? ["createdTemplate"] : []], "case");
+  if (data.version === EXPORT_VERSION) validateCreatedTemplate(data.case.createdTemplate);
   identifier(data.case.id);
   transferSegment(data.case.title, "Case title");
   string(data.case.markdown, "case Markdown");
@@ -141,9 +154,11 @@ function parseTransfer(raw) {
   object(data.sender.profile, [...PROFILE_FIELDS], "surgeon profile");
   for (const field of PROFILE_FIELDS) string(data.sender.profile[field], field, 4096);
   if (!["XL", "XL-Long", "2X", "2X-Long", "Unknown"].includes(data.sender.profile.gown)) fail("Invalid sender gown value.");
-  object(data.template, ["name", "markdown"], "template");
-  string(data.template.name, "template name", 180);
-  string(data.template.markdown, "template Markdown");
+  if (data.version === 1) {
+    object(data.template, ["name", "markdown"], "template");
+    string(data.template.name, "template name", 180);
+    string(data.template.markdown, "template Markdown");
+  }
   if (!Array.isArray(data.attachments) || data.attachments.length > TRANSFER_LIMITS.images) fail("Too many attachments.");
   const names = /* @__PURE__ */ new Set();
   for (const attachment of data.attachments) {
@@ -153,7 +168,7 @@ function parseTransfer(raw) {
     decodeTransferImage(attachment);
   }
   const used = /* @__PURE__ */ new Set();
-  for (const markdown of [data.case.markdown, data.template.markdown]) {
+  for (const markdown of [data.case.markdown, ...data.version === 1 ? [data.template.markdown] : []]) {
     if (portableMarkdown(markdown) !== markdown) fail("Bundle contains internal metadata, HTML or active renderer syntax.");
     for (const ref of imageReferences(markdown)) {
       if (!names.has(ref.target) || ref.raw !== `![[${ref.target}]]`) fail("Unresolved, remote or unsafe image reference.");
@@ -162,6 +177,31 @@ function parseTransfer(raw) {
   }
   if (names.size !== used.size) fail("Bundle includes unreferenced attachments.");
   return data;
+}
+function validateCreatedTemplate(value) {
+  if (value === null) return;
+  object(value, ["name", "version"], "created template metadata");
+  string(value.name, "created template name", 180);
+  string(value.version, "created template version", 80);
+  if (!value.name.trim() || /[\x00-\x1f\x7f]/.test(value.name + value.version)) fail("Invalid created template metadata.");
+}
+function createdTemplateMetadata(fm = {}) {
+  const key3 = own(fm, "cst_created_template") || own(fm, "cst_created_template_version") ? "cst_created_template" : own(fm, "template_created") || own(fm, "template_created_version") ? "template_created" : "template";
+  if (key3 === "template" && own(fm, "cst_transfer_template")) return null;
+  const name = fm[key3];
+  const rawVersion = fm[key3 === "template" ? "template_version" : key3 + "_version"];
+  if (typeof name !== "string" || !name.trim() || /^(manual|unknown)$/i.test(name.trim())) return null;
+  const version = typeof rawVersion === "string" ? rawVersion : Number.isSafeInteger(rawVersion) && rawVersion >= 0 ? String(rawVersion) : "";
+  const result = { name, version };
+  try {
+    validateCreatedTemplate(result);
+    return result;
+  } catch {
+    return null;
+  }
+}
+function transferCreatedTemplate(bundle) {
+  return bundle.version === EXPORT_VERSION ? bundle.case.createdTemplate : null;
 }
 function fallbackMarkdown(raw) {
   string(raw, "portable file", TRANSFER_LIMITS.bytes);
@@ -283,7 +323,7 @@ function createTransferService(plugin, deps) {
     let encodedBytes = 0;
     async function portable(text, sourcePath) {
       string(text, "case or template Markdown");
-      let result = text.replace(/^\uFEFF/, "").replace(/^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/, "");
+      let result = stripReservedTransferComments(text).replace(/^\uFEFF/, "").replace(/^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/, "");
       for (const ref of imageReferences(result).reverse()) {
         const refKey = sourcePath + "\0" + ref.target;
         let name = known.get(refKey), state = null, encoded;
@@ -334,7 +374,7 @@ function createTransferService(plugin, deps) {
       same(state.file, state.path);
     }
   }
-  async function prepareExport(file, options = {}) {
+  async function prepareExport(file) {
     const context = plugin.caseContext(file);
     if (!context) fail("Select a case in Specialty / Surgeon / Case.");
     const source = await read(file);
@@ -344,24 +384,25 @@ function createTransferService(plugin, deps) {
     const registry = await read(registryFile);
     const data = await plugin.getSurgeonData(context.specialty, context.surgeon, { createIfMissing: false });
     if (!data || data.unavailable) fail("Sender surgeon profile unavailable.");
-    const variant = options.variant || fm.variant || fm.spine_variant || String(fm.template || "").match(/(?:^|[-/])(Cervical|Lumbar|Thoracic)$/)?.[1] || "";
-    const storedTemplate = typeof fm.cst_transfer_template === "string" && fm.cst_transfer_template.startsWith(plugin.p("Admin/Transfers") + "/") && /\/Sender template\.md$/.test(fm.cst_transfer_template) ? lookup(path(fm.cst_transfer_template)) : null;
-    const template = isFile(storedTemplate) ? { path: storedTemplate.path, key: String(fm.template || "Portable sender template") } : await plugin.getTemplateReadOnly(context.specialty, variant);
-    const templateState = await read(lookup(template.path));
     const { portable, attachments, imageStates, warnings } = collector();
-    const bundle = { format: FORMAT, version: 1, id: unique("transfer"), case: { id: identifier(fm.cst_id || unique("case")), title: transferSegment(file.basename, "Case title"), markdown: await portable(source.text, source.path), example: fm.cst_example === true || fm.cst_id === "cst-example-lumbar-v1" }, sender: { specialty: context.specialty, surgeon: context.surgeon, profile: profileOf(data) }, template: { name: template.key, markdown: await portable(templateState.text, templateState.path) }, attachments };
+    const bundle = { format: FORMAT, version: EXPORT_VERSION, id: unique("transfer"), case: { id: identifier(fm.cst_id || unique("case")), title: transferSegment(file.basename, "Case title"), markdown: await portable(source.text, source.path), example: fm.cst_example === true || fm.cst_id === "cst-example-lumbar-v1", createdTemplate: createdTemplateMetadata(fm) }, sender: { specialty: context.specialty, surgeon: context.surgeon, profile: profileOf(data) }, attachments };
     const json = JSON.stringify(bundle, null, 2);
     parseTransfer(json);
     const exportPath = path(plugin.p("Admin/Exports"), `${bundle.id}.cst.json`);
     await check(source);
     await check(registry);
-    await check(templateState);
-    return { bundle, json, exportPath, warnings, states: [source, registry, templateState], imageStates };
+    return { bundle, json, exportPath, warnings, states: [source, registry], imageStates };
   }
-  async function saveExport(plan) {
+  async function exportJSON(plan) {
+    if (stopped) fail("Transfer was unloaded. Reopen CST Notes before continuing.");
     for (const state of plan.states) await check(state);
     await checkImages(plan.imageStates);
     parseTransfer(plan.json);
+    if (stopped) fail("Transfer was unloaded. Reopen CST Notes before continuing.");
+    return plan.json;
+  }
+  async function saveExport(plan) {
+    await exportJSON(plan);
     vacant(plan.exportPath);
     await folder(plugin.p("Admin/Exports"));
     for (const state of plan.states) await check(state);
@@ -375,7 +416,7 @@ function createTransferService(plugin, deps) {
     const source = { ...await read(file), external: true };
     const { portable, attachments, imageStates } = collector();
     const metadata = deps.parseFrontmatterObject(source.text);
-    const bundle = { format: FORMAT, version: 1, id: unique("external"), case: { id: unique("case"), title: transferSegment(deps.validatedPathSegment(choice.title, "Case title")), markdown: await portable(source.text, source.path), example: metadata.cst_example === true || metadata.cst_id === "cst-example-lumbar-v1" }, sender: { specialty: transferSegment(deps.validatedPathSegment(choice.specialty, "Specialty")), surgeon: transferSegment(deps.validatedPathSegment(choice.surgeon, "Surgeon", { person: true })), profile: { gloves: "Unknown", gown: "Unknown", music: "" } }, template: { name: "External original; sort manually", markdown: "" }, attachments };
+    const bundle = { format: FORMAT, version: EXPORT_VERSION, id: unique("external"), case: { id: unique("case"), title: transferSegment(deps.validatedPathSegment(choice.title, "Case title")), markdown: await portable(source.text, source.path), example: metadata.cst_example === true || metadata.cst_id === "cst-example-lumbar-v1", createdTemplate: null }, sender: { specialty: transferSegment(deps.validatedPathSegment(choice.specialty, "Specialty")), surgeon: transferSegment(deps.validatedPathSegment(choice.surgeon, "Surgeon", { person: true })), profile: { gloves: "Unknown", gown: "Unknown", music: "" } }, attachments };
     const plan = await prepareImport(bundle, choice);
     plan.parentGuards.push(...parents([source.path]));
     plan.externalSource = source;
@@ -417,7 +458,7 @@ function createTransferService(plugin, deps) {
     vacant(transferRoot);
     vacant(attachmentRoot);
     path(transferRoot, "source.cst.json");
-    path(transferRoot, "Sender template.md");
+    if (bundle.version === 1) path(transferRoot, "Sender template.md");
     for (const item of bundle.attachments) path(attachmentRoot, item.name);
     return { parentGuards: parents([casePath, path(transferRoot, "source.cst.json"), path(attachmentRoot, "image-1.png")]), bundle, specialty, surgeon: surgeon2, title, casePath, specialtyPath, surgeonPath, specialtyObject: lookup(specialtyPath), surgeonObject: lookup(surgeonPath), registry, recipient, fingerprint: recipient ? plugin.surgeonRecordFingerprint(recipient) : "", resolved, transferRoot, attachmentRoot, caseId: unique("case") };
   }
@@ -502,7 +543,7 @@ function createTransferService(plugin, deps) {
         }
       }
       guardParents(plan.parentGuards);
-      await vault.create(path(plan.transferRoot, "Sender template.md"), rewrite(plan.bundle.template.markdown));
+      if (plan.bundle.version === 1) await vault.create(path(plan.transferRoot, "Sender template.md"), rewrite(plan.bundle.template.markdown));
       const record = (await plugin.getRegistrySurgeon(plan.specialty, plan.surgeon, { create: false })).data;
       if (!record || plugin.surgeonRecordFingerprint(record) !== plugin.surgeonRecordFingerprint(expectedProfile)) fail("Recipient surgeon profile changed during import.");
       same(destination, plan.surgeonPath);
@@ -513,7 +554,8 @@ function createTransferService(plugin, deps) {
       guardParents(plan.parentGuards);
       same(destination, plan.surgeonPath);
       vacant(plan.casePath);
-      const fm = { schema_version: 3, ...plan.externalSource ? {} : { template_initialized: true, template: plan.bundle.template.name, cst_transfer_template: path(plan.transferRoot, "Sender template.md") }, cst_type: "case", cst_id: plan.caseId, specialty: plan.specialty, surgeon: plan.surgeon, surgeon_id: record.cst_id, cst_transfer_id: plan.bundle.id, cst_transfer_source_id: plan.bundle.case.id, ...plan.externalSource ? { cst_external_source: plan.externalSource.path } : {}, ...plan.bundle.case.example ? { cst_example: true } : {} };
+      const createdTemplate = transferCreatedTemplate(plan.bundle);
+      const fm = { schema_version: 3, ...plan.externalSource ? {} : { template_initialized: true }, ...createdTemplate ? { template: createdTemplate.name, template_version: createdTemplate.version, cst_created_template: createdTemplate.name, cst_created_template_version: createdTemplate.version } : {}, ...plan.bundle.version === 1 ? { cst_transfer_template: path(plan.transferRoot, "Sender template.md") } : {}, cst_type: "case", cst_id: plan.caseId, specialty: plan.specialty, surgeon: plan.surgeon, surgeon_id: record.cst_id, cst_transfer_id: plan.bundle.id, cst_transfer_source_id: plan.bundle.case.id, ...plan.externalSource ? { cst_external_source: plan.externalSource.path } : {}, ...plan.bundle.case.example ? { cst_example: true } : {} };
       const content = rewrite(plan.bundle.case.markdown);
       const heading = /^# [^\r\n]+/m.exec(content);
       const body = heading ? content.slice(0, heading.index + heading[0].length) + `
@@ -562,10 +604,167 @@ ${body}`;
   function dispose() {
     stopped = true;
   }
-  return { prepareExport, saveExport: (plan) => mutate(() => saveExport(plan)), prepareImport, prepareExternal, applyImport, mutate, dispose, incomingFolder, read, check, folder, vacant, path, unique };
+  return { prepareExport, exportJSON, saveExport: (plan) => mutate(() => saveExport(plan)), prepareImport, prepareExternal, applyImport, mutate, dispose, incomingFolder, read, check, folder, vacant, path, unique };
 }
+var TRANSFER_LIMITS, PROFILE_FIELDS, FORMAT, EXPORT_VERSION, own, bytes, fold;
+var init_transfer_core = __esm({
+  "src/transfer-core.mjs"() {
+    TRANSFER_LIMITS = Object.freeze({ bytes: 24 * 1024 * 1024, text: 1024 * 1024, images: 32, imageBytes: 5 * 1024 * 1024 });
+    PROFILE_FIELDS = Object.freeze(["gloves", "gown", "music"]);
+    FORMAT = "cst-notes-portable";
+    EXPORT_VERSION = 2;
+    own = (v, k) => Object.prototype.hasOwnProperty.call(v, k);
+    bytes = (s) => new TextEncoder().encode(s).length;
+    fold = (s) => s.normalize("NFC").toLowerCase();
+  }
+});
+
+// src/template-lifecycle.mjs
+var template_lifecycle_exports = {};
+__export(template_lifecycle_exports, {
+  TEMPLATE_REVISIONS_TO_KEEP: () => TEMPLATE_REVISIONS_TO_KEEP,
+  creationTemplateMetadata: () => creationTemplateMetadata,
+  describeTemplateProvenance: () => describeTemplateProvenance,
+  pruneTemplateRevisions: () => pruneTemplateRevisions,
+  templateRevisionNumber: () => templateRevisionNumber
+});
+function templateRevisionNumber(name) {
+  const match = /^v([1-9]\d*)\.md$/.exec(String(name || ""));
+  const number = match ? Number(match[1]) : 0;
+  return Number.isSafeInteger(number) ? number : 0;
+}
+function creationTemplateMetadata(frontmatter = {}) {
+  const recorded = createdTemplateMetadata(frontmatter);
+  if (!recorded) return { name: "", version: "" };
+  const name = recorded.name.trim();
+  const storedVersion = /^(unknown|manual)$/i.test(recorded.version.trim()) ? "" : recorded.version.trim();
+  const numericVersion = /^v?([1-9]\d*)$/i.exec(storedVersion);
+  const version = numericVersion && Number.isSafeInteger(Number(numericVersion[1])) ? `v${Number(numericVersion[1])}` : storedVersion;
+  return { name, version };
+}
+async function describeTemplateProvenance(plugin, file) {
+  const path = file.path;
+  plugin.assertVaultFilePath(file, path, "Case changed while reading template provenance.");
+  const fm = await plugin.fileFrontmatter(file);
+  plugin.assertVaultFilePath(file, path, "Case changed while reading template provenance.");
+  const created = creationTemplateMetadata(fm);
+  let current = null;
+  const name = created.name;
+  if (name && name !== "manual" && !/[\\/\x00-\x1f]/.test(name) && !/^\.{1,2}$/.test(name)) {
+    let relative = /^Spine-(Cervical|Lumbar|Thoracic)$/.test(name) ? `Spine/${name.slice(6)}` : name.endsWith("-Default") ? "_Default" : name;
+    if (name === "Example") relative = "Example";
+    const templatePath = name === "Example" && plugin.exampleTemplatePath ? plugin.exampleTemplatePath() : plugin.p(`_Templates/Cases/${relative}.md`);
+    const template = plugin.app.vault.getAbstractFileByPath(templatePath);
+    if (template?.extension === "md" && plugin.isTemplatePath(templatePath)) {
+      try {
+        const versions = plugin.templateVersionFilesReadOnly(templatePath);
+        const latest = versions.at(-1);
+        if (latest) current = { name, version: `v${latest.n}` };
+      } catch {
+      }
+    }
+  }
+  return { created, current };
+}
+async function pruneTemplateRevisions(plugin, file, currentVersion, expectedText) {
+  if (!Number.isSafeInteger(currentVersion) || currentVersion < TEMPLATE_REVISIONS_TO_KEEP + 1) return 0;
+  const vault = plugin.app.vault;
+  const path = file.path;
+  const rootPath = plugin.templateVersionRoot(path);
+  const root = vault.getAbstractFileByPath(rootPath);
+  const versions = plugin.templateVersionFilesReadOnly(path);
+  const latest = versions.at(-1);
+  const stale = versions.filter((entry) => entry.n <= currentVersion - TEMPLATE_REVISIONS_TO_KEEP);
+  if (!stale.length) return 0;
+  if (typeof vault.trash !== "function") throw new Error("Template cleanup paused: the vault trash service is unavailable.");
+  const conflict2 = () => new Error("Template cleanup paused because the template or revision history changed. Wait for Sync, then retry.");
+  const remaining = new Set(versions.map((entry) => entry.file));
+  const stamp = (item) => [item.stat?.mtime, item.stat?.ctime, item.stat?.size].join(":");
+  const states = new Map(versions.map((entry) => [entry.file, { path: entry.file.path, stamp: stamp(entry.file), n: entry.n }]));
+  const templateStamp = stamp(file);
+  const assertState = () => {
+    plugin.assertVaultFilePath(file, path, "Template moved or was replaced during revision cleanup.");
+    if (plugin.templateVersionRoot(path) !== rootPath || vault.getAbstractFileByPath(rootPath) !== root || root?.path !== rootPath) throw conflict2();
+    if (plugin.unloading || plugin.settings?.resetNeedsReview || stamp(file) !== templateStamp) throw conflict2();
+    const live = plugin.templateVersionFilesReadOnly(path);
+    if (live.length !== remaining.size || live.some((entry) => {
+      const state = states.get(entry.file);
+      return !remaining.has(entry.file) || !state || state.n !== entry.n || state.path !== entry.file.path || state.stamp !== stamp(entry.file);
+    })) throw conflict2();
+    if (!latest || latest.n !== currentVersion || live.at(-1)?.file !== latest.file) throw conflict2();
+  };
+  const verifyCurrent = async () => {
+    assertState();
+    const activeText = await vault.read(file);
+    assertState();
+    const savedText = await vault.read(latest.file);
+    assertState();
+    if (activeText !== expectedText || savedText !== expectedText) throw conflict2();
+  };
+  await verifyCurrent();
+  const plans = [];
+  for (const entry of stale) {
+    const revisionPath = `${rootPath}/v${entry.n}.md`;
+    plugin.assertVaultFilePath(entry.file, revisionPath, "Template revision moved or was replaced before cleanup.");
+    const text = await vault.read(entry.file);
+    assertState();
+    plugin.assertVaultFilePath(entry.file, revisionPath, "Template revision moved or was replaced while preparing cleanup.");
+    plans.push({ ...entry, path: revisionPath, text });
+  }
+  let removed = 0;
+  for (const plan of plans) {
+    await verifyCurrent();
+    plugin.assertVaultFilePath(plan.file, plan.path, "Template revision moved or was replaced before cleanup.");
+    const text = await vault.read(plan.file);
+    assertState();
+    plugin.assertVaultFilePath(plan.file, plan.path, "Template revision moved or was replaced during cleanup.");
+    if (text !== plan.text) throw conflict2();
+    const nonce = globalThis.crypto?.randomUUID?.() || `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+    const stagedName = "r" + nonce.replace(/-/g, "").slice(0, Math.min(15, plan.file.name.length - 1));
+    const stagedPath = `${rootPath}/${stagedName}`;
+    if (vault.getAbstractFileByPath(stagedPath)) throw conflict2();
+    try {
+      await plugin.renameVaultItem(plan.file, stagedPath, plan.path);
+      remaining.delete(plan.file);
+      await verifyCurrent();
+      plugin.assertVaultFilePath(plan.file, stagedPath, "Template revision moved during retirement.");
+      const stagedStamp = stamp(plan.file);
+      const stagedText = await vault.read(plan.file);
+      assertState();
+      plugin.assertVaultFilePath(plan.file, stagedPath, "Template revision moved during retirement.");
+      if (stagedText !== plan.text || stamp(plan.file) !== stagedStamp) throw conflict2();
+      await vault.trash(plan.file, false);
+      if (vault.getAbstractFileByPath(stagedPath)) throw conflict2();
+      removed++;
+      assertState();
+    } catch (error) {
+      if (vault.getAbstractFileByPath(stagedPath) === plan.file) {
+        if (!vault.getAbstractFileByPath(plan.path)) {
+          try {
+            await plugin.renameVaultItem(plan.file, plan.path, stagedPath);
+            remaining.add(plan.file);
+          } catch {
+            throw new Error(`Template cleanup stopped; the revision was preserved at ${plan.file.path}. Review after Sync settles.`);
+          }
+        } else {
+          throw new Error(`Template cleanup stopped; both the incoming revision and the retired copy at ${stagedPath} were preserved.`);
+        }
+      }
+      throw error;
+    }
+  }
+  return removed;
+}
+var TEMPLATE_REVISIONS_TO_KEEP;
+var init_template_lifecycle = __esm({
+  "src/template-lifecycle.mjs"() {
+    init_transfer_core();
+    TEMPLATE_REVISIONS_TO_KEEP = 6;
+  }
+});
 
 // src/transfer-ui.mjs
+init_transfer_core();
 function installTransferFeatures(plugin, deps) {
   if (plugin.cstTransferFeatures) return plugin.cstTransferFeatures;
   const service = createTransferService(plugin, deps);
@@ -578,6 +777,8 @@ function installTransferFeatures(plugin, deps) {
       onOpen() {
         this.alive = true;
         activeModals.add(this);
+        this.modalEl?.classList?.add("cst-transfer-modal");
+        this.contentEl.classList?.add("cst-transfer-content");
         this.contentEl.createEl("h2", { text: title });
         Promise.resolve().then(() => render(this.contentEl, this)).catch((error) => {
           if (this.alive) this.contentEl.createEl("p", { text: error.message || String(error), attr: { role: "alert" } });
@@ -594,7 +795,7 @@ function installTransferFeatures(plugin, deps) {
     return view;
   }
   function button(el, text, action) {
-    const control = el.createEl("button", { text });
+    const control = el.createEl("button", { text, attr: { type: "button" } });
     control.onclick = async () => {
       if (control.disabled || !control.isConnected) return;
       control.disabled = true;
@@ -639,7 +840,9 @@ function installTransferFeatures(plugin, deps) {
     el.createEl("p", { text: `${bundle.case.title} · ${bundle.sender.specialty} / ${bundle.sender.surgeon}` });
     for (const field of PROFILE_FIELDS) el.createEl("p", { text: `${field}: ${bundle.sender.profile[field] || "(empty)"}` });
     previewText(el, "Case text to share", bundle.case.markdown);
-    previewText(el, `Sender template: ${bundle.template.name}`, bundle.template.markdown);
+    const created = transferCreatedTemplate(bundle);
+    el.createEl("p", { text: created ? `Created with ${created.name}${created.version ? " v" + created.version.replace(/^v/i, "") : ""} (informational only).` : "Creation template was not recorded. No template is required to import this case." });
+    if (bundle.version === 1) previewText(el, `Legacy sender template: ${bundle.template.name}`, bundle.template.markdown);
     el.createEl("p", { text: `${bundle.attachments.length} referenced images. Image metadata is retained: review photos and their metadata for identifying information before sharing.` });
     for (const attachment of bundle.attachments) {
       const detail = el.createEl("details");
@@ -682,7 +885,7 @@ function installTransferFeatures(plugin, deps) {
   }
   function confirmImport(plan, sourceState, sourceView, afterImport) {
     if (sourceState) plan.sourceState = sourceState;
-    modal("Confirm CST import", (el, view) => {
+    modal("Confirm CST Notes import", (el, view) => {
       el.createEl("p", { text: `Create: ${plan.casePath}` });
       el.createEl("p", { text: `${plan.specialtyObject ? "Use existing" : "Create"} specialty. ${plan.surgeonObject ? "Use existing" : "Create"} surgeon.` });
       el.createEl("p", { text: "Resolved surgeon profile (changed fields update all live headers for this recipient surgeon):" });
@@ -690,7 +893,7 @@ function installTransferFeatures(plugin, deps) {
         el.createEl("p", { text: `${row.field}: ${plan.recipient ? row.recipient || "(empty)" : "(new profile)"} → ${row.sender || "(empty)"}` });
       }
       previewText(el, "Case content", plan.bundle.case.markdown);
-      el.createEl("p", { text: `Sender template and original bundle are saved for reference at ${plan.transferRoot}. Existing templates are not replaced. Images go to ${plan.attachmentRoot}. A registry backup is created before changes. If Sync interrupts, completed work stays available for review.` });
+      el.createEl("p", { text: `The original bundle${plan.bundle.version === 1 ? " and its legacy sender template" : ""} is saved for recovery at ${plan.transferRoot}. Existing templates are not replaced. Images go to ${plan.attachmentRoot}. A registry backup is created before changes. If Sync interrupts, completed work stays available for review.` });
       const consent = check(el, "I reviewed the destination, case contents and profile changes.");
       button(el, "Confirm and import", async () => {
         if (!consent.checked) throw new Error("Review the preview and check the confirmation box.");
@@ -706,7 +909,7 @@ function installTransferFeatures(plugin, deps) {
     });
   }
   function importBundle(bundle, sourceState = null, afterImport = null) {
-    return modal("Import portable CST case", (el, view) => {
+    return modal("Import portable CST Notes case", (el, view) => {
       bundlePreview(el, bundle);
       const profileArea = el.createDiv();
       let resolved = null, readChoice = null, nonce = 0;
@@ -720,6 +923,10 @@ function installTransferFeatures(plugin, deps) {
         const choice = readDestination();
         const initial = await service.prepareImport(bundle, choice);
         if (!view.alive || token !== nonce) return;
+        if (!initial.recipient) {
+          confirmImport(initial, sourceState, view, afterImport);
+          return;
+        }
         profileArea.empty();
         readChoice = JSON.stringify(choice);
         resolved = {};
@@ -781,7 +988,7 @@ function installTransferFeatures(plugin, deps) {
       importBundle(parseTransfer(raw), state);
     } catch (error) {
       if (error.code !== "UNSUPPORTED_TRANSFER_VERSION") throw error;
-      modal("Unsupported CST portable version", (el, view) => {
+      modal("Unsupported CST Notes portable version", (el, view) => {
         el.createEl("p", { text: error.message });
         button(el, "Review plain Markdown fallback", async () => {
           await plainFallback(raw, state);
@@ -790,19 +997,45 @@ function installTransferFeatures(plugin, deps) {
       });
     }
   }
-  plugin.openCSTExport = (file) => modal("Export CST case", (el, view) => {
+  plugin.openCSTExport = (file) => modal("Export CST Notes case", (el, view) => {
     if (!plugin.caseContext(file)) throw new Error("Select a CST case first.");
-    el.createEl("p", { text: "Share one case, its sender surgeon profile, its template and referenced local images. Review for patient identifiers, private notes and photo metadata. No backend scripts or unrelated cases are included. Your original is preserved." });
-    const variant = plugin.caseContext(file).specialty.toLowerCase() === "spine" ? select(el, "Spine template used by this case", [["", "Use saved case template"], ...["Cervical", "Lumbar", "Thoracic"].map((s) => [s, s])]) : null;
+    el.createEl("p", { text: "Share one case, its sender surgeon profile and referenced local images. Creation template metadata is informational only; no template files are needed or included. Review for patient identifiers, private notes and photo metadata. No backend scripts or unrelated cases are included. Your original is preserved." });
     button(el, "Build privacy preview", async () => {
-      const plan = await service.prepareExport(file, { variant: variant?.value || "" });
+      const plan = await service.prepareExport(file);
       if (!view.alive) return;
       modal("Privacy preview", (preview, confirm) => {
         bundlePreview(preview, plan.bundle);
         for (const warning of plan.warnings) preview.createEl("p", { text: warning });
         preview.createEl("p", { text: `Save shareable file in your vault: ${plan.exportPath}. On mobile or desktop, select the file in Obsidian’s Files pane and use the available share/open action or your device’s Files app.` });
-        const consent = check(preview, "I reviewed all text and images and approve saving this export.");
-        button(preview, "Save portable export", async () => {
+        preview.createEl("p", { text: "To receive this case: Admin → Import → Import from CST Notes → paste the JSON → review and import. Older versions may need an update to read the new portable format." });
+        const consent = check(preview, "I reviewed all text and images and approve sharing this export.");
+        const manual = preview.createDiv({ cls: "cst-transfer-manual-copy" });
+        const actions = preview.createDiv({ cls: "cst-transfer-actions" });
+        button(actions, "Copy JSON", async () => {
+          if (!consent.checked) throw new Error("Review the privacy preview and confirm before exporting.");
+          const json = await service.exportJSON(plan);
+          if (!confirm.alive || !view.alive) return;
+          const copy = deps.copyText || (globalThis.navigator?.clipboard?.writeText ? (text) => globalThis.navigator.clipboard.writeText(text) : null);
+          try {
+            if (!copy) throw new Error("Clipboard unavailable");
+            await copy(json);
+            notice("JSON copied. Send it to the recipient to paste into Import from CST Notes.");
+          } catch {
+            if (!confirm.alive || !view.alive) return;
+            manual.empty();
+            manual.createEl("p", { text: "Automatic copying is unavailable on this device. Select the JSON below and use Copy, or save the portable file instead." });
+            const area = manual.createEl("textarea", { cls: "cst-transfer-json", attr: { "aria-label": "JSON to copy manually", rows: "6", readonly: "", spellcheck: "false" } });
+            area.value = json;
+            button(manual, "Select JSON", async () => {
+              area.value = await service.exportJSON(plan);
+              if (!confirm.alive) return;
+              area.focus?.();
+              area.select?.();
+              area.setSelectionRange?.(0, area.value.length);
+            });
+          }
+        });
+        button(actions, "Save portable export", async () => {
           if (!consent.checked) throw new Error("Review the privacy preview and confirm before exporting.");
           const exported = await service.saveExport(plan);
           confirm.close();
@@ -813,9 +1046,20 @@ function installTransferFeatures(plugin, deps) {
       });
     });
   });
-  plugin.openCSTImport = () => modal("Import CST portable file", (el, view) => {
-    el.createEl("p", { text: "Choose a CST portable JSON file. Files are limited to 24 MiB, with up to 32 images (5 MiB each). Import always previews the destination and profile changes." });
-    const picker = el.createEl("input", { type: "file", attr: { accept: ".json,application/json", "aria-label": "Choose portable file from device" } });
+  plugin.openCSTImport = () => modal("Import from CST Notes", (el, view) => {
+    el.createEl("p", { text: "Paste the JSON shared by another CST Notes user, then review the case, destination and surgeon profile before importing. Nothing is imported until you confirm." });
+    const pasted = el.createEl("textarea", { cls: "cst-transfer-json", attr: { "aria-label": "Paste CST Notes JSON", placeholder: "Paste exported CST Notes JSON here", rows: "8", spellcheck: "false", autocapitalize: "off", autocomplete: "off", maxlength: String(TRANSFER_LIMITS.bytes + 1) } });
+    const actions = el.createDiv({ cls: "cst-transfer-actions" });
+    button(actions, "Review pasted JSON", async () => {
+      if (!pasted.value.trim()) throw new Error("Paste the exported CST Notes JSON first.");
+      await loadImport(pasted.value);
+      view.close();
+    });
+    button(actions, "Cancel", () => view.close());
+    const alternatives = el.createEl("details");
+    alternatives.createEl("summary", { text: "Or import a JSON file" });
+    alternatives.createEl("p", { text: "Files are limited to 24 MiB, with up to 32 images (5 MiB each). Import always previews the destination and profile changes." });
+    const picker = alternatives.createEl("input", { type: "file", attr: { accept: ".json,application/json", "aria-label": "Choose portable file from device" } });
     picker.onchange = async () => {
       const file = picker.files?.[0];
       if (!file) return;
@@ -823,7 +1067,10 @@ function installTransferFeatures(plugin, deps) {
       try {
         if (file.size > TRANSFER_LIMITS.bytes) throw new Error("Portable file exceeds 24 MiB.");
         const raw = await file.text();
-        if (view.alive) await loadImport(raw);
+        if (view.alive) {
+          await loadImport(raw);
+          view.close();
+        }
       } catch (error) {
         notice(error.message || String(error));
       } finally {
@@ -831,13 +1078,16 @@ function installTransferFeatures(plugin, deps) {
       }
     };
     const files = vault.getFiles().filter((file) => file.path.endsWith(".cst.json"));
-    const fromVault = select(el, "Or choose an exported vault file", [["", "Select file…"], ...files.map((f) => [f.path, f.path])]);
-    button(el, "Read selected vault export", async () => {
+    const fromVault = select(alternatives, "Or choose an exported vault file", [["", "Select file…"], ...files.map((f) => [f.path, f.path])]);
+    button(alternatives, "Read selected vault export", async () => {
       const file = vault.getAbstractFileByPath(fromVault.value);
       if (!(file instanceof deps.TFile)) throw new Error("Select an available vault export.");
       if (file.stat?.size > TRANSFER_LIMITS.bytes) throw new Error("Portable file exceeds 24 MiB.");
       const state = await service.read(file);
-      if (view.alive) await loadImport(state.text, state);
+      if (view.alive) {
+        await loadImport(state.text, state);
+        view.close();
+      }
     });
   });
   plugin.renderTransferAdmin = (el) => {
@@ -846,7 +1096,7 @@ function installTransferFeatures(plugin, deps) {
     const cases = plugin.allCaseFiles();
     const selection = select(el, "Case to export", [["", "Select case…"], ...cases.map((f) => [f.path, f.path])]);
     button(el, "Export selected CST case", () => plugin.openCSTExport(vault.getAbstractFileByPath(selection.value)));
-    button(el, "Import CST portable file", () => plugin.openCSTImport());
+    button(el, "Import from CST Notes", () => plugin.openCSTImport());
   };
   function migration() {
     if (!deps.LegacyTemplateMigrationModal) throw new Error("The integration has not supplied the Legacy Template Migration workspace.");
@@ -3011,7 +3261,7 @@ function installAdminWorkspace(plugin, deps) {
           "Confirm you reviewed the recovered content and waited for Sync. This clears the saved reset pause; archives are retained."
         ], "I reviewed recovery — resume automation")) return;
         await clearResetReview(plan, { confirmed: true });
-        await renderRecovery(el);
+        await plugin.renderRecoveryWorkspace(el);
       });
     }
     el.createEl("p", { text: "Preview one archived item before restoring. Existing files are preserved. Case conflicts use a recovered filename when the case identity is not already active." });
@@ -3036,7 +3286,7 @@ function installAdminWorkspace(plugin, deps) {
           plan.changes?.length ? plan.changes.length + " missing surgeon profiles will also be restored from the archive after backing up the current registry." : plan.kind === "recovery-folder" ? plan.inventory.length + " files/folders will be copied. Archive originals and partial restores are retained on conflicts." : "New files will be created. Original archives stay available; restored folder names update only routing metadata."
         ])) {
           await restore(plan);
-          await renderRecovery(el);
+          await plugin.renderRecoveryWorkspace(el);
         }
       });
     }
@@ -3148,13 +3398,42 @@ function installAdminWorkspace(plugin, deps) {
   }
   async function renderAdmin(el) {
     el.empty();
-    el.createEl("h2", { text: "CST Notes Admin" });
+    el.createEl("h2", { text: "Admin" });
     el.createEl("p", { text: isDeveloper() ? "Developer mode shows internal tools. This display preference is not a security boundary." : "Manage your case workspace and recover archived content." });
-    button(el, isDeveloper() ? "Switch to Normal mode" : "Switch to Developer mode", async () => {
-      await setDeveloperMode(!isDeveloper());
-      await renderAdmin(el);
-    });
-    const nav = el.createDiv({ cls: "cst-actions" }), body = el.createDiv();
+    const enabling = !isDeveloper();
+    let armed = false;
+    const mode = el.createEl("button", { text: enabling ? "Enable developer mode" : "Disable developer mode", attr: { type: "button" } });
+    mode.onclick = async () => {
+      if (mode.disabled) return;
+      if (enabling && !armed && !isDeveloper()) {
+        armed = true;
+        mode.textContent = "Are you sure?";
+        mode.className = "cst-admin-mode-toggle is-confirming";
+        return;
+      }
+      mode.disabled = true;
+      try {
+        if (isDeveloper() !== enabling) await setDeveloperMode(enabling);
+        await plugin.renderAdminWorkspace(el);
+      } catch (error) {
+        el.createEl("p", { text: error.message, attr: { role: "alert" } });
+      } finally {
+        mode.disabled = false;
+        resetMode();
+      }
+    };
+    function resetMode() {
+      armed = false;
+      const label = enabling ? "Enable developer mode" : "Disable developer mode";
+      if (mode.textContent !== label) mode.textContent = label;
+      if (mode.className !== "cst-admin-mode-toggle") mode.className = "cst-admin-mode-toggle";
+    }
+    resetMode();
+    mode.onblur = resetMode;
+    mode.onkeydown = (event) => {
+      if (event.key === "Escape") resetMode();
+    };
+    const nav = el.createDiv({ cls: "cst-admin-action-grid" }), body = el.createDiv();
     const pages = {
       settings: ["Settings", (target) => plugin.renderConfig(target)],
       specialties: ["Specialties", (target) => {
@@ -3162,8 +3441,7 @@ function installAdminWorkspace(plugin, deps) {
       }],
       surgeons: ["Surgeons", (target) => plugin.renderSurgeonAdmin(target)],
       templates: ["Templates", (target) => plugin.renderTemplateAdmin(target)],
-      transfer: ["Transfer", (target) => plugin.renderTransferAdmin(target)],
-      externalImport: ["External Import", (target) => plugin.renderExternalImport(target)],
+      import: ["Import", (target) => plugin.renderImportWorkspace(target)],
       resources: ["Resources", (target) => plugin.renderResourceAdmin(target)],
       images: ["Images", (target) => plugin.renderImageAdmin(target)],
       onboarding: ["Onboarding", (target) => plugin.renderOnboardingAdmin(target)],
@@ -3181,6 +3459,7 @@ function installAdminWorkspace(plugin, deps) {
     for (const [id2, [label, fallback]] of Object.entries(pages)) {
       if (!isDeveloper() && ADMIN_DEVELOPER_PAGES.includes(id2)) continue;
       button(nav, label, async () => {
+        resetMode();
         body.empty();
         if (!guard(id2, body)) return;
         const render = deps.adminPages?.[id2] || fallback;
@@ -3784,6 +4063,7 @@ var FEATURE_PAGES = Object.freeze({
   "Admin/Admin.md": ["CST Notes Admin", "cst-admin-workspace", "renderAdminWorkspace"],
   "Admin/Recovery.md": ["Recovery", "cst-admin-recovery", "renderRecoveryWorkspace"],
   "Admin/Metrics.md": ["Metrics", "cst-admin-metrics", "renderMetricsWorkspace"],
+  "Admin/Import.md": ["Import", "cst-admin-import", "renderImportWorkspace"],
   "Admin/Transfer.md": ["CST Notes transfer", "cst-admin-transfer", "renderTransferAdmin"],
   "Admin/External Import.md": ["External notes import", "cst-admin-external-import", "renderExternalImport"],
   "Admin/Resources.md": ["Resources", "cst-admin-resources", "renderResourceAdmin"],
@@ -3870,9 +4150,20 @@ function installFeatures(plugin, deps) {
   installResourceFeatures(plugin, supplied);
   installAttachmentFeatures(plugin, supplied);
   installLauncherFeatures(plugin);
+  plugin.renderImportWorkspace = (el) => {
+    el.empty();
+    el.createEl("h2", { text: "Import" });
+    el.createEl("p", { text: "Choose where your notes came from. Shared CST Notes exports and external notes use separate import flows." });
+    const actions = el.createDiv({ cls: "cst-admin-action-grid" });
+    const fromCST = actions.createEl("button", { text: "Import from CST Notes", attr: { type: "button" } });
+    fromCST.onclick = () => plugin.navigateFromUI("Import from CST Notes", () => plugin.openCSTImport());
+    const external = actions.createEl("button", { text: "Import external notes", attr: { type: "button" } });
+    external.onclick = () => plugin.navigateFromUI("Import external notes", () => plugin.openPath(plugin.p("Admin/External Import.md")));
+    el.createEl("p", { text: "From CST Notes: paste the sender's JSON text or choose their export file, then review the destination and surgeon profile before importing." });
+    el.createEl("p", { text: "From another app: use Obsidian Importer to convert your notes, then sort them into CST Notes. The external-import guide walks you through each step." });
+  };
   installAdminWorkspace(plugin, { ...supplied, adminPages: {
-    transfer: (el) => plugin.renderTransferAdmin(el),
-    externalImport: (el) => plugin.renderExternalImport(el),
+    import: (el) => plugin.renderImportWorkspace(el),
     resources: (el) => plugin.renderResourceAdmin(el),
     images: (el) => plugin.renderImageAdmin(el)
   } });
@@ -3888,13 +4179,25 @@ function installFeatures(plugin, deps) {
     }
     return addCommand(command);
   };
+  const featurePageHosts = /* @__PURE__ */ new WeakSet();
   for (const [, processor, renderer] of Object.values(FEATURE_PAGES)) {
+    const render = plugin[renderer];
+    plugin[renderer] = async function(el, ...args) {
+      let parent2 = el.parentElement;
+      while (parent2 && !featurePageHosts.has(parent2)) parent2 = parent2.parentElement;
+      const nested = !!parent2;
+      featurePageHosts.add(el);
+      try {
+        return await render.call(this, el, ...args);
+      } finally {
+        if (!nested && !el.querySelector?.(".cst-app-home-nav")) {
+          plugin.addHomeButton(el);
+          el.prepend?.(el.lastElementChild);
+        }
+      }
+    };
     plugin.registerMarkdownCodeBlockProcessor(processor, async (_source, el) => {
       await plugin[renderer](el);
-      if (!el.querySelector?.(".cst-app-home-nav")) {
-        plugin.addHomeButton(el);
-        el.prepend?.(el.lastElementChild);
-      }
     });
   }
   plugin.addCommand({ id: "import-cst-notes", name: "Import CST Notes", callback: () => plugin.openCSTImport() });
@@ -3944,6 +4247,368 @@ function installFeatures(plugin, deps) {
   };
 }
 
+// src/onboarding.mjs
+var EXAMPLE_CASE_ID = "cst-example-general-v1";
+var EXAMPLE_TEMPLATE_REL = "_Templates/Cases/Example.md";
+var EXAMPLE_TITLE = "Laparoscopic Cholecystectomy — Example";
+var EXAMPLE_BODY = `## Case
+
+*Insert anatomy reference photos.*
+
+1. Abdominal access and insufflation.
+2. Camera and working ports placed.
+3. Gallbladder exposed and anatomy identified.
+4. Surgeon confirms safe identification before securing and dividing the cystic duct and artery.
+5. Gallbladder separated from the liver bed.
+6. Gallbladder retrieved in a specimen bag.
+7. Operative site inspected.
+8. Ports removed and incisions closed.
+
+## PA
+
+Jordan: 8B/8W XL
+
+## Tips
+
+- Confirm trocar sizes and clip-applier compatibility before opening.
+- Keep the specimen retrieval bag accessible.
+- Confirm whether cholangiography equipment is needed.
+
+## Drape
+
+- 4 Towels
+- Laparoscopic abdominal drape
+
+## Mayo
+
+- Knife handle with blade
+- Adson forceps
+- Kelly x2
+- Metzenbaum scissors
+- CVD Mayo scissors
+- Needle driver
+
+## Basin
+
+- Bovie
+- Suction
+- Insufflation tubing
+
+## Back Table
+
+*Insert photo of your completed back table.*
+
+- Set up on the right
+- Group laparoscopic instruments together.
+- Keep clips, specimen bag, and closure supplies organized.
+
+## Trays
+
+- General instrument tray
+- Laparoscopic cholecystectomy tray
+
+## Equipment
+
+- Laparoscopic tower
+- Electrosurgical unit
+- Suction
+
+## Mayo Flow
+
+- Entry: knife, forceps, access instruments
+- Laparoscopic portion: camera, graspers, dissector, clip applier
+- Specimen removal: retrieval bag, Kelly x2
+- Closure: needle driver, forceps, suture scissors
+
+## Sutures
+
+- 0 Vicryl UR-6
+- 2-0 Vicryl SH
+- 4-0 Monocryl SH
+
+## Dressings
+
+- Dermabond
+
+## Notes
+
+If aspirating:
+
+- Open lap aspiration needle
+- 30cc L/L syringe
+- Kidney basin
+- Towel
+`;
+var templateMarker = (token) => `<!-- cst-example-template: ${token} -->`;
+var canCleanOwnedExamples = (plugin) => {
+  const owned = plugin.settings.onboardingExample;
+  return owned?.version === 1 && !!owned.token && owned.caseId === EXAMPLE_CASE_ID && owned.folderPath === `${plugin.contentRoot}/General/Dr. Example` && owned.templatePath === plugin.p(EXAMPLE_TEMPLATE_REL);
+};
+var runMutation = (plugin, action) => plugin.withFeatureMutation ? plugin.withFeatureMutation(action) : plugin.serializedAdminMutation(action);
+async function createOnboardingExample(plugin, deps) {
+  const { TFile: TFile2, TFolder: TFolder2, id: id2, yamlString: yamlString2, parseFrontmatterObject: parseFrontmatterObject2, validatePortableVaultPath: validatePortableVaultPath2 } = deps;
+  return runMutation(plugin, async () => {
+    if (plugin.settings.resetNeedsReview || plugin.unloading) throw new Error("Onboarding is paused until CST Notes is ready.");
+    await plugin.findExampleCase();
+    if (plugin.exampleCase()) return plugin.exampleCase();
+    const specialty = "General", surgeon2 = "Dr. Example";
+    const folderPath = `${plugin.contentRoot}/${specialty}/${surgeon2}`;
+    const casePath = `${folderPath}/${EXAMPLE_TITLE}.md`;
+    const templatePath = plugin.p(EXAMPLE_TEMPLATE_REL);
+    for (const path of [folderPath, casePath, templatePath, plugin.surgeonGraphPath(specialty, surgeon2)]) validatePortableVaultPath2(path, "Onboarding example");
+    const vault = plugin.app.vault;
+    let owned = plugin.settings.onboardingExample;
+    const reusable = owned?.version === 1 && owned.casePath === casePath && owned.templatePath === templatePath && owned.folderPath === folderPath && owned.state === "creating";
+    let registry = await plugin.getRegistrySurgeon(specialty, surgeon2, { create: false });
+    if (!reusable) {
+      const history = vault.getAbstractFileByPath(plugin.templateVersionRoot(templatePath));
+      if (registry.data || history && (!(history instanceof TFolder2) || history.children.length) || [folderPath, casePath, templatePath].some((path) => vault.getAbstractFileByPath(path))) {
+        throw new Error("An example destination is already in use. Existing notes, templates, and surgeon information were preserved.");
+      }
+      owned = {
+        version: 1,
+        token: id2("example"),
+        caseId: EXAMPLE_CASE_ID,
+        surgeonId: id2("surgeon"),
+        specialty,
+        surgeon: surgeon2,
+        folderPath,
+        casePath,
+        templatePath,
+        state: "creating"
+      };
+      plugin.settings.onboardingExample = owned;
+      await plugin.saveSettings();
+    }
+    if (registry.data && registry.data.cst_id !== owned.surgeonId) throw new Error("The example surgeon identity changed. Existing data was preserved.");
+    await plugin.ensureFolder(`${plugin.contentRoot}/${specialty}`);
+    let folder = vault.getAbstractFileByPath(folderPath);
+    if (!folder) {
+      plugin.markInternalCreate(folderPath);
+      folder = await vault.createFolder(folderPath);
+    }
+    if (!(folder instanceof TFolder2)) throw new Error("The example surgeon path is not a folder.");
+    if (!registry.data) {
+      if (folder.children.length) throw new Error("The example folder gained content. It was preserved.");
+      const now = (/* @__PURE__ */ new Date()).toISOString();
+      const data = plugin.adminRegistryRecord({
+        cst_id: owned.surgeonId,
+        gloves: "8B/8W",
+        gown: "XL",
+        music: "",
+        aliases: [],
+        created: now,
+        last_verified: now
+      }, specialty, surgeon2);
+      await plugin.applyAdminRegistryChanges([{ specialty, surgeon: surgeon2, expected: null, data }]);
+      registry = await plugin.getRegistrySurgeon(specialty, surgeon2, { create: false });
+    }
+    const assertFolder = () => {
+      if (vault.getAbstractFileByPath(folderPath) !== folder || folder.path !== folderPath) throw new Error("The example folder moved or was replaced. Retry after Sync finishes.");
+    };
+    assertFolder();
+    await plugin.ensureSpecialtyNode(specialty);
+    await plugin.ensureSurgeonGraphNode(specialty, surgeon2, owned.surgeonId, registry.data);
+    await plugin.ensureFolder(templatePath.slice(0, templatePath.lastIndexOf("/")));
+    let template = vault.getAbstractFileByPath(templatePath);
+    if (!template) {
+      plugin.markInternalCreate(templatePath);
+      template = await vault.create(templatePath, `${templateMarker(owned.token)}
+
+${EXAMPLE_BODY}`);
+    }
+    if (!(template instanceof TFile2) || !(await vault.read(template)).startsWith(templateMarker(owned.token) + "\n")) {
+      throw new Error("The Example template is not owned by this onboarding session. It was preserved.");
+    }
+    const version = await plugin.ensureTemplateVersion(template, false, templatePath);
+    assertFolder();
+    let file = vault.getAbstractFileByPath(casePath);
+    if (!file) {
+      const graph = `[[${plugin.surgeonGraphPath(specialty, surgeon2).replace(/\.md$/, "")}|${surgeon2}]]`;
+      const created = (/* @__PURE__ */ new Date()).toISOString();
+      const content = `---
+cst_type: case
+cst_example: true
+cst_example_owner: ${yamlString2(owned.token)}
+cst_id: ${EXAMPLE_CASE_ID}
+specialty: General
+surgeon: Dr. Example
+surgeon_id: ${yamlString2(owned.surgeonId)}
+graph_parent: ${yamlString2(graph)}
+schema_version: 3
+template: Example
+template_version: v${version}
+cst_created_template: Example
+cst_created_template_version: v${version}
+template_initialized: true
+created: ${yamlString2(created)}
+last_verified: ${yamlString2(created)}
+---
+
+# ${EXAMPLE_TITLE}
+
+\`\`\`cst-surgeon-header
+\`\`\`
+
+${EXAMPLE_BODY}`;
+      plugin.markInternalCreate(casePath);
+      file = await vault.create(casePath, content);
+    }
+    if (!(file instanceof TFile2)) throw new Error("The example case path is occupied.");
+    const fm = parseFrontmatterObject2(await vault.read(file));
+    assertFolder();
+    if (file.path !== casePath || vault.getAbstractFileByPath(casePath) !== file || fm.cst_id !== EXAMPLE_CASE_ID || fm.cst_example_owner !== owned.token) {
+      throw new Error("The example case changed identity. Existing content was preserved.");
+    }
+    owned.state = "ready";
+    plugin.exampleFile = file;
+    plugin.settings.onboardingCompleted = {};
+    plugin.settings.onboardingCreatedCases = [];
+    plugin.settings.onboardingDismissed = false;
+    delete plugin.settings.onboardingCompletionChoice;
+    plugin.onboardingWelcomeUntil = 0;
+    plugin.showCompletedOnboarding = false;
+    await plugin.saveSettings();
+    plugin.scheduleGraphRebuild(250);
+    plugin.refreshOnboarding();
+    return file;
+  });
+}
+async function cleanOnboardingExamples(plugin, { TFile: TFile2, TFolder: TFolder2, parseFrontmatterObject: parseFrontmatterObject2 }) {
+  const owned = plugin.settings.onboardingExample;
+  if (owned?.version !== 1 || !owned.token || owned.caseId !== EXAMPLE_CASE_ID) {
+    throw new Error("These older examples cannot be safely identified for automatic cleanup. Continue from here, or remove them individually.");
+  }
+  if (owned.folderPath !== `${plugin.contentRoot}/General/Dr. Example` || owned.templatePath !== plugin.p(EXAMPLE_TEMPLATE_REL)) {
+    throw new Error("The example locations changed. Existing content was preserved.");
+  }
+  return runMutation(plugin, async () => {
+    if (plugin.settings.resetNeedsReview || plugin.unloading) throw new Error("Example cleanup is paused until CST Notes is ready.");
+    const vault = plugin.app.vault, candidates = [], marker = templateMarker(owned.token);
+    for (const file of plugin.allCaseFiles()) {
+      const path = file.path, text = await vault.read(file), fm = parseFrontmatterObject2(text);
+      plugin.assertVaultFilePath(file, path, "Example cleanup paused because a case moved or was replaced.");
+      if (fm.cst_example === true && fm.cst_id === owned.caseId && fm.cst_example_owner === owned.token) candidates.push({ file, path, text });
+    }
+    if (candidates.length > 1) throw new Error("Duplicate example identities were found. No examples were removed.");
+    const templateFiles = [vault.getAbstractFileByPath(owned.templatePath), ...plugin.templateVersionFilesReadOnly(owned.templatePath).map((entry) => entry.file)];
+    const templates = [];
+    for (const file of templateFiles) {
+      if (!(file instanceof TFile2)) continue;
+      const path = file.path, text = await vault.read(file);
+      plugin.assertVaultFilePath(file, path, "Example template moved or was replaced.");
+      if (text.startsWith(marker + "\n")) templates.push({ file, path, text });
+    }
+    const registry = await plugin.getRegistrySurgeon("General", "Dr. Example", { create: false });
+    await plugin.snapshotFiles("Onboarding examples", [...candidates, ...templates].map((entry) => entry.file).concat(registry.file || []));
+    for (const entry of [...candidates, ...templates]) {
+      plugin.assertVaultFilePath(entry.file, entry.path, "Example cleanup paused because a file moved or was replaced.");
+      if (await vault.read(entry.file) !== entry.text) throw new Error("An example changed during cleanup. Retry after editing and Sync finish.");
+      plugin.assertVaultFilePath(entry.file, entry.path, "Example cleanup paused because a file moved or was replaced.");
+    }
+    for (const entry of candidates) await plugin.archiveCaseDeletion(entry.file, entry.path, entry.text);
+    for (const entry of templates) {
+      plugin.assertVaultFilePath(entry.file, entry.path, "Example template changed before removal.");
+      if (await vault.read(entry.file) !== entry.text) throw new Error("An example template changed during cleanup. It was preserved.");
+      await plugin.quarantineManagedFile(entry.file, entry.path, "Onboarding example template");
+    }
+    let surgeonKept = false;
+    const folder = vault.getAbstractFileByPath(owned.folderPath);
+    const current = await plugin.getRegistrySurgeon("General", "Dr. Example", { create: false });
+    if (current.data?.cst_id === owned.surgeonId && folder instanceof TFolder2 && folder.children.length === 0) {
+      const target = await plugin.quarantineEmptySurgeonFolder(folder, owned.folderPath, "Onboarding example surgeon");
+      try {
+        if (folder.children.length || vault.getAbstractFileByPath(owned.folderPath)) throw new Error("The example surgeon folder changed during cleanup.");
+        await plugin.applyAdminRegistryChanges([{ specialty: "General", surgeon: "Dr. Example", expected: current.data, data: null }]);
+        if (folder.children.length || vault.getAbstractFileByPath(owned.folderPath)) {
+          await plugin.applyAdminRegistryChanges([{ specialty: "General", surgeon: "Dr. Example", expected: null, data: current.data }]);
+          throw new Error("The example surgeon gained content during cleanup. Its registry record was restored.");
+        }
+      } catch (error) {
+        if (!vault.getAbstractFileByPath(owned.folderPath)) await plugin.renameVaultItem(folder, owned.folderPath, target);
+        throw error;
+      }
+    } else if (current.data || folder) surgeonKept = true;
+    await plugin.findExampleCase();
+    plugin.scheduleGraphRebuild(250);
+    return { surgeonKept, templateKept: !!vault.getAbstractFileByPath(owned.templatePath), caseKept: !!plugin.exampleCase() };
+  });
+}
+async function finishOnboarding(plugin, choice, deps) {
+  if (plugin.onboardingFinishing || plugin.settings.onboardingCompletionChoice || !plugin.onboardingDone()) return false;
+  if (!["fresh", "continue"].includes(choice)) throw new Error("Choose Start fresh or Continue from here.");
+  plugin.onboardingFinishing = true;
+  try {
+    await plugin.onboardingSave;
+    const result = choice === "fresh" ? await cleanOnboardingExamples(plugin, deps) : null;
+    plugin.settings.onboardingCompletionChoice = choice;
+    plugin.showCompletedOnboarding = false;
+    try {
+      await plugin.saveSettings();
+    } catch (error) {
+      delete plugin.settings.onboardingCompletionChoice;
+      throw error;
+    }
+    plugin.onboardingWelcomeUntil = Date.now() + 1e4;
+    await plugin.activateSidebar({ specialty: "", surgeon: "", query: "" });
+    plugin.refreshOnboarding();
+    if (result) {
+      const retained = [result.caseKept && "the example case", result.templateKept && "Example template", result.surgeonKept && "Dr. Example"].filter(Boolean);
+      if (retained.length) new deps.Notice(`Example cleanup finished. Kept ${retained.join(", ")} because it contains other content or its ownership changed.`);
+    }
+    return true;
+  } finally {
+    plugin.onboardingFinishing = false;
+  }
+}
+function openOnboardingCompletion(plugin, deps) {
+  if (plugin.onboardingCompletionPrompt || plugin.onboardingFinishing || plugin.settings.onboardingCompletionChoice || plugin.unloading) return;
+  const { Modal: Modal2, Notice: Notice2 } = deps;
+  class CompletionModal extends Modal2 {
+    onOpen() {
+      this.contentEl.createEl("h2", { text: "You’re ready to start!" });
+      this.contentEl.createEl("p", { text: "Start fresh to remove the example case, Dr. Example, and Example template—including edits you made to them. Or keep the examples to continue practicing." });
+      this.contentEl.createEl("p", { text: "Separately created cases and other user content are kept. Removed examples remain recoverable in Admin → Recovery.", cls: "cst-muted" });
+      const canClean = canCleanOwnedExamples(plugin);
+      if (!canClean) this.contentEl.createEl("p", { text: "These examples were added by an earlier version or their locations have changed. Continue from here to keep them; remove unwanted cases individually using Delete. Automatic cleanup is unavailable so your notes and surgeon information stay safe.", cls: "cst-muted" });
+      const actions = this.contentEl.createDiv({ cls: "cst-actions" });
+      const fresh = actions.createEl("button", { text: "Start fresh", cls: "mod-cta" });
+      fresh.disabled = !canClean;
+      fresh.setAttribute("aria-describedby", "cst-onboarding-recommended");
+      if (canClean) this.contentEl.createEl("p", { text: "Recommended: start fresh with your own cases.", attr: { id: "cst-onboarding-recommended" }, cls: "cst-muted" });
+      const keep = actions.createEl("button", { text: "Continue from here" });
+      const choose = async (choice) => {
+        if (this.running || choice === "fresh" && !canClean) return;
+        this.running = true;
+        fresh.disabled = keep.disabled = true;
+        try {
+          await finishOnboarding(plugin, choice, deps);
+          this.running = false;
+          this.close();
+        } catch (error) {
+          new Notice2("Onboarding completion paused: " + (error.message || error));
+        } finally {
+          this.running = false;
+          fresh.disabled = !canClean;
+          keep.disabled = false;
+        }
+      };
+      fresh.onclick = () => choose("fresh");
+      keep.onclick = () => choose("continue");
+    }
+    close() {
+      if (!this.running) super.close();
+    }
+    onClose() {
+      plugin.onboardingCompletionPrompt = null;
+      this.contentEl.empty();
+    }
+  }
+  const modal = new CompletionModal(plugin.app);
+  plugin.onboardingCompletionPrompt = modal;
+  modal.open();
+}
+
 // src/main.js
 var {
   Plugin,
@@ -3961,7 +4626,7 @@ var {
   parseYaml,
   setIcon
 } = require("obsidian");
-var PLUGIN_VERSION = "0.1.9";
+var PLUGIN_VERSION = "0.1.10";
 var SCHEMA_VERSION = 3;
 var GLOVE_SIZES = ["Unknown", "5.5", "6", "6.5", "7", "7.5", "8", "8.5", "9", "9.5"];
 var DEFAULT_GLOVE_LABELS = Object.freeze({ O: "Ortho", B: "Blue", W: "White" });
@@ -4276,6 +4941,7 @@ function addOption(select, value, text = value) {
 }
 function canonicalPersonName(name) {
   let s = String(name || "").trim().replace(/\s+/g, " ");
+  if (/^(dr\.?|doctor)\s+example$/i.test(s)) return "Dr. Example";
   s = s.replace(/^(dr\.?|doctor)\s+/i, "");
   if (!s) return "";
   return s.split(" ").map((p) => p ? p[0].toUpperCase() + p.slice(1) : "").join(" ");
@@ -4582,11 +5248,27 @@ var CSTNotesPlugin = class extends Plugin {
     this.addCommand({ id: "legacy-template-migration", name: "Legacy Template Migration", callback: () => new LegacyTemplateMigrationModal(this).open() });
     this.addSettingTab(new CSTSettingsTab(this.app, this));
     this.registerMarkdownCodeBlockProcessor("cst-onboarding", async (_src, el) => this.renderOnboardingAdmin(el));
-    this.registerMarkdownPostProcessor((el, ctx) => {
+    this.registerMarkdownPostProcessor(async (el, ctx) => {
       const path = normalizePath(ctx.sourcePath || "");
-      if (!path.startsWith(this.p("Admin") + "/") || path.startsWith(this.p("Admin/Backups") + "/")) return;
+      if (!path.startsWith(this.p() + "/") || path.startsWith(this.p("Admin/Backups") + "/") || path.startsWith(this.p("_Graph/Surgeons") + "/")) return;
       const section = ctx.getSectionInfo?.(el);
-      if (section?.lineStart !== 0 || el.querySelector(".cst-admin-home")) return;
+      if (!section || el.querySelector(".cst-admin-home")) return;
+      if (section.lineStart !== 0) {
+        const file = this.app.vault.getAbstractFileByPath(path);
+        if (!(file instanceof TFile)) return;
+        const stamp = `${file.stat?.mtime}:${file.stat?.size}`;
+        this.homeNavSourceCache || (this.homeNavSourceCache = /* @__PURE__ */ new WeakMap());
+        let cached = this.homeNavSourceCache.get(file);
+        if (!cached || cached.stamp !== stamp) {
+          const text = (await this.app.vault.cachedRead(file)).replace(/\r\n/g, "\n");
+          if (file.path !== path || this.app.vault.getAbstractFileByPath(path) !== file) return;
+          const prefix = /^(?:\uFEFF)?(?:---[ \t]*\n[\s\S]*?\n---[ \t]*(?:\n|$))?(?:(?:[ \t]*\n)|(?:[ \t]*<!--[\s\S]*?-->[ \t]*(?:\n|$)))*[ \t]*/.exec(text)?.[0] || "";
+          cached = { stamp, firstLine: prefix.split("\n").length - 1 };
+          this.homeNavSourceCache.set(file, cached);
+        }
+        if (cached.firstLine < section.lineStart || cached.firstLine > (section.lineEnd ?? section.lineStart)) return;
+      }
+      if (this.unloading || el.querySelector(".cst-admin-home")) return;
       const nav = el.createDiv({ cls: "cst-admin-home" });
       el.prepend(nav);
       this.addHomeButton(nav);
@@ -4622,7 +5304,10 @@ var CSTNotesPlugin = class extends Plugin {
     this.registerEvent(this.app.workspace.on("file-open", (file) => {
       this.trackOnboardingFile(file).catch((error) => console.error("CST onboarding", error));
     }));
-    this.registerEvent(this.app.workspace.on("active-leaf-change", () => this.updateManagedBodyClass()));
+    this.registerEvent(this.app.workspace.on("active-leaf-change", () => {
+      this.updateManagedBodyClass();
+      this.refreshOnboarding();
+    }));
     this.registerEvent(this.app.workspace.on("layout-change", () => this.updateManagedBodyClass()));
     this.app.workspace.onLayoutReady(() => {
       if (this.unloading) return;
@@ -4699,13 +5384,17 @@ var CSTNotesPlugin = class extends Plugin {
     return file instanceof TFile && this.isCasePath(file.path) && this.app.vault.getAbstractFileByPath(file.path) === file ? file : null;
   }
   onboardingTasks() {
+    const exampleFile = this.exampleCase();
+    const example = exampleFile instanceof TFile ? this.caseContext(exampleFile) : null;
+    const specialty = example?.specialty || "General", surgeon2 = example?.surgeon || "Dr. Example";
+    const exampleTemplate = this.app?.vault?.getAbstractFileByPath?.(this.p("_Templates/Cases/Example.md"));
     return [
-      ["home", "Open CST workspace"],
-      ["hierarchy", "Explore a specialty and surgeon"],
-      ["profile", "View a surgeon profile"],
-      ["templateEdit", "View and edit a template"],
-      ["caseEdit", "Create and edit a case"],
-      ["admin", "Open Admin"]
+      ["home", "Open CST Notes", "Tap a Home button or search for CST Notes: Open CST app."],
+      ["hierarchy", `Explore a specialty (e.g., ${specialty})`, `From Home, tap ${specialty}, then ${surgeon2}.`],
+      ["profile", "View a surgeon profile", `Open ${surgeon2} to see the live surgeon profile.`],
+      ["templateEdit", "View and edit a template", exampleTemplate instanceof TFile ? "Tap Templates, open Example template, and save an edit." : "Tap Templates, open a template, and save an edit."],
+      ["caseEdit", "Create and edit a case", "Open a specialty and surgeon, tap New case, then edit your case."],
+      ["admin", "Open Admin", "Tap Admin at the bottom of the CST Notes app screen."]
     ];
   }
   onboardingDone() {
@@ -4725,7 +5414,7 @@ var CSTNotesPlugin = class extends Plugin {
       }
       if (file.path !== path || this.app.vault.getAbstractFileByPath(path) !== file) continue;
       const fm = parseFrontmatterObject(text);
-      if (fm.cst_example === true && fm.cst_id === "cst-example-lumbar-v1" && this.isCasePath(file.path)) {
+      if (fm.cst_example === true && ["cst-example-general-v1", "cst-example-lumbar-v1"].includes(fm.cst_id) && this.isCasePath(file.path)) {
         found = file;
         break;
       }
@@ -4743,46 +5432,70 @@ var CSTNotesPlugin = class extends Plugin {
     this.refreshOnboarding();
   }
   refreshOnboarding() {
-    const present = !!this.exampleCase();
-    const done = this.onboardingDone();
-    for (const card of this.onboardingCards || []) {
-      if (!card.isConnected) {
-        this.onboardingCards.delete(card);
-        continue;
+    if (this.onboardingRefreshing || this.unloading) return;
+    this.onboardingRefreshing = true;
+    try {
+      const present = !!this.exampleCase();
+      const done = this.onboardingDone();
+      const welcome = (this.onboardingWelcomeUntil || 0) > Date.now();
+      const mode = welcome ? "welcome" : present && !this.settings.onboardingDismissed && (!done || this.showCompletedOnboarding) ? "checklist" : "hidden";
+      for (const host of this.onboardingHosts || []) {
+        if (host.isConnected === false) {
+          this.onboardingHosts.delete(host);
+          continue;
+        }
+        if (host.cstOnboardingMode !== mode) {
+          host.empty();
+          this.renderOnboarding(host);
+        }
       }
-      card.hidden = !present || this.settings.onboardingDismissed || done && !this.showCompletedOnboarding;
       const count = this.onboardingTasks().filter(([key3]) => this.settings.onboardingCompleted?.[key3]).length;
-      const heading = card.querySelector("h3");
-      if (heading) heading.textContent = `Getting started — ${count} of 6 complete`;
-      const progress = card.querySelector("progress");
-      if (progress) progress.value = count;
-      for (const [key3, label] of this.onboardingTasks()) {
-        const row = card.querySelector(`[data-onboarding-task="${key3}"]`);
-        if (row) row.textContent = `${this.settings.onboardingCompleted?.[key3] ? "✓" : "○"} ${label}`;
+      for (const card of this.onboardingCards || []) {
+        if (card.isConnected === false) {
+          this.onboardingCards.delete(card);
+          continue;
+        }
+        card.hidden = mode === "hidden";
+        if (mode !== "checklist") continue;
+        const heading = card.querySelector("h3");
+        if (heading) heading.textContent = `Getting started — ${count} of 6 complete`;
+        const progress = card.querySelector("progress");
+        if (progress) progress.value = count;
+        for (const [key3, label, hint] of this.onboardingTasks()) {
+          const row = card.querySelector(`[data-onboarding-task="${key3}"]`);
+          if (row) row.textContent = `${this.settings.onboardingCompleted?.[key3] ? "✓" : "○"} ${label} — ${hint}`;
+        }
       }
-    }
-    if (this.onboardingTimer) window.clearTimeout(this.onboardingTimer);
-    this.onboardingTimer = null;
-    if (!present || done || this.settings.onboardingDismissed || this.unloading) return;
-    this.onboardingTimer = window.setTimeout(async () => {
+      if (this.onboardingTimer) window.clearTimeout(this.onboardingTimer);
       this.onboardingTimer = null;
-      try {
-        await this.trackOnboardingFile(this.app.workspace.getActiveFile(), true);
-      } catch (error) {
-        console.error("CST onboarding refresh", error);
+      if (welcome) {
+        this.onboardingTimer = window.setTimeout(() => this.refreshOnboarding(), Math.max(1, this.onboardingWelcomeUntil - Date.now()));
+      } else if (present && done && !this.settings.onboardingDismissed && !this.showCompletedOnboarding) {
+        openOnboardingCompletion(this, { Modal, Notice, TFile, TFolder, parseFrontmatterObject });
+      } else if (present && !done && !this.settings.onboardingDismissed) {
+        this.onboardingTimer = window.setTimeout(async () => {
+          this.onboardingTimer = null;
+          try {
+            await this.trackOnboardingFile(this.app.workspace.getActiveFile(), true);
+          } catch (error) {
+            console.error("CST onboarding refresh", error);
+          }
+          this.refreshOnboarding();
+        }, 750);
       }
-      this.refreshOnboarding();
-    }, 1500);
+    } finally {
+      this.onboardingRefreshing = false;
+    }
   }
   async trackOnboardingFile(file, modified = false) {
     if (!this.exampleCase() || this.onboardingDone() || this.settings.onboardingDismissed) return;
     if (!(file instanceof TFile) || file.extension !== "md") return;
-    if (!modified && file.path === this.p("Admin/Admin.md")) this.completeOnboarding("admin");
+    if (file.path === this.p("Admin/Admin.md")) this.completeOnboarding("admin");
     const template = this.isTemplatePath(file.path);
     if (!template && !this.caseContext(file)) return;
     const path = file.path;
     const text = await this.app.vault.read(file);
-    if (file.path !== path || !this.exampleCase()) return;
+    if (file.path !== path || !this.exampleCase() || this.app.vault.getAbstractFileByPath && this.app.vault.getAbstractFileByPath(path) !== file) return;
     const body = this.stripFrontmatter(text).replace(/<!--[\s\S]*?-->/g, "");
     this.onboardingCaseBodies || (this.onboardingCaseBodies = /* @__PURE__ */ new Map());
     const previous = this.onboardingCaseBodies.get(path);
@@ -4797,15 +5510,26 @@ var CSTNotesPlugin = class extends Plugin {
     this.onboardingCaseBodies.set(path, body);
   }
   renderOnboarding(el) {
-    if (!this.exampleCase() || this.settings.onboardingDismissed || this.onboardingDone() && !this.showCompletedOnboarding) return;
+    this.onboardingHosts || (this.onboardingHosts = /* @__PURE__ */ new Set());
+    this.onboardingHosts.add(el);
+    const welcome = (this.onboardingWelcomeUntil || 0) > Date.now();
+    el.cstOnboardingMode = welcome ? "welcome" : !this.exampleCase() || this.settings.onboardingDismissed || this.onboardingDone() && !this.showCompletedOnboarding ? "hidden" : "checklist";
+    if (el.cstOnboardingMode === "hidden") return;
     const card = el.createDiv({ cls: "cst-onboarding-card" });
     this.onboardingCards || (this.onboardingCards = /* @__PURE__ */ new Set());
     this.onboardingCards.add(card);
+    if (welcome) {
+      card.setAttribute("role", "status");
+      card.createEl("h3", { text: "Welcome to CST Notes!" });
+      card.createEl("p", { text: "I suggest going through the templates and making them your own!" });
+      this.refreshOnboarding();
+      return;
+    }
     card.createEl("h3");
     const progress = card.createEl("progress");
     progress.max = 6;
     progress.setAttribute("aria-label", "Getting started progress");
-    card.createEl("p", { text: 'Reopen CST Notes using the Home buttons or swipe down and click the "CST Notes: Open CST app" command.' });
+    card.createEl("p", { text: 'Reopen CST Notes using the available Home buttons or swipe down and search for "CST Notes: Open CST app".' });
     card.createEl("p", { text: "Steps complete as you use the app.", cls: "cst-muted" });
     const list = card.createEl("ul");
     for (const [key3] of this.onboardingTasks()) list.createEl("li").setAttribute("data-onboarding-task", key3);
@@ -4850,28 +5574,14 @@ var CSTNotesPlugin = class extends Plugin {
   }
   async addExampleCase() {
     if (this.exampleCreation) return this.exampleCreation;
-    this.exampleCreation = (async () => {
-      await this.findExampleCase();
-      if (this.exampleCase()) return this.exampleCase();
-      const specialty = "Spine", surgeon2 = "Morgan Example";
-      const folder = cleanPath(this.contentRoot, specialty, surgeon2);
-      const path = validatePortableVaultPath(cleanPath(folder, "Example - Lumbar Decompression.md"), "Example case");
-      if (this.app.vault.getAbstractFileByPath(path)) throw new Error("The example path is occupied. No note was changed.");
-      await this.ensureFolder(folder);
-      const record = await this.ensureSurgeonData(specialty, surgeon2, { gloves: "8B/8W", gown: "XL" });
-      const content = "---\ncst_type: case\ncst_example: true\ncst_id: cst-example-lumbar-v1\nspecialty: Spine\nsurgeon: Morgan Example\nsurgeon_id: " + yamlString(record.data.cst_id) + "\ngraph_parent: " + yamlString("[[" + this.surgeonGraphPath(specialty, surgeon2).replace(/\.md$/, "") + "|" + surgeon2 + "]]") + "\nschema_version: 3\ntemplate: manual\ntemplate_initialized: true\n---\n\n# Example — Lumbar Decompression\n\n```cst-surgeon-header\n```\n\n> Example case for learning CST Notes. This is a sample setup, not a clinical protocol. Customize it for your team.\n\n## Case\nMicrodiscectomy:\nRemoval of herniated disc. Usually in addition to a laminectomy or foraminotomy.\n\nLaminectomy:\nA complete removal of the spinous process and lamina.\n\nForaminotomy:\nAn excision of portions of bone from the foramina of the level. The foramen is the canal where nerve roots branch from the spinal cord. Has laterality.\n\nImages can be added here using Obsidian's normal attachment tools.\n\n## Tips\nToss Bovie tip and sleeve.\nKeep Phase 1 Mayo on the back table.\n\n## Drape\n4 towels + stapler\nLarge sheet x4\nC-arm drape + Mayo cover\nSplit sheet x2\nIoban\n\n## Mayo\nSet up:\n- Suction x2 with 11F tip\n- Bovie\n- Bipolar with green forceps\n- Light handle covers\n- Instrument pouch\n- TPX spine burr\n- RT x2\n\n## Basin\nC-arm drape\nMayo cover\nSplit x2\nLarge sheet x4\n4 towels\n\n## Back Table\nAdd your own back-table photo here.\n\n## Trays\nLami kit\nSpine TPX\nLumbar Karlins (1 & 2)\n\n### Retractors\nMcCullough retractor\nPhantom in the room if high BMI\n\n### Kerrisons\n3 mm\n4 mm\n5 mm\nPistol grip\n2 mm pituitary straight\n2 mm pituitary up-biter\nMicro pituitary straight\nMicro pituitary up-biter\nForaminotomy Kerrisons 2 & 3 mm on back table\n\n### Karlins\n0s x4\n1 x4\nWoodson (probe)\n\n### Power\nTPX\n\n### Fluoro / Navigation\nC-arm\n\n## Sutures\n0 Vicryl CT-1 pop-offs\n2-0 Vicryl CT-2 pop-offs\n4-0 Monocryl PS-2\n\n## Mayo Flow\nPhase 1:\n- Kerrisons 3–5\n- Penfield family + nerve root retractor\n- Pituitaries\n- Karlins\n- Pattie towel\n  - 1/2 x 1 x10\n  - 1/2 x 1/2 x10\n  - Surgiflow\n  - Saline irrigation syringe with Angiocath\n  - Smaller bayonet forceps\n\n## Dressings\nDermabond\nTelfa\nMedium Tegaderm\n\n## Notes\n";
-      this.markInternalCreate(path);
-      const file = await this.app.vault.create(path, content);
-      this.exampleFile = file;
-      this.settings.onboardingCompleted = {};
-      this.settings.onboardingCreatedCases = [];
-      this.settings.onboardingDismissed = false;
-      this.showCompletedOnboarding = false;
-      await this.saveSettings();
-      this.scheduleGraphRebuild(250);
-      this.refreshOnboarding();
-      return file;
-    })();
+    this.exampleCreation = createOnboardingExample(this, {
+      TFile,
+      TFolder,
+      id,
+      yamlString,
+      parseFrontmatterObject,
+      validatePortableVaultPath
+    });
     try {
       return await this.exampleCreation;
     } finally {
@@ -5740,23 +6450,37 @@ ${marker}
     return path.startsWith(root) && path.endsWith(".md") && !path.includes("/_Versions/");
   }
   templateVersionRoot(templatePath) {
+    const segments = String(templatePath || "").replace(/\\/g, "/").split("/");
+    if (segments.some((segment) => segment === "." || segment === "..")) throw new Error("Template path must stay within its managed folder.");
+    if (!this.isTemplatePath(templatePath)) throw new Error("Template history requires an editable CST template path.");
     const root = this.p("_Templates/Cases") + "/";
     const rel = normalizePath(templatePath).slice(root.length).replace(/\.md$/i, "");
-    return this.p(`_Templates/_Versions/${rel}`);
+    return validatePortableVaultPath(this.p(`_Templates/_Versions/${rel}`), "Template history path");
   }
   async templateVersionFiles(templatePath) {
     const root = this.templateVersionRoot(templatePath);
     await this.ensureFolder(root);
-    const folder = this.app.vault.getAbstractFileByPath(root);
-    if (!(folder instanceof TFolder)) return [];
-    return folder.children.filter((x) => x instanceof TFile && /^v\d+\.md$/i.test(x.name)).map((file) => ({ file, n: Number((/^v(\d+)\.md$/i.exec(file.name) || [])[1] || 0) })).filter((x) => x.n > 0).sort((a, b) => a.n - b.n);
+    return this.templateVersionFilesReadOnly(templatePath);
   }
   templateVersionFilesReadOnly(templatePath) {
     const root = this.templateVersionRoot(templatePath);
     const folder = this.app.vault.getAbstractFileByPath(root);
     if (!folder) return [];
     if (!(folder instanceof TFolder)) throw new Error(`Template version path is not a folder: ${root}`);
-    return folder.children.filter((x) => x instanceof TFile && /^v\d+\.md$/i.test(x.name)).map((file) => ({ file, n: Number((/^v(\d+)\.md$/i.exec(file.name) || [])[1] || 0) })).filter((x) => x.n > 0).sort((a, b) => a.n - b.n);
+    return folder.children.filter((x) => x instanceof TFile && /^v[1-9]\d*\.md$/.test(x.name)).map((file) => {
+      this.assertVaultFilePath(file, cleanPath(root, file.name), "Template revision history moved or was replaced.");
+      return { file, n: Number(/^v(\d+)\.md$/.exec(file.name)[1]) };
+    }).filter((x) => Number.isSafeInteger(x.n) && x.n > 0).sort((a, b) => a.n - b.n);
+  }
+  async pruneTemplateVersions(file, version, text) {
+    const path = file.path;
+    const { pruneTemplateRevisions: pruneTemplateRevisions2 } = await Promise.resolve().then(() => (init_template_lifecycle(), template_lifecycle_exports));
+    this.assertVaultFilePath(file, path, "Template moved before revision cleanup.");
+    return pruneTemplateRevisions2(this, file, version, text);
+  }
+  async caseTemplateProvenance(file) {
+    const { describeTemplateProvenance: describeTemplateProvenance2 } = await Promise.resolve().then(() => (init_template_lifecycle(), template_lifecycle_exports));
+    return describeTemplateProvenance2(this, file);
   }
   async ensureTemplateVersion(file, announce = false, expectedPath = "") {
     if (!(file instanceof TFile)) return 0;
@@ -5784,6 +6508,12 @@ ${marker}
     assertTemplate();
     const current = await this.app.vault.read(file);
     assertTemplate();
+    const finish = async (version) => {
+      assertTemplate();
+      await this.pruneTemplateVersions(file, version, current);
+      assertTemplate();
+      return version;
+    };
     const root = this.templateVersionRoot(path);
     await this.ensureFolder(root);
     assertTemplate();
@@ -5797,16 +6527,17 @@ ${marker}
         const latestText = await this.app.vault.read(latest.file);
         assertTemplate();
         this.assertVaultFilePath(latest.file, latestPath, `Template version history changed while reading ${latestPath}.`);
-        if (latestText === current) return latest.n;
+        if (latestText === current) return finish(latest.n);
       }
       const next = (latest?.n || 0) + 1;
+      if (!Number.isSafeInteger(next)) throw new Error("Template revision number exceeds the safe numeric range.");
       const target = cleanPath(root, `v${next}.md`);
       const existing = this.app.vault.getAbstractFileByPath(target);
       if (existing instanceof TFile) {
         const existingText = await this.app.vault.read(existing);
         assertTemplate();
         this.assertVaultFilePath(existing, target, `Template version history changed while reading ${target}.`);
-        if (existingText === current) return next;
+        if (existingText === current) return finish(next);
         continue;
       }
       if (existing) throw new Error(`Template version target is not a file: ${target}`);
@@ -5821,7 +6552,7 @@ ${marker}
         const collidedText = await this.app.vault.read(collided);
         assertTemplate();
         this.assertVaultFilePath(collided, target, `Template version collision changed while reading ${target}.`);
-        if (collidedText === current) return next;
+        if (collidedText === current) return finish(next);
         continue;
       }
       const created = this.app.vault.getAbstractFileByPath(target);
@@ -5833,7 +6564,7 @@ ${marker}
       if (next > 1) await this.appendLog("Template version", `${path} → v${next}`);
       assertTemplate();
       if (announce) new Notice(`${file.basename} template saved as v${next}.`);
-      return next;
+      return finish(next);
     }
     throw new Error(`Template versioning could not settle after repeated Sync collisions for ${path}.`);
   }
@@ -6647,6 +7378,8 @@ surgeon_id: ${yamlString(surgeonId)}
 graph_parent: ${yamlString(`[[${graphNode}|${surgeon2}]]`)}
 template: ${yamlString(t.key)}
 template_version: ${yamlString(t.version)}
+cst_created_template: ${yamlString(t.key)}
+cst_created_template_version: ${yamlString(t.version)}
 template_initialized: true
 schema_version: ${SCHEMA_VERSION}
 created: ${yamlString(created)}
@@ -7060,15 +7793,20 @@ Diagnostic persistence also failed: ${diagnosticError?.stack || diagnosticError}
       this.settings.schemaVersion = SCHEMA_VERSION;
       settingsChanged = true;
     }
-    if (this.settings.featurePagesVersion !== "0.1.9") {
+    if (this.settings.featurePagesVersion !== "0.1.10") {
       await this.createAdminNotes();
-      this.settings.featurePagesVersion = "0.1.9";
+      this.settings.featurePagesVersion = "0.1.10";
       settingsChanged = true;
     }
-    if (this.settings.navigationUpgradeVersion !== "0.1.8") {
+    if (this.settings.navigationUpgradeVersion !== "0.1.10") {
       await this.createAdminNotes();
       await this.repairLiveHeaders(true);
-      this.settings.navigationUpgradeVersion = "0.1.8";
+      this.settings.navigationUpgradeVersion = "0.1.10";
+      settingsChanged = true;
+    }
+    if (this.settings.templateRetentionVersion !== 1) {
+      await this.ensureAllTemplateVersions();
+      this.settings.templateRetentionVersion = 1;
       settingsChanged = true;
     }
     if (settingsChanged) {
@@ -7994,31 +8732,11 @@ ${next.slice(at).replace(/^\s+/, "")}`;
         missingGraph++;
         issues.push(["Missing graph node", file.path]);
       }
-      const storedTemplate = String(fm.template || "").trim();
-      const storedTemplateVersion = String(fm.template_version || "").trim();
-      if (!storedTemplate) {
-        templateIssues++;
-        issues.push(["Missing template identity", file.path]);
-      } else if (storedTemplate !== "manual") {
-        if (!storedTemplateVersion) {
-          templateIssues++;
-          issues.push(["Missing template version", file.path]);
-        }
+      if (this.caseTemplateProvenance) {
         try {
-          const variant = c.specialty.toLowerCase() === "spine" ? await this.inferSpineVariant(file) : "";
-          const template = await this.getTemplateReadOnly(c.specialty, variant);
-          if (storedTemplate !== template.key) {
-            templateIssues++;
-            issues.push(["Template identity mismatch", `${file.path} (stored ${storedTemplate}; expected ${template.key})`]);
-          }
-          if (storedTemplateVersion && storedTemplateVersion !== template.version) {
-            outdatedTemplates++;
-            templateIssues++;
-            issues.push(["Template version mismatch", `${file.path} (stored ${storedTemplateVersion}; current ${template.version})`]);
-          }
-        } catch (error) {
-          templateIssues++;
-          issues.push(["Template lookup error", `${file.path} (${error.message || error})`]);
+          const { created, current } = await this.caseTemplateProvenance(file);
+          if (created.version && current && created.version !== current.version) outdatedTemplates++;
+        } catch (_) {
         }
       }
     }
@@ -8460,7 +9178,8 @@ Diagnostic persistence also failed: ${diagnosticError?.stack || diagnosticError}
       throw new Error("Case deletion stopped because its unique archive transaction already exists.");
     }
     const context = this.caseContext(file);
-    const surgeonRecord = context ? await this.getSurgeonData(context.specialty, context.surgeon, { createIfMissing: false }) : null;
+    const surgeonData = context ? await this.getSurgeonData(context.specialty, context.surgeon, { createIfMissing: false }) : null;
+    const surgeonRecord = surgeonData?.cst_id && !surgeonData.unavailable ? this.portableSurgeonRecord(surgeonData, context.specialty, context.surgeon) : null;
     const session = await this.loadMigrationSession();
     const migrationState = session ? {
       queued: session.order?.includes(originalPath),
@@ -8670,11 +9389,12 @@ Diagnostic persistence also failed: ${diagnosticError?.stack || diagnosticError}
   }
   addCaseDeleteButton(el, actions, file) {
     this.addHomeButton(actions);
+    const row = actions.createDiv({ cls: "cst-case-action-row" });
     if (this.openCSTExport) {
-      const share = actions.createEl("button", { text: "Export" });
+      const share = row.createEl("button", { text: "Export" });
       share.onclick = () => this.openCSTExport(file);
     }
-    const remove = actions.createEl("button", { text: "Delete", cls: "cst-danger-button" });
+    const remove = row.createEl("button", { text: "Delete", cls: "cst-case-delete-confirm" });
     let confirmation = null;
     remove.onclick = () => this.navigateFromUI("Delete case", async () => {
       if (!confirmation) {
@@ -8683,11 +9403,13 @@ Diagnostic persistence also failed: ${diagnosticError?.stack || diagnosticError}
         this.assertVaultFilePath(file, path, "Case moved before confirmation.");
         confirmation = { file, path, text, until: Date.now() + 1e4 };
         remove.textContent = "Are you sure?";
+        remove.setAttribute?.("data-confirming", "true");
         return;
       }
       const approved = confirmation;
       confirmation = null;
       remove.textContent = "Delete";
+      remove.setAttribute?.("data-confirming", "false");
       if (Date.now() > approved.until) return;
       remove.disabled = true;
       try {
@@ -8698,7 +9420,8 @@ Diagnostic persistence also failed: ${diagnosticError?.stack || diagnosticError}
     });
     remove.onblur = () => {
       confirmation = null;
-      remove.textContent = "Delete";
+      if (remove.textContent !== "Delete") remove.textContent = "Delete";
+      remove.setAttribute?.("data-confirming", "false");
     };
     return remove;
   }
@@ -8971,6 +9694,18 @@ Diagnostic persistence also failed: ${diagnosticError?.stack || diagnosticError}
     el.dataset.cstSpecialty = c.specialty;
     el.dataset.cstSurgeon = c.surgeon;
     await this.populateCaseHeader(el, c);
+    if (this.caseTemplateProvenance) {
+      try {
+        const provenance = await this.caseTemplateProvenance(file);
+        if (provenance.created.name && provenance.created.name !== "manual") {
+          const created = `${provenance.created.name} ${provenance.created.version}`.trim();
+          const current = provenance.current ? ` · Current: ${provenance.current.name} ${provenance.current.version}` : "";
+          el.createDiv({ cls: "cst-live-header-meta cst-template-provenance", text: `Created with ${created}${current}` });
+        }
+      } catch (error) {
+        console.error("CST template provenance display", error);
+      }
+    }
   }
   refreshSurgeonHeaderDisplays(specialty, surgeon2, data = null) {
     const gloves = formatGloves(data?.gloves || "Unknown");
@@ -9042,6 +9777,7 @@ Diagnostic persistence also failed: ${diagnosticError?.stack || diagnosticError}
   async renderSurgeonProfile(el, ctx) {
     const node = this.app.vault.getAbstractFileByPath(ctx.sourcePath);
     if (!(node instanceof TFile)) return;
+    this.addHomeButton(el);
     const raw = await this.app.vault.read(node);
     const fm = Object.assign(
       {},
@@ -9299,14 +10035,17 @@ Diagnostic persistence also failed: ${diagnosticError?.stack || diagnosticError}
       };
     }
     const prefix = this.p("_Templates/Cases") + "/";
-    const files = this.filesWithin(this.p("_Templates/Cases"), "md").filter((f) => this.isTemplatePath(f.path)).sort((a, b) => compareCSTNames(a.path, b.path));
+    const examplePath = this.exampleTemplatePath?.() || this.p("_Templates/Cases/Example.md");
+    const defaultPath = this.p("_Templates/Cases/_Default.md");
+    const rank = (file) => file.path === examplePath ? 0 : file.path === defaultPath ? 1 : 2;
+    const files = this.filesWithin(this.p("_Templates/Cases"), "md").filter((f) => this.isTemplatePath(f.path)).sort((a, b) => rank(a) - rank(b) || compareCSTNames(a.path, b.path));
     const table = el.createEl("table", { cls: "cst-table" });
     const hr = table.createEl("tr");
     ["Template", "Current version", "Action"].forEach((x) => hr.createEl("th", { text: x }));
     for (const f of files) {
       const version = await this.ensureTemplateVersion(f, false);
       const tr = table.createEl("tr");
-      tr.createEl("td", { text: f.path.slice(prefix.length).replace(/\.md$/, "") });
+      tr.createEl("td", { text: f.path === examplePath ? "Example template" : f.path === defaultPath ? "Default" : f.path.slice(prefix.length).replace(/\.md$/, "") });
       tr.createEl("td", { text: `v${version || 1}` });
       const td = tr.createEl("td");
       const b = td.createEl("button", { text: "Open" });
@@ -11739,7 +12478,7 @@ var CSTSidebarView = class extends ItemView {
     this.chipsEl = el.createDiv({ cls: "cst-specialty-chips" });
     this.bodyEl = el.createDiv({ cls: "cst-app-body" });
     const footer = el.createDiv({ cls: "cst-app-footer" });
-    const admin = footer.createEl("button", { text: "Open Admin" });
+    const admin = footer.createEl("button", { text: "Admin" });
     admin.onclick = () => this.plugin.navigateFromUI("Open CST Admin", () => this.plugin.openAdmin());
     footer.createSpan({ text: `v${PLUGIN_VERSION}`, cls: "cst-muted" });
     this.shellReady = true;
@@ -12031,7 +12770,7 @@ var SetupModal = class extends Modal {
     contentEl.createEl("h2", { text: "CST Notes Setup" });
     contentEl.createEl("p", { text: `Content: ${this.plugin.contentRoot}` });
     contentEl.createEl("p", { text: `Backend: ${this.plugin.settings.backendRoot}` });
-    contentEl.createEl("p", { text: "Initialization creates/reconciles Backend infrastructure, editable templates, hidden metadata, surgeon data, Admin pages, and the generated graph. v0.1.1 also backs up and replaces only legacy glove blocks with the generated live surgeon header; substantive case sections are preserved." });
+    contentEl.createEl("p", { text: "Set up your CST Notes workspace with editable templates and navigation. New users also receive an example case and surgeon to practice with. Existing case content is preserved when repairing a workspace." });
     const existing = this.plugin.detectExistingCSTArtifacts();
     const actions = contentEl.createDiv({ cls: "cst-actions" });
     if ((this.plugin.settings.initialized || existing.exists) && !this.syncVerified) {
@@ -12128,10 +12867,11 @@ var SetupModal = class extends Modal {
       new Notice("CST Notes initialized.");
       this.close();
       try {
-        await this.plugin.openPath(this.plugin.p("Admin/Backend/Templates.md"));
+        await this.plugin.activateSidebar({ specialty: "", surgeon: "", query: "" });
+        this.plugin.refreshOnboarding();
       } catch (e) {
         console.error(e);
-        new Notice(`CST Notes initialized, but Template Admin could not open: ${e.message || e}`);
+        new Notice(`CST Notes initialized, but the CST Notes app could not open: ${e.message || e}`);
       }
     };
   }

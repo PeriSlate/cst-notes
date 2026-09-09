@@ -1031,3 +1031,114 @@ body.cst-platform-phone .modal-container .modal.cst-migration-modal .modal-conte
     --cst-mobile-editor-height: clamp(260px, 38dvh, 520px);
   }
 }
+
+/* 0.1.10: stable two-button rows and restrained destructive confirmation. */
+body .cst-live-header .cst-actions .cst-app-home-nav {
+  flex: 0 0 100%;
+  width: 100%;
+  grid-column: 1 / -1;
+}
+body .cst-case-action-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  width: 100%;
+  flex: 0 0 100%;
+  grid-column: 1 / -1;
+}
+body .cst-case-action-row > button {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  white-space: normal;
+}
+body .cst-live-header .cst-case-delete-confirm {
+  background: var(--interactive-normal);
+  color: var(--text-normal);
+}
+body .cst-live-header .cst-case-delete-confirm[data-confirming="true"] {
+  background: var(--background-modifier-error);
+  color: var(--text-normal);
+  border-color: var(--text-error);
+}
+
+body .cst-admin-action-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-block: 12px;
+}
+body .cst-admin-action-grid > button {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  height: auto;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+body .cst-admin-mode-toggle {
+  background: var(--interactive-normal);
+  color: var(--text-normal);
+  min-height: 44px;
+}
+body .cst-admin-mode-toggle.is-confirming,
+body .cst-live-header .cst-case-delete-confirm[data-confirming="true"] {
+  background: #8f2424;
+  color: #fff;
+}
+body .modal-container .modal.cst-transfer-modal {
+  --cst-transfer-viewport: 100vh;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  width: min(680px, calc(100vw - 24px - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)));
+  max-width: calc(100vw - 24px - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px));
+  height: auto;
+  max-height: calc(var(--cst-transfer-viewport) - 24px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+  overflow: hidden;
+}
+body .modal-container .modal.cst-transfer-modal .cst-transfer-content {
+  min-height: 0;
+  min-width: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  padding-top: 36px;
+  padding-bottom: 16px;
+  overflow-wrap: anywhere;
+}
+.cst-transfer-content label {
+  display: block;
+  margin-block: 10px;
+}
+.cst-transfer-content input:not([type="checkbox"]),
+.cst-transfer-content select,
+.cst-transfer-content textarea {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  font-size: 16px;
+}
+.cst-transfer-content textarea {
+  min-height: 100px;
+  resize: vertical;
+}
+.cst-transfer-content button {
+  min-height: 44px;
+  height: auto;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.cst-transfer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-block: 12px;
+}
+@supports (height: 100dvh) {
+  body .modal-container .modal.cst-transfer-modal {
+    --cst-transfer-viewport: 100dvh;
+  }
+}

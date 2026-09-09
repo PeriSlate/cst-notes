@@ -1,5 +1,14 @@
 # CST Notes changelog
 
+## 0.1.10
+
+- Fresh setup opens the CST Notes app; onboarding stays visible when returning and provides clearer starting hints.
+- Added the General Lap Chole example, Dr. Example, editable Example template, optional completion cleanup, and a timed welcome.
+- Added easier Home navigation, paired Export/Delete controls, neutral-to-red delete confirmation, and a two-column Admin layout with confirmed developer mode.
+- Fixed circular-object serialization during case deletion while preserving archive/restore.
+- Keep the current template revision and the five preceding revisions without changing case contents or requiring old templates for export.
+- Added template-free JSON sharing with recorded creation metadata, paste-first importing, and mobile-friendly scrolling dialogs.
+
 ## 0.1.9
 
 ### Sharing and importing
