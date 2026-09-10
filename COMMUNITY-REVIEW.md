@@ -10,20 +10,20 @@ PeriSlate authorizes the Obsidian Community directory to access the private sour
 
 - No payment is required for the current plugin functionality.
 - No user account is required.
-- No network services are used by the plugin.
+- No external processing services are used by the plugin. It enables Obsidian's own community-plugin update checks on supported versions, without automatically installing updates.
 - No telemetry, advertising, or analytics are included.
 - The plugin does not access files outside the active Obsidian vault.
 - The release contains no real patient, surgeon, hospital, case, backup, diagnostic, or credential data. The General onboarding example and Dr. Example are fictional teaching content.
 
 ## Release asset verification
 
-The private source repository includes a pinned deterministic JavaScript bundler and release verification checks. Rebuilding the private source produces the exact public `main.js` for v0.1.10. Source files themselves are not individual release assets.
+The private source repository includes a pinned deterministic JavaScript bundler and release verification checks. Rebuilding the private source must produce the exact public `main.js` for v0.1.11. Source files themselves are not individual release assets.
 
 ## Maintainer action before submission
 
 1. Push the public distribution repository to GitHub.
 2. Push the private source repository to a separate private GitHub repository.
-3. Create the v0.1.10 public GitHub Release and attach `main.js`, `manifest.json`, and `styles.css`.
+3. Create the v0.1.11 public GitHub Release and attach `main.js`, `manifest.json`, and `styles.css`.
 4. Submit the public repository to the Obsidian Community directory.
 5. Install the official Community Directory GitHub App on the private source repository when prompted.
 6. Run the Community Directory review preview and address any review feedback.
@@ -32,9 +32,11 @@ The private source repository includes a pinned deterministic JavaScript bundler
 
 Routine file discovery is scoped to the relevant CST folders. Initialization still checks cached Markdown metadata across the vault to detect moved or legacy CST records before creating infrastructure; this safety check does not read unrelated note bodies.
 
-Local resource collection reads eligible CST case notes and stores provenance plus hidden collection markers in the vault. AI remains disconnected. Explicit image-organization previews inspect referring Markdown and supported link containers across the vault to preserve shared image links; uncertain links prevent moves. Portable exports are created locally after review, and users choose how to share them. External import guidance opens Obsidian Importer installation controls only at the user’s request; CST Notes does not install other plugins automatically.
+Local resource collection reads eligible CST case notes and stores provenance and collection state in Backend, not inline case comments. AI remains disconnected. Explicit image-organization previews inspect referring Markdown and supported link containers across the vault to preserve shared image links; uncertain links prevent moves. Supported recovery references use recorded relocation history while original archive backups stay unchanged. Portable exports are created locally after review, and users choose how to share them. External import guidance opens Obsidian Importer installation controls only at the user’s request; CST Notes does not install other plugins automatically.
 
-Copy diagnostic and Copy JSON buttons write reviewed text to the system clipboard only after a user clicks them. CST Notes does not read clipboard contents. Review diagnostic output before sharing it.
+Copy diagnostic and Copy JSON buttons write reviewed text to the system clipboard only after a user clicks them. Import from clipboard reads text only after its button is clicked, validates the portable package, and requires destination/profile review before import. File import and manual paste are available if clipboard access is unavailable. Review diagnostic output before sharing it.
+
+Supported Obsidian-owned settings configure CST Notes mobile shortcuts, the editing toolbar, and community-plugin update checks once per device/policy revision. Capability checks and readback retain fallback Home navigation when shortcuts cannot be verified. Later user setting changes are respected; no automatic plugin installation or update is performed.
 
 The public release workflow will attest the attached main.js, manifest.json, and styles.css from the public release tag. These attestations identify the distribution workflow and exact asset bytes; they do not claim that this workflow builds the private source. Private-source reproducibility remains separately verified by the Obsidian review process.
 

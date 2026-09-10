@@ -4,7 +4,7 @@ CST Notes organizes surgical technologist notes in Obsidian with a Specialty →
 
 ## Privacy and data
 
-CST Notes is designed for local, offline vault use. It does not use network services or telemetry, and it does not require access outside the active Obsidian vault. No real surgeon records, cases, clinical notes, backups, diagnostics, or other user data are included in this repository or release. The onboarding example is fictional teaching content.
+CST Notes is designed for local, offline vault use. It has no external processing service or telemetry and does not require file access outside the active Obsidian vault. Obsidian's own community-plugin update checks are enabled on supported versions; updates are not installed automatically. Import from clipboard reads the clipboard only when pressed. No real surgeon records, cases, clinical notes, backups, diagnostics, or other user data are included in this repository or release. The onboarding example is fictional teaching content.
 
 CST Notes is proprietary software; see [LICENSE](LICENSE) for the permitted end-user and distribution rights.
 
@@ -12,7 +12,7 @@ CST Notes is proprietary software; see [LICENSE](LICENSE) for the permitted end-
 
 CST Notes is proprietary, closed-source software. The source code is not published in this public distribution repository. PeriSlate will provide the Obsidian Community directory read-only access to the separate private source repository through the official Community Directory GitHub App solely for review, security scanning, and verification that the release assets match the source build.
 
-CST Notes has no payment requirement, account requirement, network service, telemetry, advertising, or outside-vault access. See [COMMUNITY-REVIEW.md](COMMUNITY-REVIEW.md) for the reviewer summary and [LICENSE](LICENSE) for the applicable proprietary license.
+CST Notes has no payment requirement, account requirement, external processing service, telemetry, advertising, or outside-vault file access. See [COMMUNITY-REVIEW.md](COMMUNITY-REVIEW.md) for clipboard and host-setting disclosures and [LICENSE](LICENSE) for the applicable proprietary license.
 
 ## Installation from a release
 
@@ -32,9 +32,9 @@ GitHub releases attach these files:
 
 `versions.json` is tracked in the repository for version compatibility metadata. This repository intentionally does not contain user vault data, local settings, source code, or build tooling.
 
-## New in 0.1.9
+## New in 0.1.11
 
-Portable CST Notes case sharing, guided external-note sorting, local resource collection with editable terminology, improved Admin and recovery, protected CST-only reset, and previewed image organization. AI remains disconnected. See the release notes for details.
+Reusable General example template and safer onboarding cleanup; a mirrored open-Kelly icon and supported mobile shortcuts; scrollable dialogs; Save-based glove settings; clipboard-button importing; protected tab clearing; cleaner resource tracking and recovery-aware image organization. See [release notes](RELEASE-NOTES.md) for details and cleanup safeguards.
 
 ## Support
 

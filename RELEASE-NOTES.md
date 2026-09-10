@@ -1,22 +1,28 @@
-# CST Notes 0.1.10
+# CST Notes 0.1.11
 
-## Getting started
+## Onboarding and examples
 
-- Fresh setup opens the CST Notes app. The onboarding checklist appears consistently when returning to Home.
-- Clearer checklist tasks include hints for where to begin. Completion offers Start fresh to remove the examples or Continue from here to keep them, followed by a short welcome message.
-- New installations include a General example: Laparoscopic Cholecystectomy with Dr. Example and an editable Example template. Existing users can add the example from Admin → Onboarding.
+- The Example template is now a reusable General template with an empty Case section. The filled Lap Chole example remains available for learning the note structure.
+- Onboarding uses clearer "make an edit" wording and recognizes completed users who chose to keep their examples.
+- Start fresh removes the owned example surgeon, practice cases, and example-template backend from the active workspace using recoverable archives. This includes user-created cases under the owned Dr. Example. A one-time update cleanup finishes earlier Start fresh requests; Kept Examples and unrelated notes are preserved.
 
-## Navigation and Admin
+## Navigation and mobile
 
-- Home buttons are easier to find on surgeon profiles and CST Notes pages.
-- Export and Delete share one row. Delete starts neutral and turns red for confirmation.
-- Admin actions use a two-column layout. Enabling developer mode requires confirmation.
+- Added the original open-Kelly icon, mirrored left-to-right with a transparent background.
+- On supported Obsidian versions, this update configures CST Notes mobile shortcuts and toolbar preferences and enables community-plugin update checks. It does not install plugin updates automatically. Preferences are applied once per device; later user changes are respected.
+- Extra Home buttons are hidden only when mobile CST Notes shortcuts are verified; the navigation-panel Home stays available. Fallback Home buttons use a darker shade of your accent color. Images no longer has an extra Home button.
+- CST Notes dialogs scroll on smaller screens. Enter dismisses single-line inputs, including gloves and music, without interrupting multiline text or composed input. Surgeon links now say "Open surgeon profile."
 
-## Cases, templates, and sharing
+## Settings and sharing
 
-- Fixed case deletion failing with a circular-structure error. Deleted cases remain recoverable.
-- Template history keeps the current revision and the five preceding revisions. Case content is unchanged, and creation-template information remains informational.
-- Export no longer requires or bundles the original template. Mobile export dialogs scroll to keep controls reachable.
-- Share using Copy JSON or a file. Recipients can use Admin → Import → Import from CST Notes to paste JSON and review the destination and surgeon profile before importing.
+- Admin settings can be edited and saved together. Glove sizes are normalized, and Add label supports editable glove codes and labels. The glove-type summary stays read-only; verification timing and Resources are developer tools.
+- Storage metrics use B, KB, MB, and GB. Clear CST Notes tabs preserves pinned tabs, unsaved edits, and unrelated notes.
+- Import from clipboard reads a shared package when pressed, then opens recipient review. File import and manual paste remain available when clipboard access is unavailable. Unsupported glove codes receive clear setup guidance.
+- Restoring an archived case opens the restored note and refreshes its normal header. Routine update notices are quieter; actionable errors remain visible.
+
+## Cleaner notes and images
+
+- Resource collection tracks its state in Backend instead of adding hidden grab markers to case text. Existing markers are cleaned up safely.
+- Image organization can relocate images referenced by supported recovery archives while preserving restoration links and original backups. Ambiguous or unsafe references remain protected. Move previews summarize results with expandable details.
 
 The example is a learning aid for organizing notes, not a clinical protocol. Follow your facility's requirements and the confirmed case preference card.

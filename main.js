@@ -186,10 +186,10 @@ function validateCreatedTemplate(value) {
   if (!value.name.trim() || /[\x00-\x1f\x7f]/.test(value.name + value.version)) fail("Invalid created template metadata.");
 }
 function createdTemplateMetadata(fm = {}) {
-  const key3 = own(fm, "cst_created_template") || own(fm, "cst_created_template_version") ? "cst_created_template" : own(fm, "template_created") || own(fm, "template_created_version") ? "template_created" : "template";
-  if (key3 === "template" && own(fm, "cst_transfer_template")) return null;
-  const name = fm[key3];
-  const rawVersion = fm[key3 === "template" ? "template_version" : key3 + "_version"];
+  const key4 = own(fm, "cst_created_template") || own(fm, "cst_created_template_version") ? "cst_created_template" : own(fm, "template_created") || own(fm, "template_created_version") ? "template_created" : "template";
+  if (key4 === "template" && own(fm, "cst_transfer_template")) return null;
+  const name = fm[key4];
+  const rawVersion = fm[key4 === "template" ? "template_version" : key4 + "_version"];
   if (typeof name !== "string" || !name.trim() || /^(manual|unknown)$/i.test(name.trim())) return null;
   const version = typeof rawVersion === "string" ? rawVersion : Number.isSafeInteger(rawVersion) && rawVersion >= 0 ? String(rawVersion) : "";
   const result = { name, version };
@@ -292,8 +292,8 @@ function createTransferService(plugin, deps) {
     for (const p of paths) {
       const segments = p.split("/");
       for (let i = 1; i < segments.length; i++) {
-        const key3 = segments.slice(0, i).join("/"), item = lookup(key3);
-        if (item) seen.set(key3, item);
+        const key4 = segments.slice(0, i).join("/"), item = lookup(key4);
+        if (item) seen.set(key4, item);
       }
     }
     return [...seen].map(([path2, file]) => ({ path: path2, file }));
@@ -677,21 +677,21 @@ async function pruneTemplateRevisions(plugin, file, currentVersion, expectedText
   const stale = versions.filter((entry) => entry.n <= currentVersion - TEMPLATE_REVISIONS_TO_KEEP);
   if (!stale.length) return 0;
   if (typeof vault.trash !== "function") throw new Error("Template cleanup paused: the vault trash service is unavailable.");
-  const conflict2 = () => new Error("Template cleanup paused because the template or revision history changed. Wait for Sync, then retry.");
+  const conflict3 = () => new Error("Template cleanup paused because the template or revision history changed. Wait for Sync, then retry.");
   const remaining = new Set(versions.map((entry) => entry.file));
   const stamp = (item) => [item.stat?.mtime, item.stat?.ctime, item.stat?.size].join(":");
   const states = new Map(versions.map((entry) => [entry.file, { path: entry.file.path, stamp: stamp(entry.file), n: entry.n }]));
   const templateStamp = stamp(file);
   const assertState = () => {
     plugin.assertVaultFilePath(file, path, "Template moved or was replaced during revision cleanup.");
-    if (plugin.templateVersionRoot(path) !== rootPath || vault.getAbstractFileByPath(rootPath) !== root || root?.path !== rootPath) throw conflict2();
-    if (plugin.unloading || plugin.settings?.resetNeedsReview || stamp(file) !== templateStamp) throw conflict2();
+    if (plugin.templateVersionRoot(path) !== rootPath || vault.getAbstractFileByPath(rootPath) !== root || root?.path !== rootPath) throw conflict3();
+    if (plugin.unloading || plugin.settings?.resetNeedsReview || stamp(file) !== templateStamp) throw conflict3();
     const live = plugin.templateVersionFilesReadOnly(path);
     if (live.length !== remaining.size || live.some((entry) => {
       const state = states.get(entry.file);
       return !remaining.has(entry.file) || !state || state.n !== entry.n || state.path !== entry.file.path || state.stamp !== stamp(entry.file);
-    })) throw conflict2();
-    if (!latest || latest.n !== currentVersion || live.at(-1)?.file !== latest.file) throw conflict2();
+    })) throw conflict3();
+    if (!latest || latest.n !== currentVersion || live.at(-1)?.file !== latest.file) throw conflict3();
   };
   const verifyCurrent = async () => {
     assertState();
@@ -699,7 +699,7 @@ async function pruneTemplateRevisions(plugin, file, currentVersion, expectedText
     assertState();
     const savedText = await vault.read(latest.file);
     assertState();
-    if (activeText !== expectedText || savedText !== expectedText) throw conflict2();
+    if (activeText !== expectedText || savedText !== expectedText) throw conflict3();
   };
   await verifyCurrent();
   const plans = [];
@@ -718,11 +718,11 @@ async function pruneTemplateRevisions(plugin, file, currentVersion, expectedText
     const text = await vault.read(plan.file);
     assertState();
     plugin.assertVaultFilePath(plan.file, plan.path, "Template revision moved or was replaced during cleanup.");
-    if (text !== plan.text) throw conflict2();
+    if (text !== plan.text) throw conflict3();
     const nonce = globalThis.crypto?.randomUUID?.() || `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
     const stagedName = "r" + nonce.replace(/-/g, "").slice(0, Math.min(15, plan.file.name.length - 1));
     const stagedPath = `${rootPath}/${stagedName}`;
-    if (vault.getAbstractFileByPath(stagedPath)) throw conflict2();
+    if (vault.getAbstractFileByPath(stagedPath)) throw conflict3();
     try {
       await plugin.renameVaultItem(plan.file, stagedPath, plan.path);
       remaining.delete(plan.file);
@@ -732,9 +732,9 @@ async function pruneTemplateRevisions(plugin, file, currentVersion, expectedText
       const stagedText = await vault.read(plan.file);
       assertState();
       plugin.assertVaultFilePath(plan.file, stagedPath, "Template revision moved during retirement.");
-      if (stagedText !== plan.text || stamp(plan.file) !== stagedStamp) throw conflict2();
+      if (stagedText !== plan.text || stamp(plan.file) !== stagedStamp) throw conflict3();
       await vault.trash(plan.file, false);
-      if (vault.getAbstractFileByPath(stagedPath)) throw conflict2();
+      if (vault.getAbstractFileByPath(stagedPath)) throw conflict3();
       removed++;
       assertState();
     } catch (error) {
@@ -779,6 +779,7 @@ function installTransferFeatures(plugin, deps) {
         activeModals.add(this);
         this.modalEl?.classList?.add("cst-transfer-modal");
         this.contentEl.classList?.add("cst-transfer-content");
+        this.contentEl.tabIndex = 0;
         this.contentEl.createEl("h2", { text: title });
         Promise.resolve().then(() => render(this.contentEl, this)).catch((error) => {
           if (this.alive) this.contentEl.createEl("p", { text: error.message || String(error), attr: { role: "alert" } });
@@ -820,7 +821,7 @@ function installTransferFeatures(plugin, deps) {
     const wrap = el.createEl("label");
     wrap.createSpan({ text: label });
     const field = wrap.createEl("select", { attr: { "aria-label": label } });
-    for (const [key3, text] of values) field.createEl("option", { value: key3, text });
+    for (const [key4, text] of values) field.createEl("option", { value: key4, text });
     field.value = value;
     return field;
   }
@@ -852,7 +853,7 @@ function installTransferFeatures(plugin, deps) {
     }
     if (bundle.case.example) el.createEl("p", { text: "Example case: its example flag stays attached and it must be excluded from resource learning." });
   }
-  function destinations(el, defaults, changed = () => {
+  function destinations(el, defaults, changed2 = () => {
   }) {
     const specialties = plugin.getSpecialties();
     const initial = specialties.includes(defaults.specialty) ? defaults.specialty : "";
@@ -869,18 +870,18 @@ function installTransferFeatures(plugin, deps) {
       newSurgeon.hidden = !!surgeon2.value;
       surgeon2.onchange = () => {
         newSurgeon.hidden = !!surgeon2.value;
-        changed();
+        changed2();
       };
-      newSurgeon.oninput = changed;
+      newSurgeon.oninput = changed2;
     }
     surgeons();
     specialty.onchange = () => {
       surgeons();
-      changed();
+      changed2();
     };
-    newSpecialty.oninput = changed;
+    newSpecialty.oninput = changed2;
     const title = input(el, "New case name (never overwrites an existing case)", defaults.title);
-    title.oninput = changed;
+    title.oninput = changed2;
     return () => ({ specialty: specialty.value || newSpecialty.value, surgeon: surgeon2.value || newSurgeon.value, title: title.value });
   }
   function confirmImport(plan, sourceState, sourceView, afterImport) {
@@ -889,6 +890,7 @@ function installTransferFeatures(plugin, deps) {
       el.createEl("p", { text: `Create: ${plan.casePath}` });
       el.createEl("p", { text: `${plan.specialtyObject ? "Use existing" : "Create"} specialty. ${plan.surgeonObject ? "Use existing" : "Create"} surgeon.` });
       el.createEl("p", { text: "Resolved surgeon profile (changed fields update all live headers for this recipient surgeon):" });
+      el.createEl("p", { text: "Glove codes use this vault’s labels. Shared packages do not include code definitions, so confirm their meaning with the sender before importing—even when a code already exists here. Review or adjust the profile and Admin → Settings labels if needed." });
       for (const row of profileConflicts(plan.resolved, plan.recipient)) {
         el.createEl("p", { text: `${row.field}: ${plan.recipient ? row.recipient || "(empty)" : "(new profile)"} → ${row.sender || "(empty)"}` });
       }
@@ -918,10 +920,22 @@ function installTransferFeatures(plugin, deps) {
         profileArea.empty();
         nonce++;
       });
+      const profileStatus = el.createEl("p", { cls: "cst-transfer-status", attr: { role: "status", "aria-live": "polite", "aria-atomic": "true" } });
+      async function prepareRecipient(choice) {
+        profileStatus.textContent = "";
+        try {
+          return await service.prepareImport(bundle, choice);
+        } catch (error) {
+          if (error?.name !== "GloveValidationError" || error.field !== "gloves") throw error;
+          const message = "This glove size or type code is not configured here. Add the sender’s matching size/code in Admin → Settings after confirming its meaning, or choose an existing recipient surgeon and keep/edit their profile. Then retry; the shared file stays unchanged.";
+          if (view.alive) profileStatus.textContent = message;
+          throw new Error(message);
+        }
+      }
       button(el, "Compare recipient profile", async () => {
         const token = ++nonce;
         const choice = readDestination();
-        const initial = await service.prepareImport(bundle, choice);
+        const initial = await prepareRecipient(choice);
         if (!view.alive || token !== nonce) return;
         if (!initial.recipient) {
           confirmImport(initial, sourceState, view, afterImport);
@@ -950,7 +964,7 @@ function installTransferFeatures(plugin, deps) {
           const profile = Object.fromEntries(PROFILE_FIELDS.map((k) => [k, resolved[k].value]));
           const token2 = nonce;
           const selected = readDestination();
-          const plan = await service.prepareImport(bundle, { ...selected, profile });
+          const plan = await prepareRecipient({ ...selected, profile });
           if (!view.alive || token2 !== nonce) throw new Error("Destination changed; compare profiles again.");
           if (plan.fingerprint !== baseline) throw new Error("The recipient profile changed. Compare profiles again before choosing values.");
           if (sourceState?.external) plan.externalSource = sourceState;
@@ -1000,6 +1014,7 @@ function installTransferFeatures(plugin, deps) {
   plugin.openCSTExport = (file) => modal("Export CST Notes case", (el, view) => {
     if (!plugin.caseContext(file)) throw new Error("Select a CST case first.");
     el.createEl("p", { text: "Share one case, its sender surgeon profile and referenced local images. Creation template metadata is informational only; no template files are needed or included. Review for patient identifiers, private notes and photo metadata. No backend scripts or unrelated cases are included. Your original is preserved." });
+    el.createEl("p", { text: "If you customized glove codes, tell the recipient what they mean. Code definitions are not included in the shared package." });
     button(el, "Build privacy preview", async () => {
       const plan = await service.prepareExport(file);
       if (!view.alive) return;
@@ -1007,7 +1022,7 @@ function installTransferFeatures(plugin, deps) {
         bundlePreview(preview, plan.bundle);
         for (const warning of plan.warnings) preview.createEl("p", { text: warning });
         preview.createEl("p", { text: `Save shareable file in your vault: ${plan.exportPath}. On mobile or desktop, select the file in Obsidian’s Files pane and use the available share/open action or your device’s Files app.` });
-        preview.createEl("p", { text: "To receive this case: Admin → Import → Import from CST Notes → paste the JSON → review and import. Older versions may need an update to read the new portable format." });
+        preview.createEl("p", { text: "To receive this case: copy the shared JSON, then Admin → Import → Import from CST Notes → Import from clipboard → review and import. Older versions may need an update to read the new portable format." });
         const consent = check(preview, "I reviewed all text and images and approve sharing this export.");
         const manual = preview.createDiv({ cls: "cst-transfer-manual-copy" });
         const actions = preview.createDiv({ cls: "cst-transfer-actions" });
@@ -1019,7 +1034,7 @@ function installTransferFeatures(plugin, deps) {
           try {
             if (!copy) throw new Error("Clipboard unavailable");
             await copy(json);
-            notice("JSON copied. Send it to the recipient to paste into Import from CST Notes.");
+            notice("JSON copied. Send it to the recipient to use Import from clipboard in Import from CST Notes.");
           } catch {
             if (!confirm.alive || !view.alive) return;
             manual.empty();
@@ -1047,48 +1062,123 @@ function installTransferFeatures(plugin, deps) {
     });
   });
   plugin.openCSTImport = () => modal("Import from CST Notes", (el, view) => {
-    el.createEl("p", { text: "Paste the JSON shared by another CST Notes user, then review the case, destination and surgeon profile before importing. Nothing is imported until you confirm." });
-    const pasted = el.createEl("textarea", { cls: "cst-transfer-json", attr: { "aria-label": "Paste CST Notes JSON", placeholder: "Paste exported CST Notes JSON here", rows: "8", spellcheck: "false", autocapitalize: "off", autocomplete: "off", maxlength: String(TRANSFER_LIMITS.bytes + 1) } });
+    el.classList?.add("cst-transfer-import");
+    el.createEl("p", { text: "Copy the JSON shared by another CST Notes user, then choose Import from clipboard. Clipboard access happens only when you choose that button. Review the case, destination and surgeon profile before confirming the import." });
+    let readClipboard = null;
+    try {
+      if (typeof deps.readClipboardText === "function") readClipboard = () => deps.readClipboardText();
+      else {
+        const clipboard = globalThis.navigator?.clipboard;
+        if (typeof clipboard?.readText === "function") readClipboard = () => clipboard.readText();
+      }
+    } catch {
+    }
+    const status = el.createEl("p", { cls: "cst-transfer-status", attr: { role: "status", "aria-live": "polite", "aria-atomic": "true" } });
     const actions = el.createDiv({ cls: "cst-transfer-actions" });
-    button(actions, "Review pasted JSON", async () => {
-      if (!pasted.value.trim()) throw new Error("Paste the exported CST Notes JSON first.");
-      await loadImport(pasted.value);
-      view.close();
+    const controls = [];
+    let busy = false, composing = false, focusManual = false;
+    async function review(read) {
+      if (busy || !view.alive) return;
+      busy = true;
+      el.setAttribute?.("aria-busy", "true");
+      status.textContent = "Reading and validating the export…";
+      for (const control of controls) control.disabled = true;
+      try {
+        const { raw, state = null } = await read();
+        if (!view.alive) return;
+        if (typeof raw !== "string") throw new Error("The export must contain JSON text.");
+        if (raw.length > TRANSFER_LIMITS.bytes) throw new Error("Portable file exceeds 24 MiB.");
+        if (!raw.trim()) throw new Error("No JSON text was found. Copy the exported CST Notes JSON, paste it manually, or choose a JSON file.");
+        await loadImport(raw, state);
+        view.close();
+      } catch (error) {
+        if (view.alive) status.textContent = error instanceof SyntaxError ? "This is not valid JSON. Copy a CST Notes portable export and try again." : error.message || "Unable to read this export. Try manual paste or choose a JSON file.";
+      } finally {
+        busy = false;
+        if (view.alive) {
+          el.setAttribute?.("aria-busy", "false");
+          for (const control of controls) control.disabled = false;
+          clipboardButton.disabled = !readClipboard;
+          if (focusManual) {
+            focusManual = false;
+            pasted.focus?.();
+          }
+        }
+      }
+    }
+    const clipboardButton = button(actions, "Import from clipboard", () => review(async () => {
+      try {
+        return { raw: await readClipboard() };
+      } catch {
+        if (view.alive) showManual(true);
+        throw new Error("Clipboard access is unavailable or was denied. Paste the JSON below and choose Continue, or choose a JSON file.");
+      }
+    }));
+    clipboardButton.disabled = !readClipboard;
+    const picker = el.createEl("input", { type: "file", attr: { accept: ".json,application/json", "aria-label": "Choose portable file from device" } });
+    picker.hidden = true;
+    const chooseFile = button(actions, "Choose JSON file", () => {
+      if (!busy && view.alive) picker.click();
+    });
+    const pasteButton = button(actions, "Paste manually", () => {
+      if (!busy) showManual(true);
     });
     button(actions, "Cancel", () => view.close());
-    const alternatives = el.createEl("details");
-    alternatives.createEl("summary", { text: "Or import a JSON file" });
-    alternatives.createEl("p", { text: "Files are limited to 24 MiB, with up to 32 images (5 MiB each). Import always previews the destination and profile changes." });
-    const picker = alternatives.createEl("input", { type: "file", attr: { accept: ".json,application/json", "aria-label": "Choose portable file from device" } });
-    picker.onchange = async () => {
+    const manual = el.createDiv({ cls: "cst-transfer-manual-paste" });
+    manual.hidden = true;
+    manual.createEl("p", { text: "Paste the exported JSON below. Choose Continue or press Enter to validate it and review the recipient details. Shift+Enter adds a line break." });
+    const pasted = manual.createEl("textarea", { cls: "cst-transfer-json", attr: { "aria-label": "Paste CST Notes JSON", placeholder: "Paste exported CST Notes JSON here", rows: "6", spellcheck: "false", autocapitalize: "off", autocomplete: "off", maxlength: String(TRANSFER_LIMITS.bytes + 1) } });
+    const continueActions = manual.createDiv({ cls: "cst-transfer-actions" });
+    const continueButton = button(continueActions, "Continue", () => review(() => ({ raw: pasted.value })));
+    function showManual(focus = false) {
+      manual.hidden = false;
+      if (focus) {
+        if (busy) focusManual = true;
+        else pasted.focus?.();
+      }
+    }
+    pasted.oncompositionstart = () => {
+      composing = true;
+    };
+    pasted.oncompositionend = () => {
+      composing = false;
+    };
+    pasted.onkeydown = (event) => {
+      if (event.key !== "Enter" || event.shiftKey || event.isComposing || composing || event.keyCode === 229) return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (!event.repeat && !busy) return continueButton.onclick();
+    };
+    picker.onchange = () => {
       const file = picker.files?.[0];
       if (!file) return;
-      picker.disabled = true;
-      try {
-        if (file.size > TRANSFER_LIMITS.bytes) throw new Error("Portable file exceeds 24 MiB.");
-        const raw = await file.text();
-        if (view.alive) {
-          await loadImport(raw);
-          view.close();
+      return review(async () => {
+        try {
+          if (file.size > TRANSFER_LIMITS.bytes) throw new Error("Portable file exceeds 24 MiB.");
+          return { raw: await file.text() };
+        } finally {
+          picker.value = "";
         }
-      } catch (error) {
-        notice(error.message || String(error));
-      } finally {
-        picker.disabled = false;
-      }
+      });
     };
+    const alternatives = el.createEl("details");
+    alternatives.createEl("summary", { text: "Or choose an exported vault file" });
+    alternatives.createEl("p", { text: "Files are limited to 24 MiB, with up to 32 images (5 MiB each). Import always previews the destination and profile changes." });
     const files = vault.getFiles().filter((file) => file.path.endsWith(".cst.json"));
     const fromVault = select(alternatives, "Or choose an exported vault file", [["", "Select file…"], ...files.map((f) => [f.path, f.path])]);
-    button(alternatives, "Read selected vault export", async () => {
+    const vaultButton = button(alternatives, "Read selected vault export", () => review(async () => {
       const file = vault.getAbstractFileByPath(fromVault.value);
       if (!(file instanceof deps.TFile)) throw new Error("Select an available vault export.");
       if (file.stat?.size > TRANSFER_LIMITS.bytes) throw new Error("Portable file exceeds 24 MiB.");
       const state = await service.read(file);
-      if (view.alive) {
-        await loadImport(state.text, state);
-        view.close();
-      }
-    });
+      return { raw: state.text, state };
+    }));
+    controls.push(clipboardButton, chooseFile, pasteButton, pasted, continueButton, picker, fromVault, vaultButton);
+    if (!readClipboard) {
+      status.textContent = "Clipboard access is unavailable on this device. Paste the JSON below and choose Continue, or choose a JSON file.";
+      showManual();
+    }
+    (readClipboard ? clipboardButton : chooseFile).focus?.();
   });
   plugin.renderTransferAdmin = (el) => {
     el.createEl("h3", { text: "CST Notes portable transfer" });
@@ -1290,6 +1380,9 @@ var sections = /* @__PURE__ */ new Map([
   ["dressing", "Dressings"],
   ["dressings", "Dressings"]
 ]);
+function stripResourceMarkers(text) {
+  return String(text).replace(/<!--[\s\S]*?(?:-->|$)/g, (comment) => /^<!-- cst-resource-grabbed:v1:[a-f0-9]{64} -->$/.test(comment) ? "" : comment);
+}
 function resourceBody(text) {
   return String(text).replace(/^\uFEFF/, "").replace(/\r\n?/g, "\n").replace(/^---\n[\s\S]*?\n(?:---|\.\.\.)[ \t]*(?:\n|$)/, "").replace(/<!--[\s\S]*?(?:-->|$)/g, "");
 }
@@ -1384,6 +1477,7 @@ var ResourceCollector = class {
     }
     if (previous?.body === body && previous.fingerprint === fingerprint) {
       previous.path = path;
+      previous.text = text;
       return false;
     }
     this.notes.set(id2, { id: id2, path, body, text, fingerprint, revision: ++this.revision, grabbed: false, entries: [] });
@@ -1441,9 +1535,9 @@ var ResourceCollector = class {
   resources() {
     return [...this.catalog.values()].map((entry) => {
       const sources = [...entry.sources.values()].map((source) => {
-        const parent2 = this.notes.get(source.noteId);
-        const current = !!parent2?.grabbed && parent2.entries.some((item) => item.key === entry.key && item.section === source.section);
-        return { ...source, path: parent2?.path || source.path, current };
+        const parent3 = this.notes.get(source.noteId);
+        const current = !!parent3?.grabbed && parent3.entries.some((item) => item.key === entry.key && item.section === source.section);
+        return { ...source, path: parent3?.path || source.path, current };
       });
       const noteCount = new Set(sources.filter((source) => source.current).map((source) => source.noteId)).size;
       return {
@@ -1462,7 +1556,6 @@ var ResourceCollector = class {
 // src/resource-runtime.mjs
 var kinds = ["resource", "clamp", "scissors", "forceps", "retractor", "needle-holder", "suture", "dressing", "fluid"];
 var sectionNames = ["Mayo", "Basin", "Sutures", "Dressings"];
-var markerPattern = /<!-- cst-resource-grabbed:v1:[a-f0-9]{64} -->/g;
 var emptyState = () => ({ version: 1, revision: 0, aliases: [], hidden: [], catalog: [], notes: [] });
 var conflict = () => new Error("Resource collection paused because Sync changed a file. Refresh after Sync settles.");
 var safePath = (path) => {
@@ -1500,11 +1593,11 @@ function decodeResourceIndex(text) {
   state.aliases = state.aliases.map(validateResourceAlias);
   const seen = /* @__PURE__ */ new Set();
   for (const alias of state.aliases) {
-    const key3 = JSON.stringify([alias.section, alias.identityKey || resourcePhraseKey(alias.raw)]);
-    if (seen.has(key3)) throw new Error("Conflicting resource aliases.");
-    seen.add(key3);
+    const key4 = JSON.stringify([alias.section, alias.identityKey || resourcePhraseKey(alias.raw)]);
+    if (seen.has(key4)) throw new Error("Conflicting resource aliases.");
+    seen.add(key4);
   }
-  if (state.hidden.some((key3) => typeof key3 !== "string")) throw new Error("Invalid hidden resources.");
+  if (state.hidden.some((key4) => typeof key4 !== "string")) throw new Error("Invalid hidden resources.");
   for (const entry of state.catalog) {
     if (!entry || typeof entry.key !== "string" || typeof entry.label !== "string" || typeof entry.normalized !== "string" || !kinds.includes(entry.kind) || !Array.isArray(entry.sources) || entry.sources.some((s) => typeof s.noteId !== "string" || typeof s.path !== "string" || !sectionNames.includes(s.section) || typeof s.raw !== "string")) throw new Error("Invalid resource provenance.");
   }
@@ -1516,14 +1609,6 @@ async function resourceFingerprint(text, aliases = []) {
   const bytes2 = new TextEncoder().encode(JSON.stringify([comparableResourceBody(text), aliases]));
   const digest = await globalThis.crypto.subtle.digest("SHA-256", bytes2);
   return [...new Uint8Array(digest)].map((n) => n.toString(16).padStart(2, "0")).join("");
-}
-function withResourceMarker(text, hash) {
-  if (!/^[a-f0-9]{64}$/.test(hash)) throw new Error("Invalid resource fingerprint.");
-  const marker = "<!-- cst-resource-grabbed:v1:" + hash + " -->";
-  const matches = text.match(markerPattern) || [];
-  if (matches.length === 1) return text.replace(markerPattern, marker);
-  const clean = text.replace(markerPattern, "");
-  return clean + (clean.endsWith("\n") ? "" : clean.includes("\r\n") ? "\r\n" : "\n") + marker;
 }
 function createDisconnectedResourceProvider() {
   return Object.freeze({
@@ -1653,10 +1738,18 @@ function createResourceRuntime(plugin, deps) {
     if (vault.getAbstractFileByPath(folder)) throw conflict();
     await ensureFolder(folder);
     active();
-    await vault.create(folder + "/Original.md", text);
+    const originalPath = folder + "/Original.md", manifestPath = folder + "/Manifest.md";
+    const original = await vault.create(originalPath, text);
     active();
-    await vault.create(folder + "/Manifest.md", "# Resource backup\n\n" + JSON.stringify({ originalPath: path, version: 1 }) + "\n");
-    active();
+    const manifestText = "# Resource backup\n\n" + JSON.stringify({ originalPath: path, version: 1 }) + "\n";
+    const manifest = await vault.create(manifestPath, manifestText);
+    fileAt(original, originalPath);
+    if (await vault.read(original) !== text) throw conflict();
+    fileAt(original, originalPath);
+    fileAt(manifest, manifestPath);
+    if (await vault.read(manifest) !== manifestText) throw conflict();
+    fileAt(manifest, manifestPath);
+    fileAt(original, originalPath);
     return folder;
   }
   async function load({ discardHistory = false } = {}) {
@@ -1678,8 +1771,8 @@ function createResourceRuntime(plugin, deps) {
       const current = merged.catalog.get(entry.key);
       if (!current) merged.catalog.set(entry.key, { ...entry, sources: new Map(entry.sources.map((s) => [JSON.stringify([s.noteId, s.section]), s])) });
       else for (const source of entry.sources) {
-        const key3 = JSON.stringify([source.noteId, source.section]);
-        if (!current.sources.has(key3)) current.sources.set(key3, source);
+        const key4 = JSON.stringify([source.noteId, source.section]);
+        if (!current.sources.has(key4)) current.sources.set(key4, source);
       }
     }
     runtime.state = state;
@@ -1739,7 +1832,12 @@ function createResourceRuntime(plugin, deps) {
     const path = roots().index, expectedFile = runtime.indexFile, expectedText = runtime.indexText;
     const snapshot = () => ({ ...runtime.state, ...runtime.collector.snapshot(), revision: runtime.state.revision + 1 });
     const comparable = (value) => JSON.stringify({ ...value, revision: 0 });
-    if (expectedText && comparable(decodeResourceIndex(expectedText)) === comparable(snapshot())) return;
+    if (expectedText && comparable(decodeResourceIndex(expectedText)) === comparable(snapshot())) {
+      fileAt(expectedFile, path);
+      if (await vault.read(expectedFile) !== expectedText) throw conflict();
+      fileAt(expectedFile, path);
+      return;
+    }
     await ensureFolder(path.slice(0, path.lastIndexOf("/")));
     let nextState, next;
     if (expectedFile) {
@@ -1851,25 +1949,62 @@ function createResourceRuntime(plugin, deps) {
     fileAt(file, path);
     if (initialVersion !== (runtime.pathVersions.get(path) || 0) || reviewGeneration !== runtime.reviewGeneration) throw conflict();
     runtime.collector.observe({ id: identity.id, path, text, fingerprint: hash });
-    const next = withResourceMarker(text, hash);
-    if (next !== text) {
-      if (typeof vault.process !== "function") throw new Error("Atomic vault updates are required for resource collection.");
+    const result = runtime.collector.prepare(identity.id);
+    const current = await vault.read(file);
+    fileAt(file, path);
+    if (current !== text || initialVersion !== (runtime.pathVersions.get(path) || 0) || reviewGeneration !== runtime.reviewGeneration || eligible(file, current)?.id !== identity.id) throw conflict();
+    if (result && !runtime.collector.commit(result)) throw conflict();
+  }
+  async function cleanupLegacyMarkers() {
+    active();
+    const report = { cleaned: [], skipped: 0 };
+    runtime.lastMarkerCleanup = report;
+    for (const file of plugin.allCaseFiles()) {
+      active();
+      const path = file.path, content = roots().content;
+      if (!(file instanceof deps.TFile) || !path.startsWith(content + "/") || path.slice(content.length + 1).split("/").length !== 3 || !plugin.isCasePath(path) || !plugin.caseContext(file)) {
+        report.skipped++;
+        continue;
+      }
+      safePath(path);
+      fileAt(file, path);
+      const version = runtime.pathVersions.get(path) || 0;
+      const text = await vault.read(file);
+      fileAt(file, path);
+      if (version !== (runtime.pathVersions.get(path) || 0)) throw conflict();
+      const next = stripResourceMarkers(text);
+      if (next === text) {
+        report.skipped++;
+        continue;
+      }
+      if (typeof vault.process !== "function") throw new Error("Atomic vault updates are required for resource cleanup.");
       if (await vault.read(file) !== text) throw conflict();
-      await backup(path, text);
+      fileAt(file, path);
+      const backupPath = await backup(path, text);
       fileAt(file, path);
       await vault.process(file, (current2) => {
         fileAt(file, path);
-        if (current2 !== text || reviewGeneration !== runtime.reviewGeneration || eligible(file, current2)?.id !== identity.id) throw conflict();
+        if (current2 !== text || version !== (runtime.pathVersions.get(path) || 0) || !plugin.isCasePath(path) || !plugin.caseContext(file)) throw conflict();
         return next;
       });
+      invalidatePath(path);
+      enqueue(path, file);
+      const finalVersion = runtime.pathVersions.get(path) || 0;
+      const current = await vault.read(file);
+      fileAt(file, path);
+      if (current !== next || finalVersion !== (runtime.pathVersions.get(path) || 0)) throw conflict();
+      report.cleaned.push({ path, backupPath });
     }
-    const finalVersion = runtime.pathVersions.get(path) || 0;
-    const current = await vault.read(file);
-    fileAt(file, path);
-    if (current !== next || finalVersion !== (runtime.pathVersions.get(path) || 0) || reviewGeneration !== runtime.reviewGeneration || eligible(file, current)?.id !== identity.id) throw conflict();
-    const result = runtime.collector.prepare(identity.id);
-    if (result && !runtime.collector.commit(result)) throw conflict();
+    return report;
   }
+  runtime.cleanupLegacyMarkers = () => serial(async () => {
+    try {
+      return await cleanupLegacyMarkers();
+    } catch (error) {
+      fail2(error);
+      throw error;
+    }
+  });
   runtime.flushBatch = () => serial(async () => {
     if (suspended() || runtime.error) {
       clearTimer();
@@ -1906,6 +2041,7 @@ function createResourceRuntime(plugin, deps) {
       await load({ discardHistory });
       runtime.discardHistoryOnResume = false;
       await refreshReviews(true);
+      if (options.cleanupLegacyMarkers === true) runtime.lastMarkerCleanup = await cleanupLegacyMarkers();
       runtime.scanDirty = false;
       scan();
       if (!runtime.pending.size) await persist();
@@ -1917,7 +2053,7 @@ function createResourceRuntime(plugin, deps) {
     }
     return runtime.status();
   }
-  runtime.start = () => {
+  runtime.start = (options = {}) => {
     const epoch = runtime.epoch;
     return serial(async () => {
       if (runtime.holds.size || epoch !== runtime.epoch || resetPending()) {
@@ -1925,7 +2061,7 @@ function createResourceRuntime(plugin, deps) {
         return runtime.status();
       }
       runtime.stopped = false;
-      return restart();
+      return restart(options);
     });
   };
   runtime.pause = (reason = "Administrative transaction") => {
@@ -1969,7 +2105,7 @@ function createResourceRuntime(plugin, deps) {
       return;
     }
     const path = file?.path;
-    const touches = (target) => path === target || oldPath === target || file instanceof deps.TFolder && kind !== "create" && [path, oldPath].some((parent2) => parent2 && target.startsWith(parent2 + "/"));
+    const touches = (target) => path === target || oldPath === target || file instanceof deps.TFolder && kind !== "create" && [path, oldPath].some((parent3) => parent3 && target.startsWith(parent3 + "/"));
     if (touches(configured.index)) {
       runtime.indexDirty = true;
       runtime.indexGeneration++;
@@ -2065,7 +2201,7 @@ function createResourceRuntime(plugin, deps) {
       next.aliases.sort((a, b) => a.section.localeCompare(b.section) || resourcePhraseKey(a.raw).localeCompare(resourcePhraseKey(b.raw)));
       invalidateAll();
     } else {
-      next.hidden = next.hidden.filter((key3) => key3 !== change.key);
+      next.hidden = next.hidden.filter((key4) => key4 !== change.key);
       if (change.hidden) next.hidden.push(change.key);
     }
     runtime.state = next;
@@ -2130,7 +2266,7 @@ function createResourceRuntime(plugin, deps) {
     };
     resume.onclick = () => {
       const preview = el.createDiv();
-      preview.createEl("p", { text: "Rescan reads eligible case notes, backs up changed notes, updates hidden collection markers and the Backend index. Case wording is preserved." });
+      preview.createEl("p", { text: "Rescan reads eligible case notes and updates the Backend resource library." });
       preview.createEl("button", { text: "Cancel" }).onclick = () => preview.remove();
       preview.createEl("button", { text: "Confirm rescan" }).onclick = () => perform(() => runtime.start());
     };
@@ -2212,7 +2348,9 @@ function installResourceFeatures(plugin, deps) {
   const runtime = createResourceRuntime(plugin, deps);
   plugin.resourceFeatures = runtime;
   plugin.renderResourceAdmin = (el) => runtime.render(el);
-  plugin.startResourceCollection = () => runtime.start();
+  plugin.startResourceCollection = (options) => runtime.start(options);
+  plugin.cleanupResourceMarkers = () => runtime.cleanupLegacyMarkers();
+  plugin.stripResourceMarkers = stripResourceMarkers;
   plugin.onResourceFileEvent = (kind, file, oldPath) => runtime.event(kind, file, oldPath);
   plugin.stopResourceCollection = () => runtime.stop();
   plugin.pauseResourceCollection = (reason) => runtime.pause(reason);
@@ -2220,6 +2358,103 @@ function installResourceFeatures(plugin, deps) {
   plugin.resumeResourceCollection = (token, options) => runtime.resume(token, options);
   plugin.register?.(() => runtime.stop());
   return runtime;
+}
+
+// src/ui-preferences.mjs
+var UI_PREFERENCES_REVISION = 1;
+var MOBILE_TOOLBAR_COMMANDS = Object.freeze([
+  "editor:undo",
+  "editor:redo",
+  "editor:attach-file",
+  "editor:set-heading",
+  "editor:toggle-bold",
+  "editor:toggle-italics",
+  "editor:toggle-strikethrough",
+  "editor:toggle-highlight",
+  "editor:toggle-bullet-list",
+  "editor:toggle-numbered-list",
+  "editor:indent-list",
+  "editor:unindent-list",
+  "editor:configure-toolbar"
+]);
+var STATE_KEY = "cst-notes-ui-preferences";
+function mobileNavigationReady(app, pluginId = "cst-notes") {
+  if (typeof app.vault?.getConfig !== "function") return false;
+  const command = `${pluginId}:open-app`, ribbon = `${pluginId}:CST: Open App`;
+  return app.vault.getConfig("mobilePullAction") === command && app.vault.getConfig("mobileQuickRibbonItem") === ribbon && typeof app.commands?.commands?.[command]?.callback === "function" && !!app.workspace?.leftRibbon?.items?.some((item) => item.id === ribbon && !item.hidden && typeof item.callback === "function");
+}
+async function applyUIPreferences(app, { mobile = false, pluginId = "cst-notes", revision = UI_PREFERENCES_REVISION } = {}) {
+  const result = { updates: false, mobile: false, unsupported: [] };
+  const saved = app.loadLocalStorage?.(STATE_KEY) || {};
+  const next = { ...saved };
+  try {
+    if (saved.updates !== revision) {
+      if (typeof app.plugins?.setAutomaticUpdateCheck !== "function") throw new Error("Automatic update checks");
+      await app.plugins.setAutomaticUpdateCheck(true);
+      if (app.plugins.autoCheckForUpdates !== true) throw new Error("Automatic update checks");
+      next.updates = revision;
+    }
+    result.updates = app.plugins?.autoCheckForUpdates === true;
+  } catch {
+    result.unsupported.push("Automatic update checks");
+  }
+  if (mobile) {
+    try {
+      if (saved.mobile !== revision) {
+        if (typeof app.vault?.setConfig !== "function" || typeof app.vault?.getConfig !== "function") throw new Error("Mobile preferences");
+        const command = `${pluginId}:open-app`, ribbon = `${pluginId}:CST: Open App`;
+        const leftRibbon = app.workspace?.leftRibbon;
+        if (!app.commands?.commands?.[command] || !leftRibbon?.items?.some((item) => item.id === ribbon)) throw new Error("CST Notes shortcuts");
+        if (typeof leftRibbon.onChange !== "function") throw new Error("Ribbon preference persistence");
+        const commands = MOBILE_TOOLBAR_COMMANDS.filter((id2) => app.commands?.commands?.[id2]);
+        const values = {
+          mobilePullAction: command,
+          mobileQuickRibbonItem: ribbon,
+          autoFullScreen: true,
+          floatingNavigation: true,
+          slidingSidebar: true,
+          mobileToolbarCommands: commands
+        };
+        for (const [key4, value] of Object.entries(values)) {
+          await app.vault.setConfig(key4, value);
+          if (JSON.stringify(app.vault.getConfig(key4)) !== JSON.stringify(value)) throw new Error(key4);
+        }
+        const items = leftRibbon.items;
+        for (const title of ["CST: New Case", "CST: Open App", "CST: Open Admin"]) {
+          const item = items.find((item2) => item2.id === `${pluginId}:${title}`);
+          if (item) item.hidden = false;
+        }
+        await leftRibbon.onChange(true);
+        app.mobileNavbar?.updateRibbonMenuItem?.();
+        app.mobileToolbar?.update?.();
+        if (!mobileNavigationReady(app, pluginId)) throw new Error("CST Notes shortcuts");
+        next.mobile = revision;
+      }
+      result.mobile = mobileNavigationReady(app, pluginId);
+    } catch {
+      result.unsupported.push("Mobile navigation preferences");
+    }
+  }
+  if (typeof app.saveLocalStorage === "function") app.saveLocalStorage(STATE_KEY, next);
+  return result;
+}
+function formatStorageBytes(value) {
+  const bytes2 = Math.max(0, Number(value) || 0), units = ["B", "KB", "MB", "GB"];
+  let n = bytes2, i = 0;
+  while (n >= 1024 && i < units.length - 1) {
+    n /= 1024;
+    i++;
+  }
+  return `${i ? Number(n.toFixed(2)) : Math.round(n)} ${units[i]}`;
+}
+function exitSingleLineOnEnter(event) {
+  if (event.key !== "Enter" || event.isComposing || event.keyCode === 229 || event.defaultPrevented) return false;
+  const input = event.target;
+  if (String(input?.tagName || "").toLowerCase() !== "input" || !["text", "search", "number", "email", "url", "tel", "password"].includes(input.type || "text")) return false;
+  if (input.getAttribute?.("aria-expanded") === "true") return false;
+  event.preventDefault();
+  input.blur();
+  return true;
 }
 
 // src/admin-workspace.mjs
@@ -2230,14 +2465,16 @@ var ADMIN_DEVELOPER_PAGES = Object.freeze([
   "repair",
   "migrations",
   "diagnostics",
-  "reset"
+  "reset",
+  "resources"
 ]);
 var ADMIN_DEVELOPER_RENDERERS = Object.freeze({
   renderSystem: "system",
   renderMetadataAdmin: "metadata",
   renderGraphAdmin: "graph",
   renderRepairAdmin: "repair",
-  renderMigrations: "migrations"
+  renderMigrations: "migrations",
+  renderResourceAdmin: "resources"
 });
 var ADMIN_DEVELOPER_COMMANDS = Object.freeze([
   "repair-backend",
@@ -2347,7 +2584,7 @@ function installAdminWorkspace(plugin, deps) {
     assertObject(file, expected);
     return { object: file, path: expected, binary, content };
   }
-  function equal(a, b) {
+  function equal3(a, b) {
     return typeof a === "string" ? a === b : a.length === b.length && a.every((v, i) => v === b[i]);
   }
   async function check(entry, at = entry.path) {
@@ -2355,7 +2592,7 @@ function installAdminWorkspace(plugin, deps) {
     if (isFile(entry.object)) {
       const current = entry.binary ? new Uint8Array(await vault.readBinary(entry.object)) : await vault.read(entry.object);
       assertObject(entry.object, at);
-      if (!equal(entry.content, current)) throw new Error(`Content changed at ${at}. All detected content was retained.`);
+      if (!equal3(entry.content, current)) throw new Error(`Content changed at ${at}. All detected content was retained.`);
     }
   }
   async function inventory(root) {
@@ -2565,9 +2802,9 @@ function installAdminWorkspace(plugin, deps) {
     if (!match) throw new Error("Archived case needs a valid frontmatter block.");
     const newline = text.includes("\r\n") ? "\r\n" : "\n";
     let header = match[1];
-    for (const [key3, value] of Object.entries(fields)) {
-      header = header.split(/\r?\n/).filter((line) => !new RegExp("^" + key3 + "\\s*:").test(line)).join(newline);
-      header += newline + key3 + ": " + JSON.stringify(value);
+    for (const [key4, value] of Object.entries(fields)) {
+      header = header.split(/\r?\n/).filter((line) => !new RegExp("^" + key4 + "\\s*:").test(line)).join(newline);
+      header += newline + key4 + ": " + JSON.stringify(value);
     }
     return "---" + newline + header + newline + "---" + newline + text.slice(match[0].length);
   }
@@ -2602,9 +2839,9 @@ function installAdminWorkspace(plugin, deps) {
       const data = plugin.adminRegistryRecord(record, parts[0], parts[1]);
       const currentRegistry = plugin.parseSurgeonRegistryText(registry.content);
       if (currentRegistry.invalid || Object.values(currentRegistry.registry.surgeons).some((r) => r.cst_id === expectedId)) throw new Error("Archived surgeon identity is already active elsewhere or current registry is invalid.");
-      const key3 = plugin.surgeonKey(parts[0], parts[1]), previous = changes.get(key3);
+      const key4 = plugin.surgeonKey(parts[0], parts[1]), previous = changes.get(key4);
       if (previous && previous.data.cst_id !== data.cst_id) throw new Error("Conflicting archived surgeon identities.");
-      changes.set(key3, Object.freeze({ specialty: parts[0], surgeon: parts[1], expected: null, data: Object.freeze(data) }));
+      changes.set(key4, Object.freeze({ specialty: parts[0], surgeon: parts[1], expected: null, data: Object.freeze(data) }));
     }
     for (const item of entries.filter((e) => isFile(e.object))) {
       const original = entry.target + item.path.slice(entry.source.length);
@@ -2674,9 +2911,18 @@ function installAdminWorkspace(plugin, deps) {
       await check(plan.entry.manifest);
       await check(plan.source);
       if (occupied(plan.target)) throw new Error("Sync occupied the recovery destination.");
+      const body = plan.restoredTexts?.[plan.source.path] ?? plan.source.content;
+      const cleanBody = !plan.source.binary && plugin.stripResourceMarkers ? plugin.stripResourceMarkers(body) : body;
+      const imagePlan = !plan.source.binary && /\.md$/i.test(plan.target) ? await plugin.attachmentRecovery?.prepareRestore({ text: cleanBody, originalPath: plan.entry.target, targetPath: plan.target }) : null;
+      const restoredContent = imagePlan?.text ?? cleanBody;
+      await imagePlan?.assertUnchanged();
+      await check(plan.entry.manifest);
+      await check(plan.source);
+      if (occupied(plan.target)) throw new Error("Sync occupied the recovery destination during image recovery.");
       plugin.markInternalCreate?.(plan.target);
-      const restored = plan.source.binary ? await vault.createBinary(plan.target, plan.source.content.slice().buffer) : await vault.create(plan.target, plan.source.content);
-      await check({ ...plan.source, object: restored }, plan.target);
+      const restored = plan.source.binary ? await vault.createBinary(plan.target, plan.source.content.slice().buffer) : await vault.create(plan.target, restoredContent);
+      await check({ ...plan.source, content: restoredContent, object: restored }, plan.target);
+      await imagePlan?.assertUnchanged();
       await commitRecoveredProfiles(plan);
       plugin.scheduleGraphRebuild?.(250);
       return restored;
@@ -2701,8 +2947,17 @@ function installAdminWorkspace(plugin, deps) {
         plugin.markInternalCreate?.(destination);
         if (isFolder(entry.object)) await vault.createFolder(destination);
         else {
-          const file = entry.binary ? await vault.createBinary(destination, entry.content.slice().buffer) : await vault.create(destination, plan.restoredTexts?.[entry.path] || entry.content);
-          await check({ ...entry, content: plan.restoredTexts?.[entry.path] || entry.content, object: file }, destination);
+          const body = plan.restoredTexts?.[entry.path] ?? entry.content;
+          const cleanBody = !entry.binary && plugin.stripResourceMarkers ? plugin.stripResourceMarkers(body) : body;
+          const imagePlan = !entry.binary && /\.md$/i.test(destination) ? await plugin.attachmentRecovery?.prepareRestore({ text: cleanBody, originalPath: plan.entry.target + entry.path.slice(plan.entry.source.length), targetPath: destination }) : null;
+          const restoredContent = imagePlan?.text ?? cleanBody;
+          await imagePlan?.assertUnchanged();
+          await check(entry);
+          await check(plan.entry.manifest);
+          if (occupied(destination)) throw new Error("Sync occupied " + destination);
+          const file = entry.binary ? await vault.createBinary(destination, entry.content.slice().buffer) : await vault.create(destination, restoredContent);
+          await check({ ...entry, content: restoredContent, object: file }, destination);
+          await imagePlan?.assertUnchanged();
         }
         created.push(destination);
       }
@@ -3035,9 +3290,9 @@ function installAdminWorkspace(plugin, deps) {
       }
       return result || object2;
     };
-    const scopedVault = new Proxy(vault, { get(target, key3) {
-      if (key3 === "create" || key3 === "createFolder") return (p, text) => write(key3, p, text);
-      if (key3 === "process" || key3 === "modify") return async (file, transform) => {
+    const scopedVault = new Proxy(vault, { get(target, key4) {
+      if (key4 === "create" || key4 === "createFolder") return (p, text) => write(key4, p, text);
+      if (key4 === "process" || key4 === "modify") return async (file, transform) => {
         const expected = await owned(file);
         assertSettings();
         let next;
@@ -3045,7 +3300,7 @@ function installAdminWorkspace(plugin, deps) {
           assertObject(file, expected.path);
           assertSettings();
           if (current !== expected.content) throw new Error("Sync changed a freshly initialized file.");
-          next = key3 === "modify" ? transform : transform(current);
+          next = key4 === "modify" ? transform : transform(current);
           return next;
         });
         const entry = { ...expected, content: next };
@@ -3053,21 +3308,21 @@ function installAdminWorkspace(plugin, deps) {
         created.set(entry.path, entry);
         return next;
       };
-      if (["delete", "trash", "rename", "createBinary", "modifyBinary", "adapter"].includes(key3)) {
+      if (["delete", "trash", "rename", "createBinary", "modifyBinary", "adapter"].includes(key4)) {
         return () => {
           throw new Error("Unsupported mutation during fresh reset initialization.");
         };
       }
-      if (["getFiles", "getMarkdownFiles", "getAllLoadedFiles"].includes(key3)) return () => target[key3]().filter((f) => inRoots(f.path));
-      const value = target[key3];
+      if (["getFiles", "getMarkdownFiles", "getAllLoadedFiles"].includes(key4)) return () => target[key4]().filter((f) => inRoots(f.path));
+      const value = target[key4];
       return typeof value === "function" ? value.bind(target) : value;
     } });
     scoped.app = {
       ...plugin.app,
       vault: scopedVault,
-      metadataCache: new Proxy(plugin.app.metadataCache || {}, { get(target, key3) {
-        if (key3 === "getFileCache") return () => null;
-        const value = target[key3];
+      metadataCache: new Proxy(plugin.app.metadataCache || {}, { get(target, key4) {
+        if (key4 === "getFileCache") return () => null;
+        const value = target[key4];
         return typeof value === "function" ? value.bind(target) : value;
       } }),
       fileManager: { processFrontMatter() {
@@ -3079,9 +3334,9 @@ function installAdminWorkspace(plugin, deps) {
       assertObject(file, expectedPath);
       const fm = parseFrontmatterObject2(entry.content);
       patcher(fm);
-      const header = Object.entries(fm).map(([key3, value]) => {
-        if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key3)) throw new Error("Unexpected generated metadata key.");
-        return key3 + ": " + JSON.stringify(value);
+      const header = Object.entries(fm).map(([key4, value]) => {
+        if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key4)) throw new Error("Unexpected generated metadata key.");
+        return key4 + ": " + JSON.stringify(value);
       }).join("\n");
       const body = entry.content.replace(/^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/, "");
       await scoped.replaceFileTextExpected(file, entry.content, "---\n" + header + "\n---\n" + body, "Reset metadata changed.", expectedPath);
@@ -3232,7 +3487,7 @@ function installAdminWorkspace(plugin, deps) {
       ["Resources", m.resources],
       ["Images", m.images],
       ["Archived files", m.archivedFiles],
-      ["CST storage bytes (including backups)", m.bytes]
+      ["CST storage (including backups)", formatStorageBytes(m.bytes)]
     ]) {
       const row = table.createEl("tr");
       row.createEl("th", { text: label });
@@ -3269,13 +3524,13 @@ function installAdminWorkspace(plugin, deps) {
     const visible = catalog.entries.filter((e) => isDeveloper() || ["Case", "Specialty", "Surgeon"].includes(e.category));
     const groups = /* @__PURE__ */ new Map();
     for (const entry of visible) {
-      const parts = caseParts(entry.target), key3 = parts ? parts[0] + "/" + parts[1] : entry.category;
-      if (!groups.has(key3)) {
+      const parts = caseParts(entry.target), key4 = parts ? parts[0] + "/" + parts[1] : entry.category;
+      if (!groups.has(key4)) {
         const section = el.createEl("details"), summary = section.createEl("summary", { text: parts ? `${parts[0]} — ${parts[1]}` : entry.category });
         if (deps.setIcon) deps.setIcon(summary.createSpan(), parts ? "users" : "folder-archive");
-        groups.set(key3, section);
+        groups.set(key4, section);
       }
-      const row = groups.get(key3).createDiv();
+      const row = groups.get(key4).createDiv();
       const name = row.createEl("span", { text: entry.label });
       if (deps.setIcon) deps.setIcon(name.createSpan(), entry.category === "Specialty" ? "folder-heart" : entry.category === "Surgeon" ? "user-round" : "file-text");
       button(row, "Preview restore", async () => {
@@ -3383,6 +3638,7 @@ function installAdminWorkspace(plugin, deps) {
     el.empty();
     if (!guard("repair", el)) return;
     el.createEl("h2", { text: kind === "graph" ? "Repair generated graph" : "Repair managed backend" });
+    button(el, kind === "graph" ? "Repair entire backend" : "Repair generated graph", () => renderRepair(el, kind === "graph" ? "backend" : "graph"));
     el.createEl("p", { text: "Rebuild managed targets from specialty/surgeon folders and the surgeon registry. Snapshot current cases, profiles, registry, and graph before repair. Editable templates and substantive case content remain source truth." });
     button(el, "Preview repair and backup", async () => {
       const plan = await previewRepair(kind);
@@ -3436,9 +3692,8 @@ function installAdminWorkspace(plugin, deps) {
     const nav = el.createDiv({ cls: "cst-admin-action-grid" }), body = el.createDiv();
     const pages = {
       settings: ["Settings", (target) => plugin.renderConfig(target)],
-      specialties: ["Specialties", (target) => {
-        for (const specialty of plugin.getSpecialties()) button(target, specialty, () => plugin.activateSidebar({ specialty, surgeon: "", query: "" }));
-      }],
+      tabs: ["Clear CST Notes tabs", () => plugin.clearCSTTabs()],
+      navigation: ["Navigation", (target) => plugin.renderInterfaceStatus(target)],
       surgeons: ["Surgeons", (target) => plugin.renderSurgeonAdmin(target)],
       templates: ["Templates", (target) => plugin.renderTemplateAdmin(target)],
       import: ["Import", (target) => plugin.renderImportWorkspace(target)],
@@ -3451,7 +3706,6 @@ function installAdminWorkspace(plugin, deps) {
       activity: ["Recent activity", (target) => plugin.renderActivity(target)],
       system: ["System", (target) => plugin.renderSystem(target)],
       metadata: ["Metadata", (target) => plugin.renderMetadataAdmin(target)],
-      graph: ["Graph", (target) => renderRepair(target, "graph")],
       repair: ["Repair", renderRepair],
       migrations: ["Migrations", (target) => plugin.renderMigrations(target)],
       reset: ["Reset", renderReset]
@@ -3565,11 +3819,428 @@ function installAdminWorkspace(plugin, deps) {
   return api;
 }
 
+// src/attachment-recovery.mjs
+var ATTACHMENT_RESTORE_ROUTES = Object.freeze([
+  "deleted-case",
+  "admin-file",
+  "admin-folder",
+  "migration-undo"
+]);
+var key2 = (value) => value.normalize("NFC").toLowerCase();
+var parent2 = (path) => path.split("/").slice(0, -1).join("/");
+var leaf = (path) => path.split("/").at(-1);
+var within2 = (path, root) => key2(path) === key2(root) || key2(path).startsWith(key2(root) + "/");
+var image = (path) => /\.(?:png|jpe?g|gif|webp|avif|bmp|svg|heic|heif|tiff?)$/i.test(path);
+var equal = (a, b) => a.length === b.length && a.every((value, i) => value === b[i]);
+function validateAttachmentPath(path) {
+  if (typeof path !== "string" || !path || path.length > 1024 || path !== path.trim() || /[\\:%\x00-\x1f\x7f<>"|?*]/.test(path) || path.split("/").some((part) => !part || part.startsWith(".") || /[. ]$/.test(part) || /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(part))) {
+    throw new Error("Unsafe attachment recovery path: " + String(path));
+  }
+  return path;
+}
+async function attachmentSHA256(bytes2) {
+  if (!globalThis.crypto?.subtle) throw new Error("Image recovery hashing is unavailable on this device.");
+  const copy = new Uint8Array(bytes2).slice();
+  const digest = await globalThis.crypto.subtle.digest("SHA-256", copy);
+  return [...new Uint8Array(digest)].map((value) => value.toString(16).padStart(2, "0")).join("");
+}
+function relativePath(note, target) {
+  const from = parent2(note).split("/").filter(Boolean), to = target.split("/");
+  while (from.length && to.length && from[0] === to[0]) {
+    from.shift();
+    to.shift();
+  }
+  return "../".repeat(from.length) + to.join("/");
+}
+function linkPath(note, target) {
+  if (/[\\:%\x00-\x1f\x7f]/.test(target) || target.startsWith("//")) throw new Error("Unsafe restored image link.");
+  const parts = target.startsWith("/") ? [] : parent2(note).split("/").filter(Boolean);
+  for (const part of target.replace(/^\//, "").split("/")) {
+    if (part === "..") {
+      if (!parts.length) throw new Error("Restored image link escapes the vault.");
+      parts.pop();
+    } else if (part !== ".") parts.push(part);
+  }
+  return validateAttachmentPath(parts.join("/"));
+}
+function installAttachmentRecovery(plugin, {
+  TFile: TFile2,
+  attachmentLinks: attachmentLinks2,
+  replaceAttachmentLinks: replaceAttachmentLinks2,
+  resetArchiveRoot = "CST Recovery Archive"
+}) {
+  if (plugin.attachmentRecovery) return plugin.attachmentRecovery;
+  const vault = plugin.app.vault, routes = /* @__PURE__ */ new Set();
+  let revision = 0;
+  for (const name of ["create", "modify", "rename", "delete"]) {
+    plugin.registerEvent(vault.on(name, () => {
+      revision++;
+    }));
+  }
+  const files = () => {
+    const result = [], stack = [vault.getRoot()];
+    while (stack.length) {
+      const item = stack.pop();
+      if (item instanceof TFile2) result.push(item);
+      else stack.push(...item?.children || []);
+    }
+    return result;
+  };
+  const backupRoot = () => validateAttachmentPath(plugin.p("Admin/Backups"));
+  const archiveRoot = validateAttachmentPath(resetArchiveRoot);
+  const archived = (path) => within2(path, backupRoot()) || within2(path, archiveRoot);
+  const manifestFiles = () => files().filter((file) => archived(file.path) && key2(leaf(file.path)) === "image moves.json");
+  const assertObject = (file, path) => {
+    if (!(file instanceof TFile2) || file.path !== path || vault.getAbstractFileByPath(path) !== file) {
+      throw new Error("Image recovery file moved or was replaced by Sync: " + path);
+    }
+  };
+  const exactFile = (path) => {
+    const matches = files().filter((file) => key2(file.path) === key2(path));
+    if (matches.length > 1 || matches.length === 1 && matches[0].path !== path) {
+      throw new Error("Ambiguous image path spelling or Sync conflict: " + path);
+    }
+    const item = vault.getAbstractFileByPath(path);
+    if (item && !(item instanceof TFile2)) throw new Error("Image path is occupied by a folder: " + path);
+    return matches[0];
+  };
+  async function catalog() {
+    const start = revision, rootKey = backupRoot(), states = /* @__PURE__ */ new Map(), binaries = /* @__PURE__ */ new Map();
+    const manifests = manifestFiles().map((file) => ({ file, path: file.path }));
+    const read = async (file, binary = false) => {
+      const path = file.path, previous = states.get(path);
+      if (previous) return previous.content;
+      assertObject(file, path);
+      const first = binary ? new Uint8Array(await vault.readBinary(file)).slice() : await vault.read(file);
+      assertObject(file, path);
+      const second = binary ? new Uint8Array(await vault.readBinary(file)).slice() : await vault.read(file);
+      assertObject(file, path);
+      if (binary ? !equal(first, second) : first !== second) throw new Error("Image recovery content changed while reading: " + path);
+      states.set(path, { file, path, binary, content: first });
+      return first;
+    };
+    const fingerprint = async (path) => {
+      if (binaries.has(path)) return binaries.get(path);
+      const file = exactFile(path);
+      if (!file) return null;
+      const bytes2 = await read(file, true);
+      const result = { path, size: bytes2.length, hash: await attachmentSHA256(bytes2) };
+      binaries.set(path, result);
+      return result;
+    };
+    const records = [], byOriginal = /* @__PURE__ */ new Map(), byTarget = /* @__PURE__ */ new Map(), manifestResiduals = /* @__PURE__ */ new Map();
+    for (const entry of manifests) {
+      validateAttachmentPath(entry.path);
+      if (leaf(entry.path) !== "Image Moves.json") throw new Error("Image move manifest spelling needs review.");
+      const text = await read(entry.file);
+      if (text.length > 8e6) throw new Error("Image move manifest is too large.");
+      const data = JSON.parse(text), snapshot = parent2(entry.path);
+      if (![1, 2].includes(data.version) || !Array.isArray(data.moves) || !data.moves.length || data.moves.length > 9999 || data.version === 2 && data.type !== "cst-image-moves") throw new Error("Unsupported image move manifest: " + entry.path);
+      const originals = /* @__PURE__ */ new Set(), targets = /* @__PURE__ */ new Set(), backups = /* @__PURE__ */ new Set();
+      for (const move of data.moves) {
+        const original = validateAttachmentPath(move.original), target = validateAttachmentPath(move.target);
+        const backup = validateAttachmentPath(move.backup);
+        if (!image(original) || !image(target) || !/^Images\/[^/]+$/.test(backup) || !image(backup) || archived(original) || archived(target) || within2(original, plugin.p("")) || within2(target, plugin.p("")) || key2(original) === key2(target) || originals.has(key2(original)) || targets.has(key2(target)) || backups.has(key2(backup))) {
+          throw new Error("Unsafe or duplicated image move entry: " + entry.path);
+        }
+        originals.add(key2(original));
+        targets.add(key2(target));
+        backups.add(key2(backup));
+        const saved = await fingerprint(validateAttachmentPath(snapshot + "/" + backup));
+        if (!saved) throw new Error("Image recovery backup is missing: " + snapshot + "/" + backup);
+        if (data.version === 2 && (!/^[a-f0-9]{64}$/.test(move.sha256) || !Number.isSafeInteger(move.size) || move.size < 0 || saved.hash !== move.sha256 || saved.size !== move.size)) throw new Error("Image recovery backup hash/size mismatch: " + saved.path);
+        const record = { original, target, backup: saved.path, hash: saved.hash, size: saved.size, legacy: data.version === 1 };
+        const old = byOriginal.get(key2(original)), incoming = byTarget.get(key2(target));
+        if (old && (old.target !== target || old.hash !== record.hash || old.original !== original) || incoming && incoming.original !== original) throw new Error("Conflicting image move history: " + original);
+        if (!old) {
+          byOriginal.set(key2(original), record);
+          byTarget.set(key2(target), record);
+          records.push(record);
+        }
+      }
+      manifestResiduals.set(entry.path, JSON.stringify({
+        ...data,
+        moves: data.moves.map(({ original, target, backup, ...rest }) => rest)
+      }));
+    }
+    const histories = /* @__PURE__ */ new Map();
+    function history(path) {
+      const existing = histories.get(key2(path));
+      if (existing) return existing;
+      const nodes = [], seen = /* @__PURE__ */ new Set();
+      let cursor = path;
+      while (byTarget.has(key2(cursor))) {
+        if (seen.has(key2(cursor))) throw new Error("Cyclic image move history.");
+        seen.add(key2(cursor));
+        cursor = byTarget.get(key2(cursor)).original;
+      }
+      seen.clear();
+      const chain = [];
+      while (byOriginal.has(key2(cursor))) {
+        if (seen.has(key2(cursor))) throw new Error("Cyclic image move history.");
+        seen.add(key2(cursor));
+        nodes.push(cursor);
+        const record = byOriginal.get(key2(cursor));
+        chain.push(record);
+        cursor = record.target;
+      }
+      nodes.push(cursor);
+      if (chain.some((record) => record.hash !== chain[0].hash)) throw new Error("Image bytes conflict across chained moves.");
+      const result = { nodes, chain, terminal: cursor, hash: chain[0]?.hash };
+      for (const node of nodes) histories.set(key2(node), result);
+      return result;
+    }
+    for (const record of records) history(record.original);
+    const resolutions = /* @__PURE__ */ new Map(), lookups = /* @__PURE__ */ new Map();
+    const lookup = (path) => {
+      const file = exactFile(path);
+      lookups.set(path, file);
+      return file;
+    };
+    async function resolvePath(path) {
+      const chain = history(path);
+      if (!chain.chain.length) return lookup(path) ? path : null;
+      if (resolutions.has(chain)) return resolutions.get(chain);
+      let latest = null;
+      for (const node of chain.nodes) {
+        lookup(node);
+        const current = await fingerprint(node);
+        if (current && current.hash !== chain.hash) throw new Error("Recovered image path contains different bytes; both versions were retained: " + node);
+        if (current) latest = node;
+      }
+      if (!latest && chain.chain.some((record) => record.legacy)) throw new Error("Legacy image move needs an intact live image to verify its backup.");
+      const target = latest || chain.chain.at(-1).backup;
+      resolutions.set(chain, target);
+      return target;
+    }
+    const names = /* @__PURE__ */ new Map();
+    function pathsNamed(name) {
+      return [.../* @__PURE__ */ new Set([
+        ...records.flatMap((record) => [record.original, record.target]),
+        ...files().filter((file) => image(file.path) && !archived(file.path)).map((file) => file.path)
+      ])].filter((path) => key2(leaf(path)) === key2(name)).sort();
+    }
+    async function resolveLink(link, note, historicalOnly = false) {
+      linkPath(note, link.target);
+      const paths = [];
+      if (!link.target.includes("/")) {
+        const matches = pathsNamed(link.target);
+        paths.push(...matches);
+      } else {
+        const relative = linkPath(note, link.target);
+        paths.push(relative);
+        if (!link.target.startsWith(".") && !link.target.startsWith("/")) paths.push(validateAttachmentPath(link.target));
+      }
+      const possible = [...new Set(paths)].filter((path) => byOriginal.has(key2(path)) || byTarget.has(key2(path)) || exactFile(path));
+      if (historicalOnly && !possible.some((path) => byOriginal.has(key2(path)) || byTarget.has(key2(path)))) return null;
+      if (!link.target.includes("/")) names.set(link.target, pathsNamed(link.target));
+      for (const path of new Set(paths)) lookup(path);
+      const groups = /* @__PURE__ */ new Map();
+      for (const path of possible) {
+        const chain = history(path), id2 = key2(chain.nodes[0]);
+        if (!groups.has(id2)) groups.set(id2, path);
+      }
+      if (groups.size > 1) throw new Error("Ambiguous restored image link (duplicate basename or path): " + link.target);
+      if (!groups.size) return null;
+      const resolved = await resolvePath([...groups.values()][0]);
+      const live = [...new Set(paths)].filter((path) => exactFile(path));
+      const sameHistory = live.length === 1 && histories.get(key2(live[0])) && histories.get(key2(live[0])) === histories.get(key2(resolved));
+      return { path: resolved, unchanged: live.length === 1 && (live[0] === resolved || !!sameHistory) };
+    }
+    async function checkStates(archiveOnly = false) {
+      for (const state of states.values()) {
+        if (archiveOnly && !archived(state.path)) continue;
+        assertObject(state.file, state.path);
+        const current = state.binary ? new Uint8Array(await vault.readBinary(state.file)) : await vault.read(state.file);
+        assertObject(state.file, state.path);
+        if (state.binary ? !equal(current, state.content) : current !== state.content) throw new Error("Image recovery content changed: " + state.path);
+      }
+    }
+    async function assertUnchanged() {
+      const before = revision;
+      if (plugin.unloading || backupRoot() !== rootKey) throw new Error("Image recovery settings changed. Preview again.");
+      const current = manifestFiles();
+      if (current.length !== manifests.length || manifests.some((entry) => entry.file.path !== entry.path || !current.includes(entry.file))) {
+        throw new Error("Image move manifests changed during recovery. Wait for Sync.");
+      }
+      for (const [path, file] of lookups) if (exactFile(path) !== file) throw new Error("Image recovery destination changed: " + path);
+      for (const [name, paths] of names) if (JSON.stringify(pathsNamed(name)) !== JSON.stringify(paths)) throw new Error("Image basename resolution changed during recovery.");
+      await checkStates();
+      if (before !== revision) throw new Error("Sync changed the vault while validating image recovery.");
+    }
+    if (start !== revision) throw new Error("Sync changed the vault while reading image move history.");
+    return {
+      read,
+      resolveLink,
+      assertUnchanged,
+      assertArchiveEvidence: () => checkStates(true),
+      manifests,
+      manifestResiduals,
+      namesForPath: (path) => history(path).nodes.map(leaf)
+    };
+  }
+  async function prepareRestore({ text, originalPath, targetPath = originalPath }) {
+    validateAttachmentPath(originalPath);
+    validateAttachmentPath(targetPath);
+    if (typeof text !== "string") throw new Error("Restored image references require note text.");
+    if (!attachmentLinks2(text).some((link) => image(link.target))) {
+      return Object.freeze({ text, changedLinks: 0, references: Object.freeze([]), assertUnchanged: async () => {
+      } });
+    }
+    return prepareWithState(await catalog(), { text, originalPath, targetPath }, true);
+  }
+  async function prepareWithState(state, { text, originalPath, targetPath = originalPath }, historicalOnly = false) {
+    validateAttachmentPath(originalPath);
+    validateAttachmentPath(targetPath);
+    if (typeof text !== "string") throw new Error("Restored image references require note text.");
+    const changes = [], references = [];
+    for (const link of attachmentLinks2(text).filter((link2) => image(link2.target))) {
+      const resolution = await state.resolveLink(link, originalPath, historicalOnly);
+      if (!resolution?.path) continue;
+      const resolved = resolution.path;
+      references.push(Object.freeze({ ...link, path: resolved }));
+      if (originalPath === targetPath && resolution.unchanged) continue;
+      const path = link.wiki ? resolved : relativePath(targetPath, resolved);
+      if (path !== link.target) changes.push({ ...link, path });
+    }
+    await state.assertUnchanged();
+    return Object.freeze({
+      text: replaceAttachmentLinks2(text, changes),
+      changedLinks: changes.length,
+      references: Object.freeze(references),
+      assertUnchanged: state.assertUnchanged
+    });
+  }
+  async function inspectArchives(documents) {
+    const sourcePaths = /* @__PURE__ */ new Map(), metadata = /* @__PURE__ */ new Map(), problems = [], relocations = [], historicalOrigins = /* @__PURE__ */ new Map();
+    let state;
+    try {
+      state = await catalog();
+    } catch (error) {
+      return { sourcePaths, metadata, problems: [error.message] };
+    }
+    const texts = new Map(documents.map((document2) => [document2.path, document2.original]));
+    const mapped = (source, original) => {
+      validateAttachmentPath(source);
+      validateAttachmentPath(original);
+      if (!texts.has(source)) throw new Error("Archived note is unavailable: " + source);
+      if (sourcePaths.has(source) && sourcePaths.get(source) !== original) throw new Error("Conflicting archived source path.");
+      sourcePaths.set(source, original);
+    };
+    const archivedDocuments = documents.filter((document2) => archived(document2.path)).sort((a, b) => Number(leaf(b.path) === "Reset Manifest.json") - Number(leaf(a.path) === "Reset Manifest.json"));
+    for (const document2 of archivedDocuments) {
+      const { path, original: text } = document2;
+      try {
+        if (leaf(path) === "Manifest.md") {
+          const blocks = [...text.matchAll(/```json\s*\n([\s\S]*?)\n```/g)];
+          if (blocks.length !== 1) throw new Error("Invalid snapshot mapping.");
+          const data = JSON.parse(blocks[0][1]), staged = [], seen = /* @__PURE__ */ new Set();
+          if (data.version !== 1 || !Array.isArray(data.files)) throw new Error("Invalid snapshot mapping.");
+          for (const file of data.files) {
+            const backup = validateAttachmentPath(file.backup_file), original = validateAttachmentPath(file.original_path);
+            if (!/^Files\/[^/]+$/.test(backup) || seen.has(key2(original))) throw new Error("Unsafe/duplicate snapshot mapping.");
+            seen.add(key2(original));
+            const source = parent2(path) + "/" + backup;
+            if (!texts.has(source) || !Number.isSafeInteger(file.characters) || texts.get(source).length !== file.characters) throw new Error("Incomplete snapshot mapping.");
+            staged.push([source, original]);
+          }
+          for (const pair of staged) mapped(...pair);
+          metadata.set(path, text.replace(blocks[0][0], JSON.stringify({
+            ...data,
+            files: data.files.map(({ original_path, backup_file, ...rest }) => rest)
+          })));
+        } else if (leaf(path) === "Reset Manifest.json") {
+          const data = JSON.parse(text);
+          if (data.version !== 1 || data.type !== "cst-workspace-reset" || !Array.isArray(data.entries) || !Array.isArray(data.roots) || data.roots.length !== 2) throw new Error("Invalid reset mapping.");
+          const content = validateAttachmentPath(data.content_root), backend = validateAttachmentPath(data.backend_root);
+          const expected = [
+            { original_path: content, archive_path: parent2(path) + "/Content" },
+            { original_path: backend, archive_path: parent2(path) + "/Backend" }
+          ];
+          if (JSON.stringify(data.roots) !== JSON.stringify(expected)) throw new Error("Unsafe reset mapping.");
+          const seen = /* @__PURE__ */ new Set(), staged = [];
+          for (const item of data.entries) {
+            const original = validateAttachmentPath(item.original_path), mapping = expected.find((root) => within2(original, root.original_path));
+            if (!mapping || seen.has(key2(original)) || !["file", "folder"].includes(item.kind)) throw new Error("Unsafe/duplicate reset mapping.");
+            seen.add(key2(original));
+            const source = mapping.archive_path + original.slice(mapping.original_path.length);
+            if (item.kind === "file" && /\.md$/i.test(original) && !within2(original, backend + "/Admin/Backups")) staged.push([source, original]);
+          }
+          for (const pair of staged) if (!sourcePaths.has(pair[0])) mapped(...pair);
+          relocations.push(...expected);
+          metadata.set(path, JSON.stringify({
+            ...data,
+            roots: [],
+            entries: data.entries.map(({ original_path, ...rest }) => rest)
+          }));
+        } else if (/\/Deleted Cases\/[^/]+\.json$/.test(path)) {
+          const data = JSON.parse(text);
+          const relocation = relocations.find((root) => within2(path, root.archive_path) && typeof data.archive_path === "string" && within2(data.archive_path, root.original_path));
+          const source = relocation ? relocation.archive_path + data.archive_path.slice(relocation.original_path.length) : data.archive_path;
+          if (data.version !== 1 || !["archived", "restored"].includes(data.state) || source !== path.replace(/\.json$/, ".md")) throw new Error("Invalid deleted-case mapping.");
+          validateAttachmentPath(data.original_path);
+          validateAttachmentPath(data.archive_path);
+          for (const archivedPath of [source, data.archive_path]) {
+            if (historicalOrigins.has(archivedPath) && historicalOrigins.get(archivedPath) !== data.original_path) throw new Error("Conflicting deleted-case origin.");
+            historicalOrigins.set(archivedPath, data.original_path);
+          }
+          if (data.state === "archived" || texts.has(source)) mapped(source, data.original_path);
+          const { original_path, archive_path, ...rest } = data;
+          metadata.set(path, JSON.stringify(rest));
+        }
+      } catch (error) {
+        problems.push(path + ": " + error.message);
+      }
+    }
+    for (const [source, original] of sourcePaths) {
+      let resolved = original;
+      const seen = /* @__PURE__ */ new Set([source]);
+      while (historicalOrigins.has(resolved) || sourcePaths.has(resolved)) {
+        if (seen.has(resolved)) {
+          problems.push(source + ": cyclic archive origin mapping.");
+          break;
+        }
+        seen.add(resolved);
+        resolved = historicalOrigins.get(resolved) || sourcePaths.get(resolved);
+      }
+      sourcePaths.set(source, resolved);
+    }
+    for (const [path, residual] of state.manifestResiduals) metadata.set(path, residual);
+    await state.assertUnchanged();
+    return {
+      sourcePaths,
+      metadata,
+      problems,
+      namesForPath: state.namesForPath,
+      assertUnchanged: state.assertUnchanged,
+      assertArchiveEvidence: state.assertArchiveEvidence,
+      prepareRestore: (options) => prepareWithState(state, options)
+    };
+  }
+  const api = Object.freeze({
+    prepareRestore,
+    inspectArchives,
+    isArchivePath: archived,
+    get archivesReady() {
+      return ATTACHMENT_RESTORE_ROUTES.every((route) => routes.has(route));
+    },
+    get missingRoutes() {
+      return ATTACHMENT_RESTORE_ROUTES.filter((route) => !routes.has(route));
+    },
+    registerRestoreRoute(route) {
+      if (!ATTACHMENT_RESTORE_ROUTES.includes(route)) throw new Error("Unknown attachment restore route: " + route);
+      routes.add(route);
+    }
+  });
+  plugin.attachmentRecovery = api;
+  return api;
+}
+
 // src/attachment-workspace.mjs
 var IMAGE = /\.(?:png|jpe?g|gif|webp|avif|bmp|svg|heic|heif|tiff?)$/i;
 var DOCUMENT = /^(?:md|canvas|html?|json|txt|svg|xml|excalidraw|base)$/i;
-var key2 = (path) => path.normalize("NFC").toLowerCase();
-var below = (path, root) => key2(path) === key2(root) || key2(path).startsWith(key2(root) + "/");
+var key3 = (path) => path.normalize("NFC").toLowerCase();
+var below = (path, root) => key3(path) === key3(root) || key3(path).startsWith(key3(root) + "/");
 function imagePath(path) {
   return IMAGE.test(path);
 }
@@ -3650,13 +4321,14 @@ function referenceText(text) {
       (_, name) => ({ amp: "&", sol: "/", period: ".", lowbar: "_", num: "#", percnt: "%", lpar: "(", rpar: ")" })[name.toLowerCase()]
     ).replace(/\\([^\w\s])/g, "$1");
   }
-  return key2(result);
+  return key3(result);
 }
 function equalBytes(a, b) {
   return a.length === b.length && a.every((value, i) => value === b[i]);
 }
-function installAttachmentFeatures(plugin, { TFile: TFile2, Modal: Modal2, Notice: Notice2, normalizePath: normalizePath2, validatePortableVaultPath: validatePortableVaultPath2, shortHash: shortHash2, withAdminMutation }) {
+function installAttachmentFeatures(plugin, { TFile: TFile2, Modal: Modal2, Notice: Notice2, normalizePath: normalizePath2, validatePortableVaultPath: validatePortableVaultPath2, shortHash: shortHash2, withAdminMutation, resetArchiveRoot }) {
   const vault = plugin.app.vault, previews = /* @__PURE__ */ new WeakMap();
+  const recovery = installAttachmentRecovery(plugin, { TFile: TFile2, attachmentLinks, replaceAttachmentLinks, resetArchiveRoot });
   let revision = 0;
   for (const event of ["create", "modify", "rename", "delete"]) {
     plugin.registerEvent(vault.on(event, () => {
@@ -3674,10 +4346,10 @@ function installAttachmentFeatures(plugin, { TFile: TFile2, Modal: Modal2, Notic
     return result;
   };
   const files = () => allItems().filter((item) => item instanceof TFile2);
-  const occupied = (path) => allItems().find((item) => key2(item.path) === key2(path));
+  const occupied = (path) => allItems().find((item) => key3(item.path) === key3(path));
   const root = () => {
-    const parent2 = plugin.contentRoot.split("/").slice(0, -1).join("/");
-    return plugin.settings.imageFolder || (parent2 ? parent2 + "/" : "") + "Images";
+    const parent3 = plugin.contentRoot.split("/").slice(0, -1).join("/");
+    return plugin.settings.imageFolder || (parent3 ? parent3 + "/" : "") + "Images";
   };
   const safePath2 = (value, label) => {
     const path = String(value).trim();
@@ -3690,7 +4362,7 @@ function installAttachmentFeatures(plugin, { TFile: TFile2, Modal: Modal2, Notic
   const destinationRoot = (value) => {
     const path = safePath2(value, "Image folder");
     if (/[\[\]#%\x60^]/.test(path)) throw new Error("Image folder must be portable in both Markdown and wiki links.");
-    if (below(path, plugin.contentRoot) || below(path, plugin.p("")) || below(plugin.contentRoot, path) || below(plugin.p(""), path) || below(path, "CST Recovery Archive")) {
+    if (below(path, plugin.contentRoot) || below(path, plugin.p("")) || below(plugin.contentRoot, path) || below(plugin.p(""), path) || recovery.isArchivePath(path)) {
       throw new Error("Choose a separate Images folder outside the case hierarchy, Backend, and recovery archives.");
     }
     assertFolderPath(path);
@@ -3740,56 +4412,84 @@ function installAttachmentFeatures(plugin, { TFile: TFile2, Modal: Modal2, Notic
     for (const document2 of documents) {
       if (!cases.has(document2.file)) continue;
       for (const link of attachmentLinks(document2.original)) {
-        const image = plugin.app.metadataCache.getFirstLinkpathDest(link.target, document2.path);
-        if (!(image instanceof TFile2) || !imagePath(image.path) || below(image.path, destination) || below(image.path, plugin.p("")) || below(image.path, "CST Recovery Archive")) continue;
-        if (!candidates.has(image.path)) candidates.set(image.path, {
-          file: image,
-          path: image.path,
-          size: image.stat?.size,
-          mtime: image.stat?.mtime,
+        const image2 = plugin.app.metadataCache.getFirstLinkpathDest(link.target, document2.path);
+        if (!(image2 instanceof TFile2) || !imagePath(image2.path) || below(image2.path, destination) || below(image2.path, plugin.p("")) || recovery.isArchivePath(image2.path)) continue;
+        if (!candidates.has(image2.path)) candidates.set(image2.path, {
+          file: image2,
+          path: image2.path,
+          size: image2.stat?.size,
+          mtime: image2.stat?.mtime,
           refs: [],
-          blocked: image.extension.toLowerCase() === "svg" ? "SVG may contain relative resources; leave in place." : ""
+          blocked: image2.extension.toLowerCase() === "svg" ? "SVG may contain relative resources; leave in place." : ""
         });
       }
     }
+    const archiveCoverage = recovery.archivesReady ? await recovery.inspectArchives(documents) : null;
+    const archiveChecks = archiveCoverage?.assertUnchanged ? [archiveCoverage] : [];
     for (const document2 of documents) {
       const markdown = document2.file.extension.toLowerCase() === "md";
+      const archived = recovery.isArchivePath(document2.path);
+      if (archived) {
+        let residual2 = !archiveCoverage?.problems.length && archiveCoverage?.metadata.has(document2.path) ? archiveCoverage.metadata.get(document2.path) : document2.original;
+        const originalPath = archiveCoverage?.sourcePaths.get(document2.path);
+        if (originalPath && markdown && !archiveCoverage.problems.length) {
+          try {
+            const restored = await archiveCoverage.prepareRestore({ text: document2.original, originalPath });
+            if (!archiveChecks.includes(archiveCoverage)) archiveChecks.push(archiveCoverage);
+            for (const link of [...restored.references].sort((a, b) => b.matchStart - a.matchStart)) {
+              if (!candidates.has(link.path)) continue;
+              residual2 = residual2.slice(0, link.matchStart) + " ".repeat(link.matchEnd - link.matchStart) + residual2.slice(link.matchEnd);
+            }
+          } catch (error) {
+            for (const candidate of candidates.values()) candidate.blocked = "Recovery archive needs review: " + error.message;
+          }
+        }
+        const unknown2 = referenceText(residual2);
+        for (const candidate of candidates.values()) {
+          const aliases = archiveCoverage?.namesForPath?.(candidate.path) || [candidate.file.name];
+          if (archiveCoverage?.problems.length || aliases.some((name) => unknown2.includes(key3(name))) || /&[a-z][a-z0-9]+;/i.test(unknown2)) {
+            candidate.blocked = "Referenced by a recovery archive; " + (archiveCoverage?.problems.length ? "its recovery records need review." : "leave in place until its references can be restored safely.");
+          }
+        }
+        continue;
+      }
       const links = markdown ? attachmentLinks(document2.original) : [];
       let residual = markdown ? maskCode(document2.original) : document2.original;
       for (const link of [...links].reverse()) {
-        const image = plugin.app.metadataCache.getFirstLinkpathDest(link.target, document2.path);
-        const candidate = image && candidates.get(image.path);
-        if (!candidate || candidate.file !== image) continue;
+        const image2 = plugin.app.metadataCache.getFirstLinkpathDest(link.target, document2.path);
+        const candidate = image2 && candidates.get(image2.path);
+        if (!candidate || candidate.file !== image2) continue;
         candidate.refs.push({ document: document2, link });
         residual = residual.slice(0, link.matchStart) + " ".repeat(link.matchEnd - link.matchStart) + residual.slice(link.matchEnd);
       }
-      const archived = below(document2.path, plugin.p("Admin/Backups")) || below(document2.path, "CST Recovery Archive");
       const html = /<(?:img|a|source|object|video|audio|svg|image|picture)\b/i.test(document2.original);
-      const unknown = referenceText(archived || html ? document2.original : residual);
+      const unknown = referenceText(html ? document2.original : residual);
       for (const candidate of candidates.values()) {
         const ambiguousEntity = /&[a-z][a-z0-9]+;/i.test(unknown) && (html || /!?\[/.test(residual));
-        if (unknown.includes(key2(candidate.file.name)) || ambiguousEntity) candidate.blocked = archived ? "Referenced by a recovery archive; leave in place." : "Possible unsupported reference (Markdown, canvas, HTML or other text); leave in place.";
+        if (unknown.includes(key3(candidate.file.name)) || ambiguousEntity) candidate.blocked = "Possible unsupported reference (Markdown, canvas, HTML or other text); leave in place.";
       }
     }
-    const reserved = new Set(allItems().map((item) => key2(item.path)));
+    const reserved2 = new Set(allItems().map((item) => key3(item.path)));
     for (const candidate of candidates.values()) {
       try {
         safePath2(candidate.path, "Original image path");
+        validateAttachmentPath(candidate.path);
         const basename2 = candidate.file.name.replace(/[\[\]#|%^\x60]/g, "-");
         let target = destination + "/" + basename2;
         const hash = shortHash2(candidate.path).replace(/[^a-z0-9]/gi, "").slice(0, 12) || "image";
-        for (let suffix = 1; reserved.has(key2(target)) && suffix <= 9999; suffix++) {
+        for (let suffix = 1; reserved2.has(key3(target)) && suffix <= 9999; suffix++) {
           target = destination + "/" + hash + (suffix === 1 ? "" : "-" + suffix) + "-" + basename2;
         }
-        if (reserved.has(key2(target))) throw new Error("Destination already exists.");
+        if (reserved2.has(key3(target))) throw new Error("Destination already exists.");
         candidate.target = safePath2(target, "Image path");
-        reserved.add(key2(target));
+        reserved2.add(key3(target));
       } catch (error) {
         candidate.blocked = error.message;
       }
       if (!candidate.refs.length) candidate.blocked = "No resolved links; leave in place.";
       if (!candidate.blocked) {
         candidate.bytes = await readImage(candidate);
+        candidate.sha256 = await attachmentSHA256(candidate.bytes);
         for (const { document: document2, link } of candidate.refs) document2.changes.push({
           ...link,
           path: link.wiki ? candidate.target : relativeTarget(document2.path, candidate.target)
@@ -3805,6 +4505,7 @@ function installAttachmentFeatures(plugin, { TFile: TFile2, Modal: Modal2, Notic
       inventory,
       contentRoot: plugin.contentRoot,
       backendRoot: plugin.p(""),
+      archiveChecks,
       createdAt: Date.now()
     };
     const preview = Object.freeze({
@@ -3819,10 +4520,11 @@ function installAttachmentFeatures(plugin, { TFile: TFile2, Modal: Modal2, Notic
       plans: Object.freeze(plans.map((plan) => Object.freeze({ path: plan.path, original: plan.original, next: plan.next })))
     });
     previews.set(preview, internal);
+    for (const check of archiveChecks) await check.assertUnchanged();
     await validate(internal);
     return preview;
   };
-  async function validate(plan, { owned = /* @__PURE__ */ new Map(), attempted = [], written = false, snapshot = "", readBinaries = true } = {}) {
+  async function validate(plan, { owned = /* @__PURE__ */ new Map(), evidence = [], attempted = [], written = false, snapshot = "", readBinaries = true } = {}) {
     const before = revision;
     if (plugin.unloading || plan.destination !== destinationRoot(root()) || plan.contentRoot !== plugin.contentRoot || plan.backendRoot !== plugin.p("")) throw new Error("Image settings changed; preview again.");
     const expected = new Map(plan.inventory.map((entry) => [entry.path, entry.file]));
@@ -3831,7 +4533,7 @@ function installAttachmentFeatures(plugin, { TFile: TFile2, Modal: Modal2, Notic
       expected.set(candidate.target, candidate.file);
     }
     const logPath = plugin.p("Admin/Logs/Automation.md");
-    const logSafe = (text) => !plan.candidates.some((candidate) => referenceText(text).includes(key2(candidate.path.split("/").at(-1))));
+    const logSafe = (text) => !plan.candidates.some((candidate) => referenceText(text).includes(key3(candidate.path.split("/").at(-1))));
     const current = files();
     for (const file of current) {
       if (owned.get(file.path) === file) continue;
@@ -3861,6 +4563,15 @@ function installAttachmentFeatures(plugin, { TFile: TFile2, Modal: Modal2, Notic
       else assertImage(candidate);
       if (occupied(candidate.target)) throw new Error("Image destination changed; preview again.");
     }
+    for (const check of plan.archiveChecks) await check.assertArchiveEvidence();
+    for (const entry of evidence) {
+      if (entry.bytes) {
+        if (readBinaries && written) await readImage(entry);
+        else assertImage(entry);
+      } else if (await readText(entry.file, entry.path) !== entry.text) {
+        throw new Error("Image recovery manifest changed during organization.");
+      }
+    }
     const finalFiles = files();
     if (revision !== before || current.length !== finalFiles.length || current.some((file, i) => file !== finalFiles[i])) {
       throw new Error("Vault files changed while reading; preview again.");
@@ -3877,7 +4588,7 @@ function installAttachmentFeatures(plugin, { TFile: TFile2, Modal: Modal2, Notic
       return await withAdminMutation(async () => {
         if (Date.now() - plan.createdAt > 12e4) throw new Error("Preview expired while waiting. Preview again.");
         const selected = plan.candidates.filter((candidate) => !candidate.blocked);
-        const attempted = [], owned = /* @__PURE__ */ new Map();
+        const attempted = [], owned = /* @__PURE__ */ new Map(), evidence = [];
         let snapshot = "", written = false;
         const register = (file) => {
           assertFile(file, file.path);
@@ -3895,11 +4606,12 @@ function installAttachmentFeatures(plugin, { TFile: TFile2, Modal: Modal2, Notic
         };
         try {
           await validate(plan);
+          for (const check of plan.archiveChecks) await check.assertUnchanged();
           if (!selected.length) return { moved: 0 };
-          const previousPaths = new Set(allItems().map((item) => key2(item.path)));
+          const previousPaths = new Set(allItems().map((item) => key3(item.path)));
           snapshot = await plugin.snapshotFiles("image-organization", plan.plans.map((entry) => entry.file));
           safePath2(snapshot, "Image snapshot");
-          if (previousPaths.has(key2(snapshot)) || !below(snapshot, plugin.p("Admin/Backups")) || plan.inventory.some((entry) => below(entry.path, snapshot))) {
+          if (previousPaths.has(key3(snapshot)) || !below(snapshot, plugin.p("Admin/Backups")) || plan.inventory.some((entry) => below(entry.path, snapshot))) {
             throw new Error("Image snapshot collision; existing backup preserved.");
           }
           for (const file of files().filter((file2) => below(file2.path, snapshot))) register(file);
@@ -3909,26 +4621,34 @@ function installAttachmentFeatures(plugin, { TFile: TFile2, Modal: Modal2, Notic
           await vault.createFolder(imageBackup);
           for (let i = 0; i < selected.length; i++) {
             await readImage(selected[i]);
-            await createBinary(imageBackup + "/" + i + "." + selected[i].file.extension, selected[i].bytes);
+            const file = await createBinary(imageBackup + "/" + i + "." + selected[i].file.extension, selected[i].bytes);
+            evidence.push({ file, path: file.path, size: file.stat?.size, mtime: file.stat?.mtime, bytes: selected[i].bytes });
           }
           const manifestPath = snapshot + "/Image Moves.json";
           if (occupied(manifestPath)) throw new Error("Image backup manifest collision.");
           plugin.markInternalCreate?.(manifestPath);
-          const manifest = await vault.create(manifestPath, JSON.stringify({
-            version: 1,
+          const manifestText = JSON.stringify({
+            version: 2,
+            type: "cst-image-moves",
             recovery: "Keep both original and target images if any link write conflicts; never overwrite an occupied path.",
             moves: selected.map((candidate, i) => ({
               original: candidate.path,
               target: candidate.target,
-              backup: "Images/" + i + "." + candidate.file.extension
+              backup: "Images/" + i + "." + candidate.file.extension,
+              sha256: candidate.sha256,
+              size: candidate.bytes.length
             }))
-          }, null, 2));
+          }, null, 2);
+          const manifest = await vault.create(manifestPath, manifestText);
           assertFile(manifest, manifestPath);
           register(manifest);
-          await validate(plan, { owned, snapshot });
+          if (await readText(manifest, manifestPath) !== manifestText) throw new Error("Image move manifest changed before moving images.");
+          evidence.push({ file: manifest, path: manifestPath, text: manifestText });
+          for (const entry of evidence.filter((entry2) => entry2.bytes)) await readImage(entry);
+          await validate(plan, { owned, evidence, snapshot, readBinaries: false });
           await plugin.ensureFolder(plan.destination);
           for (const candidate of selected) {
-            await validate(plan, { owned, snapshot, attempted, readBinaries: false });
+            await validate(plan, { owned, evidence, snapshot, attempted, readBinaries: false });
             const beforeRead = revision;
             await readImage(candidate);
             if (revision !== beforeRead || occupied(candidate.target)) throw new Error("Vault changed before the image move; preview again.");
@@ -3936,10 +4656,10 @@ function installAttachmentFeatures(plugin, { TFile: TFile2, Modal: Modal2, Notic
             await plugin.renameVaultItem(candidate.file, candidate.target, candidate.path);
             assertFile(candidate.file, candidate.target);
           }
-          await validate(plan, { owned, snapshot, attempted });
+          await validate(plan, { owned, evidence, snapshot, attempted });
           await plugin.applyExpectedTextPlans(plan.plans, "Image link update");
           written = true;
-          await validate(plan, { owned, snapshot, attempted, written });
+          await validate(plan, { owned, evidence, snapshot, attempted, written });
           new Notice2("Images organized. Backup: " + snapshot);
           return { moved: selected.length, snapshot };
         } catch (error) {
@@ -3954,8 +4674,8 @@ function installAttachmentFeatures(plugin, { TFile: TFile2, Modal: Modal2, Notic
               assertFolderPath(path.split("/").slice(0, -1).join("/"));
               await plugin.ensureFolder(path.split("/").slice(0, -1).join("/"));
               await createBinary(path, candidate.bytes);
-            } catch (recovery) {
-              conflicts.push(path + ": " + (recovery.message || recovery));
+            } catch (recovery2) {
+              conflicts.push(path + ": " + (recovery2.message || recovery2));
             }
           }
           throw new Error(String(error.message || error) + (snapshot ? " Backup: " + snapshot + "." : "") + (attempted.length ? " Recovery copies retained at both image paths where available." : "") + (conflicts.length ? " Review recovery conflicts: " + conflicts.join("; ") : ""));
@@ -3967,7 +4687,6 @@ function installAttachmentFeatures(plugin, { TFile: TFile2, Modal: Modal2, Notic
   };
   plugin.renderImageAdmin = (el) => {
     el.empty();
-    plugin.addHomeButton(el);
     el.createEl("h2", { text: "Images" });
     el.createEl("p", { text: "Organize newly added and older local case images after reviewing the moves below. Shared notes are checked and their supported links are updated. Unsupported references stay in place. A backup is created before moving images." });
     const label = el.createEl("label", { text: "Image folder " });
@@ -3995,8 +4714,14 @@ function installAttachmentFeatures(plugin, { TFile: TFile2, Modal: Modal2, Notic
           const box = this.contentEl;
           box.createEl("h2", { text: "Review image moves" });
           box.createEl("p", { text: "Destination: " + plan.destination });
-          box.createEl("p", { text: plan.plans.length + " referring notes will be updated. Cancel makes no changes." });
-          for (const item of plan.candidates) box.createEl("p", { text: item.path + " → " + (item.blocked || item.target) });
+          const moving = plan.candidates.filter((item) => !item.blocked), skipped = plan.candidates.filter((item) => item.blocked);
+          box.createEl("p", { text: moving.length + " images ready to move; " + skipped.length + " skipped; " + plan.plans.length + " referring notes to update. Cancel makes no changes." });
+          for (const item of moving) box.createEl("p", { text: item.path + " → " + item.target });
+          if (skipped.length) {
+            const details = box.createEl("details");
+            details.createEl("summary", { text: "Skipped images (" + skipped.length + ")" });
+            for (const item of skipped) details.createEl("p", { text: item.path + " — " + item.blocked });
+          }
           if (!plan.candidates.length) box.createEl("p", { text: "No unorganized local case images found." });
           const cancel = box.createEl("button", { text: "Cancel" });
           cancel.onclick = () => this.close();
@@ -4029,32 +4754,32 @@ async function revealLauncher(plugin, file) {
   const workspace = plugin.app.workspace, path = plugin.launcherPath();
   const current = () => !plugin.unloading && file && file.path === path && plugin.launcherPath() === path && plugin.app.vault.getAbstractFileByPath(path) === file;
   if (!current()) return false;
-  let changed = false;
-  for (const leaf of workspace.getLeavesOfType("markdown")) {
+  let changed2 = false;
+  for (const leaf2 of workspace.getLeavesOfType("markdown")) {
     if (!current()) break;
-    const view = leaf.view;
-    if (view?.file !== file || view.getMode?.() === "preview" || pending.has(leaf)) continue;
-    const state = leaf.getViewState();
+    const view = leaf2.view;
+    if (view?.file !== file || view.getMode?.() === "preview" || pending.has(leaf2)) continue;
+    const state = leaf2.getViewState();
     if (state.type !== "markdown" || state.state?.file !== path || state.state?.mode === "preview") continue;
-    if (!current() || leaf.view !== view || view.file !== file || !workspace.getLeavesOfType("markdown").includes(leaf)) continue;
-    pending.set(leaf, true);
+    if (!current() || leaf2.view !== view || view.file !== file || !workspace.getLeavesOfType("markdown").includes(leaf2)) continue;
+    pending.set(leaf2, true);
     try {
-      await leaf.setViewState({ ...state, state: { ...state.state, mode: "preview" } });
-      if (current() && leaf.view === view && view.file === file && workspace.getLeavesOfType("markdown").includes(leaf)) changed = true;
+      await leaf2.setViewState({ ...state, state: { ...state.state, mode: "preview" } });
+      if (current() && leaf2.view === view && view.file === file && workspace.getLeavesOfType("markdown").includes(leaf2)) changed2 = true;
     } finally {
-      pending.delete(leaf);
+      pending.delete(leaf2);
     }
   }
-  return changed;
+  return changed2;
 }
 function installLauncherFeatures(plugin) {
   if (plugin.revealLauncher) return;
   plugin.revealLauncher = (file) => revealLauncher(plugin, file);
   const reveal = (file) => plugin.dispatchVaultEvent("launcher rendering", () => plugin.revealLauncher(file));
   plugin.registerEvent(plugin.app.workspace.on("file-open", reveal));
-  plugin.registerEvent(plugin.app.workspace.on("active-leaf-change", (leaf) => reveal(leaf?.view?.file)));
+  plugin.registerEvent(plugin.app.workspace.on("active-leaf-change", (leaf2) => reveal(leaf2?.view?.file)));
   plugin.app.workspace.onLayoutReady(() => {
-    for (const leaf of plugin.app.workspace.getLeavesOfType("markdown")) reveal(leaf.view?.file);
+    for (const leaf2 of plugin.app.workspace.getLeavesOfType("markdown")) reveal(leaf2.view?.file);
   });
 }
 
@@ -4159,7 +4884,7 @@ function installFeatures(plugin, deps) {
     fromCST.onclick = () => plugin.navigateFromUI("Import from CST Notes", () => plugin.openCSTImport());
     const external = actions.createEl("button", { text: "Import external notes", attr: { type: "button" } });
     external.onclick = () => plugin.navigateFromUI("Import external notes", () => plugin.openPath(plugin.p("Admin/External Import.md")));
-    el.createEl("p", { text: "From CST Notes: paste the sender's JSON text or choose their export file, then review the destination and surgeon profile before importing." });
+    el.createEl("p", { text: "From CST Notes: use Import from clipboard or choose the sender's export file, then review the destination and surgeon profile before importing." });
     el.createEl("p", { text: "From another app: use Obsidian Importer to convert your notes, then sort them into CST Notes. The external-import guide walks you through each step." });
   };
   installAdminWorkspace(plugin, { ...supplied, adminPages: {
@@ -4167,6 +4892,7 @@ function installFeatures(plugin, deps) {
     resources: (el) => plugin.renderResourceAdmin(el),
     images: (el) => plugin.renderImageAdmin(el)
   } });
+  for (const route of ["deleted-case", "admin-file", "admin-folder", "migration-undo"]) plugin.attachmentRecovery?.registerRestoreRoute(route);
   plugin.registerMarkdownCodeBlockProcessor("cst-resource-data", async (_source, el) => {
     el.empty();
     el.createEl("p", { text: "CST Notes resource library — managed locally. Open Admin → Resources to review terms and sources." });
@@ -4183,14 +4909,14 @@ function installFeatures(plugin, deps) {
   for (const [, processor, renderer] of Object.values(FEATURE_PAGES)) {
     const render = plugin[renderer];
     plugin[renderer] = async function(el, ...args) {
-      let parent2 = el.parentElement;
-      while (parent2 && !featurePageHosts.has(parent2)) parent2 = parent2.parentElement;
-      const nested = !!parent2;
+      let parent3 = el.parentElement;
+      while (parent3 && !featurePageHosts.has(parent3)) parent3 = parent3.parentElement;
+      const nested = !!parent3;
       featurePageHosts.add(el);
       try {
         return await render.call(this, el, ...args);
       } finally {
-        if (!nested && !el.querySelector?.(".cst-app-home-nav")) {
+        if (renderer !== "renderImageAdmin" && !nested && !el.querySelector?.(".cst-app-home-nav")) {
           plugin.addHomeButton(el);
           el.prepend?.(el.lastElementChild);
         }
@@ -4246,6 +4972,9 @@ function installFeatures(plugin, deps) {
     }
   };
 }
+
+// src/kelly-icon.mjs
+var KELLY_ICON = '<defs><filter id="cst-kelly-alpha" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB"><feColorMatrix type="matrix" values="0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 .34 1.144 .116 0 -.35" result="cutout"/><feFlood flood-color="currentColor" result="ink"/><feComposite in="ink" in2="cutout" operator="in"/></filter></defs><g transform="translate(100 0) scale(-1 1)"><image x="-27" y="-24" width="152" height="152" href="data:image/jpeg;base64,/9j/2wBDAAUDBAQEAwUEBAQFBQUGBwwIBwcHBw8LCwkMEQ8SEhEPERETFhwXExQaFRERGCEYGh0dHx8fExciJCIeJBweHx7/2wBDAQUFBQcGBw4ICA4eFBEUHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh7/wAARCAEAAQADASIAAhEBAxEB/8QAHAABAQEAAgMBAAAAAAAAAAAAAAEHBQYCBAgD/8QAPhAAAgEDAwIDBAcECQUAAAAAAAECAwQFBgcRITESQVETImFxCBQjQlKBkTJicqEWFyQzQ5KiscEVJjSC0f/EABUBAQEAAAAAAAAAAAAAAAAAAAAB/8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAwDAQACEQMRAD8A+dwAAKQAVAhQAbAAEKQAXkgAFIAKEAAA4HAAgKBC8ggFAIBWAQCghQCABAABRAABSAAAABSFQ4AEKQAAAABQIUEAoIUAQrIBQCAUgCAArIAKQoAhQwIAAAAAAAAAUCAACkBQIEXgAAQAGCkAAAACkApAABUQoEBSAVBgARFIUAwQAAAAAAAAAAAAKQcgUMIMCAAAAAABQABGAAAAqIAKCAACgAQAAChgOCAoEKByBAAB7eFsKuUzFljKE6dOrd3FOhCVR8QjKclFNvyXLOT19pTJ6L1Rc6fy3spXFBRkqlLl06sJLlSjyk+O6+DTRwUJShOM4ScJxalGS7prqmj6K3Fx0d29nsXrvFU1PPYmi6V9b01zOaj/AHsePVP7SPqpNAfOhTxX8igUAckEKQFFAAEAAFIUgAoQAEPIjAIDsOQABAKwiFAEKABCkApC8kYA5LS1vi7vUmNtc3dVbTGVrqnTuq9NLxU6bfDkuen/AMONAHet6dv7jb/VP1SE6lxiruLq2FzPhucfOEmunii/1TT8z2NjNxqu3+pXO5VSrhr3wwvaUOso8fs1Yr8UeX081yvQ0PaPU2D3J0b/AFYa3qf22nFLGXcpL2k1Fe6oyf8AiwXRL70enkzKNy9vdQaCyrt8rQ9rZ1JNWt9Si/ZV15fwy9Yvr811A03fDaWndW8teaBjTvsZeQ+s3FparxKKfV1aKXeD7uC6xfPC45SwQ0PaHdXN6Au/YcSyGEqT8VaxlPjwN950pfdl8Oz8/U1bVO3mi93MRV1Zt/fW9llZPm5pSj4Kc6j+7VprrSm/xLo/j3A+ZinI6kwWX05lquKzdhWsbyn3p1F3XlKL7Si/JrlHGgCgAQoAAhQBAUAQqAAAAAAAIUBgQoAAhRwBAAAKAAIUAWnOdKpGrTnKE4SUoyi2nFrqmmuz+JvO3u+NlfYtaZ3QsoZOxqRVN30qKqeJeXtqf3n+/Hr8OepggA+idR7E6f1LYvO7aaitZW9XrG2q1fa0OfSNRcyh8ppmX1cTuNtVnYZR2V/ia1N+FXUI+0t6sfwuS5hKL9H/ACOr6fzuZ0/fxv8AB5S7x1yvv29Rx5+a7SXwaZsujvpG5i2pqz1diKGXt5Lwzr26VKq15+KD9yf+kDtmmNc6F3kw9LTWtbG3sc3JeG3fi8KlJ/et6r6xl+4+/wC8Y9u/tdk9vshBzu6N9jbhy+rV4tRqpLuqlPnlcfiXMfiuxrtOw2F3Jn4rOpQwuVrdoU5fUa3i/gf2c38uTt+jLS30hhtWXGayV5no4upG2+s3kIzuJ20KEJwpdeji5VZcc9Hzy/gHxmDe9xNoaeRustc6fxP9H8tjqELy8xDuFcUKlGp42p0JxScZLwT5ptcdPd7rnNdR7Z61wdtC9rYSteY+pTjVp3th/aKMoSXKlzHqk00+qQHTgPNrzXRr0HmAYAABgoEDBALyCGq6E2yxa0zDWu42Wng9PVFza0qf/kXj8vCuG0n5cJtrr0XUDKg+nc2KpuDtPjJO3wu01ve0Y+6q+Rrp1Jr14am1+p7FpkNkNb1FY3uDutDZCq+Kd3b1VK2UvJS+6l84pfFAYqU7XudoLM6CzULDJ+zr21xF1LO8pf3dxD1XpJcrmPlyu6aZ1MCjgAgMFIABAUUAAAykIBCshQBQBO64a5XxOwaW1jqLTl99ax+RqSjKl7Ctb3H21CvR680pwl0lHq+nlz04OvgD652I3F0RmqH/AEqxsLfT2brSUqtrKo5RuJJcJ06k23LhdFBvlLok0eGv9V6w2oaqWeBsstpB1WrepGc6day8Um/Yza5XhTbUG1xxxF9UfJUZOLUotpp8pp8NP1Ny2s30q21stO7g03lcVVh7D65OHtKlODXDjVj/AIsOPP8AaXxA5W73P2b1jHw6v0ZXsrmfSVzChGcov19pScZ/qmcXcbX7Wall/wBlbk29rcS/Ztb+al+XveCf+56G720VLHY/+mGgqqyunK8fbSpUZ+1lbRf3otdZ0/8AVHz9TGnw1w0pL49QNR1BsPuHi06lnYWuaod1UsLhSbX8MvC/05M+zOFzGFqull8VfWE104uaEqf82uD9sHqbUWCl4sNnclYfChcyjH/Lzx/I75iN+dwLSmqGRuMfm7ftKnf2kZeJfOPH/IGWp8rlPlF5Nge5G2WdbeqtqrWhVl+1cYmsqcvnwvD/ALs8o6d2Hz/TGazzOnK0u1PI0vFBP05a4/1AY4DaX9H++yFJ19La207mqLXMfDNxk/8AL40cJf7EbmWrfGFtrlLzt76k+fyk0wOs7UadhqvcTC4KtHm3uLhSuF60oJzmvzUePzOd+kLqevqDci/s4SdPG4eo7Gyt49IU1D3ZyS9XJP8AJJeRsH0ctqMxpHLXOpNS0qVvfOi7e0to1FUlTUmvHOTXTlpJJJvpzyYxv7pq705uflvbUZRtchXne2lTj3akJvlpP1jJtP8AL1A6CAANq0vdz1p9HPUuHyUncXulXC8sK0+sqdHhvwJ+iSqR+TXojFjZ9JW8tIfRy1Nnb37G61POFjYUpdJTpdU5pejTqP5JPzMY7sATkvAAIAAAAAABAACKAAAApGAQAAgKQDum125GoNA5Dx4+r9Zx1SXNxYVpP2VT1lH8E/3l+aZ3/VehtN7k4evrHa9xpZGPv5HAy4hOMn3cI9lJ+i92Xlw+hhhyWms7ltOZihl8Le1bO8ov3akH3XnGS7Si/NPowPQr0qtCtOjWpzpVacnGcJxcZRku6afVNeh4G8SWlt9LRzTtdO7gUqfbtQyKiv1b/WUf3o9sW1Bhcpp/LV8VmbGrZXlB8TpVF1+DT7OL8mujA9AIADzoValCsq1CpOjUXadOTjJfmupuv0e9U67yFxkKTzuUv7S3pwUKEo0bycZtvqqdWpGpKPCfPs3zzwYOdv0Xr/I6YxNfExxGDylhWqus6WQslUlCo0l4ozXEl2XTnyA0HXm+Wt8drKvaYu8x8bWxfsZU3j5QjWmv23OFT7SDT93w89ODkZbxaH15h44bczTVW2UX4qV3Yt1FSnxx44/fg/XjxJ+aZgNWc6tSVWcnKc5OUm31bfc8ANkntXoLJv6zp/dzDRt5PlU7+MYVIr0fvR6/kj9bPSuzujJK/wBSayjq65pe9DG42n9nUl5KTTfK+ckvmYs+vdJ/MeXAHcd1NfZLXuap3VzRhZWFrD2VjY0n7lCH/MnwuXx5JLhI6eiFAoIABSFA8ShAAAwAAIBQAgKAQgpH3AKCKCMBwQoAtGrVoVoVqFSdKrTkpwnCTjKMl2aa6pr1Ns05rLTm6GJt9JbmVIWeYpLwYvPwSjLxPtGo+3V+vuy/dl1eIjgDs+4mhs/obMvH5m2fspt/Vrqmm6VxFecX5P1i+q/mdZRsO1+5mMvcPHQe5tJZPAVeIW95Wbc7N9o8y7+FeUl1j8V0Xpbk7L53Tl9G7wtSGVwFxJOle+JcW0JNcOu10UFyn7Re7x16AZX8uBwbVudjdNad26tsPc4u2q5GnBQsq0oxoXtCcn4pTlOHNO7t5e94akXyuYp9e2LAQBgAQoAAAAGAABCgAEABCgAAEAAAAAAUgAFIwABCgAQrIAPob6JOs8rcZKvom9qO4x8LSdzaOfWVDwyipQT/AAPxdvJ9u588+Zu239zbbSbSy1vcUKdxqLUn2OLoVO1OiuqlLz8P336+4gO27u7KV9RZqGRxOfx+IxcKfhhY3MJqjbyb5m6fD8MVJ9WkkuTNM1sHrezs6l5iqmKz1CC5/sFz77+UZJc/JMz3U+o85qbIzv8APZS5v6833qz92K9Ix/ZivgkfjgM3l8BfU77CZK6x9xTfMZ29Rx/Vdmvg00B619a3Njd1bS9t61tcUZeGpSqwcJwfo0+qPx5N6tLiy300hd297bW1rr3EW/taFzTiorIUl91r59OPutpro2jBWmm1JOLT4aa6p+gAcgAAAQAABH3BQUAQpAAABAeYKAAABgAQqAYApAAAAAhSASfPglx34fBs30k348Rt7VtnF494CCoeFe6pcQ8X8vCY0bXt5c4zczbintplr2nZ5/GSlVwFzV6RqR6/ZN+fdrju1w1y48AYoDmNV6ZzulcnUx2exteyrQfClOP2dResJ/syXxTOLtqVW6rwoWtOdxVm+IU6UXOUn6JLqwND+jRVuaW9WA+rKXvutCp4fwOlLnn4dEdW3FjQhuDqKNs4ugspcqn4e3HtZdjW9EYj+prSV7rjU0IUdTX9vK2wuOk050/F3nNeXk3+FLjvLgwirOdWrOrUk51Jyc5yfeUm+W/1AgCAAAEAAFAAEBIcAFABkAoCBAA5IUUEL5gAAwABQICkIAYBRDyhKUJxnCUoSi04yi+GmuzT8mQAahp7fLWmOx0cblIY7UVnFceDJ0PHPj+NdX/7Js5Gpv3lrWjKOntH6YwlaS616Fv4pJ+q7L9eTHggOS1JnsxqPKTyecyNe/u59HUqy54X4YrtFfBcI40AAAAAAAjKCAUEHJAKAUAByAQIAAAAoAAADkAEABSAEAAFAAAAAQAAUAAQAAAABRAABQAAHABAHAKURgMACkHIAAAAAAAAAAEBgFKIUACAAgFICgAwAIVAgAMgFIAUVALuABScgAByAHAKQAAxyAA5AAAAAAAKQcgUEAADkAAB5gAAABSAACAf/9k=" filter="url(#cst-kelly-alpha)"/></g>';
 
 // src/onboarding.mjs
 var EXAMPLE_CASE_ID = "cst-example-general-v1";
@@ -4339,10 +5068,61 @@ If aspirating:
 - Kidney basin
 - Towel
 `;
+var EXAMPLE_TEMPLATE_BODY = `## Case
+
+## PA
+
+*Add assistant names, glove sizes, and gown preferences.*
+
+## Tips
+
+*Add useful setup reminders and surgeon preferences.*
+
+## Drape
+
+*List the towels and drapes needed.*
+
+## Mayo
+
+*List instruments and supplies for the Mayo stand.*
+
+## Basin
+
+*List basin items, tubing, and cords.*
+
+## Back Table
+
+*Add a setup photo and describe your back table layout.*
+
+## Trays
+
+*List instrument trays and sets.*
+
+## Equipment
+
+*List equipment and setup preferences.*
+
+## Mayo Flow
+
+*Describe how the Mayo setup changes during the case.*
+
+## Sutures
+
+*List suture sizes, types, and needles.*
+
+## Dressings
+
+*List dressings and closure supplies.*
+
+## Notes
+
+*Add other case preparation notes.*
+`;
+var ONBOARDING_CLEANUP_VERSION = 1;
 var templateMarker = (token) => `<!-- cst-example-template: ${token} -->`;
 var canCleanOwnedExamples = (plugin) => {
   const owned = plugin.settings.onboardingExample;
-  return owned?.version === 1 && !!owned.token && owned.caseId === EXAMPLE_CASE_ID && owned.folderPath === `${plugin.contentRoot}/General/Dr. Example` && owned.templatePath === plugin.p(EXAMPLE_TEMPLATE_REL);
+  return owned?.version === 1 && typeof owned.token === "string" && !!owned.token && typeof owned.surgeonId === "string" && !!owned.surgeonId && owned.state === "ready" && owned.caseId === EXAMPLE_CASE_ID && owned.folderPath === `${plugin.contentRoot}/General/Dr. Example` && owned.templatePath === plugin.p(EXAMPLE_TEMPLATE_REL);
 };
 var runMutation = (plugin, action) => plugin.withFeatureMutation ? plugin.withFeatureMutation(action) : plugin.serializedAdminMutation(action);
 async function createOnboardingExample(plugin, deps) {
@@ -4415,7 +5195,7 @@ async function createOnboardingExample(plugin, deps) {
       plugin.markInternalCreate(templatePath);
       template = await vault.create(templatePath, `${templateMarker(owned.token)}
 
-${EXAMPLE_BODY}`);
+${EXAMPLE_TEMPLATE_BODY}`);
     }
     if (!(template instanceof TFile2) || !(await vault.read(template)).startsWith(templateMarker(owned.token) + "\n")) {
       throw new Error("The Example template is not owned by this onboarding session. It was preserved.");
@@ -4474,73 +5254,310 @@ ${EXAMPLE_BODY}`;
     return file;
   });
 }
-async function cleanOnboardingExamples(plugin, { TFile: TFile2, TFolder: TFolder2, parseFrontmatterObject: parseFrontmatterObject2 }) {
-  const owned = plugin.settings.onboardingExample;
-  if (owned?.version !== 1 || !owned.token || owned.caseId !== EXAMPLE_CASE_ID) {
-    throw new Error("These older examples cannot be safely identified for automatic cleanup. Continue from here, or remove them individually.");
+var changed = () => new Error("Example ownership or content changed during cleanup. Retry after editing and Sync finish.");
+var recordKey = (data) => JSON.stringify(data || null);
+var sameEntries = (a, b) => a.length === b.length && a.every((entry, i) => entry.path === b[i].path && entry.file === b[i].file && entry.text === b[i].text);
+async function previewOnboardingCleanup(plugin, deps) {
+  const { TFile: TFile2, TFolder: TFolder2, parseFrontmatterObject: parseFrontmatterObject2 } = deps;
+  if (!canCleanOwnedExamples(plugin)) throw new Error("These examples belong to an earlier version or their ownership or locations changed. Automatic cleanup is unavailable.");
+  if (plugin.settings.resetNeedsReview || plugin.unloading) throw new Error("Example cleanup is paused until CST Notes is ready.");
+  const owned = plugin.settings.onboardingExample, ownership = recordKey(owned);
+  const choice = plugin.settings.onboardingCompletionChoice;
+  const vault = plugin.app.vault;
+  const assertContext = () => {
+    if (plugin.settings.onboardingExample !== owned || recordKey(owned) !== ownership || plugin.settings.onboardingCompletionChoice !== choice || plugin.settings.resetNeedsReview || plugin.unloading) throw changed();
+  };
+  const registry = await plugin.getRegistrySurgeon("General", "Dr. Example", { create: false });
+  assertContext();
+  const folder = vault.getAbstractFileByPath(owned.folderPath);
+  const progress = owned.cleanupProgress;
+  const retiredFolder = progress?.version === ONBOARDING_CLEANUP_VERSION && typeof progress.folderArchivePath === "string" && progress.folderArchivePath.startsWith(plugin.p("Admin/Backups/Quarantined Empty Folders") + "/") ? vault.getAbstractFileByPath(progress.folderArchivePath) : null;
+  const resuming = !folder && !registry.data && retiredFolder instanceof TFolder2 && retiredFolder.children.length === 0;
+  if (!resuming && (!(folder instanceof TFolder2) || registry.data?.cst_id !== owned.surgeonId)) {
+    throw new Error("The owned example surgeon folder and registry identity are not both available. Existing content was preserved; retry after Sync finishes.");
   }
-  if (owned.folderPath !== `${plugin.contentRoot}/General/Dr. Example` || owned.templatePath !== plugin.p(EXAMPLE_TEMPLATE_REL)) {
-    throw new Error("The example locations changed. Existing content was preserved.");
+  const readEntry = async (file) => {
+    const path = file.path, text = await vault.read(file);
+    plugin.assertVaultFilePath(file, path, "An example file moved or was replaced.");
+    assertContext();
+    return { file, path, text };
+  };
+  const cases = [];
+  let ownedExampleCount = 0;
+  for (const file of plugin.allCaseFiles()) {
+    const entry = await readEntry(file), fm = parseFrontmatterObject2(entry.text);
+    const example = fm.cst_example === true && fm.cst_id === owned.caseId && fm.cst_example_owner === owned.token;
+    if (example) ownedExampleCount++;
+    if (!file.path.startsWith(owned.folderPath + "/")) continue;
+    cases.push({ ...entry, example, caseId: typeof fm.cst_id === "string" ? fm.cst_id : "" });
   }
-  return runMutation(plugin, async () => {
-    if (plugin.settings.resetNeedsReview || plugin.unloading) throw new Error("Example cleanup is paused until CST Notes is ready.");
-    const vault = plugin.app.vault, candidates = [], marker = templateMarker(owned.token);
-    for (const file of plugin.allCaseFiles()) {
-      const path = file.path, text = await vault.read(file), fm = parseFrontmatterObject2(text);
-      plugin.assertVaultFilePath(file, path, "Example cleanup paused because a case moved or was replaced.");
-      if (fm.cst_example === true && fm.cst_id === owned.caseId && fm.cst_example_owner === owned.token) candidates.push({ file, path, text });
-    }
-    if (candidates.length > 1) throw new Error("Duplicate example identities were found. No examples were removed.");
-    const templateFiles = [vault.getAbstractFileByPath(owned.templatePath), ...plugin.templateVersionFilesReadOnly(owned.templatePath).map((entry) => entry.file)];
-    const templates = [];
-    for (const file of templateFiles) {
-      if (!(file instanceof TFile2)) continue;
-      const path = file.path, text = await vault.read(file);
-      plugin.assertVaultFilePath(file, path, "Example template moved or was replaced.");
-      if (text.startsWith(marker + "\n")) templates.push({ file, path, text });
-    }
-    const registry = await plugin.getRegistrySurgeon("General", "Dr. Example", { create: false });
-    await plugin.snapshotFiles("Onboarding examples", [...candidates, ...templates].map((entry) => entry.file).concat(registry.file || []));
-    for (const entry of [...candidates, ...templates]) {
-      plugin.assertVaultFilePath(entry.file, entry.path, "Example cleanup paused because a file moved or was replaced.");
-      if (await vault.read(entry.file) !== entry.text) throw new Error("An example changed during cleanup. Retry after editing and Sync finish.");
-      plugin.assertVaultFilePath(entry.file, entry.path, "Example cleanup paused because a file moved or was replaced.");
-    }
-    for (const entry of candidates) await plugin.archiveCaseDeletion(entry.file, entry.path, entry.text);
-    for (const entry of templates) {
-      plugin.assertVaultFilePath(entry.file, entry.path, "Example template changed before removal.");
-      if (await vault.read(entry.file) !== entry.text) throw new Error("An example template changed during cleanup. It was preserved.");
-      await plugin.quarantineManagedFile(entry.file, entry.path, "Onboarding example template");
-    }
-    let surgeonKept = false;
-    const folder = vault.getAbstractFileByPath(owned.folderPath);
-    const current = await plugin.getRegistrySurgeon("General", "Dr. Example", { create: false });
-    if (current.data?.cst_id === owned.surgeonId && folder instanceof TFolder2 && folder.children.length === 0) {
-      const target = await plugin.quarantineEmptySurgeonFolder(folder, owned.folderPath, "Onboarding example surgeon");
+  cases.sort((a, b) => a.path.localeCompare(b.path));
+  if (ownedExampleCount > 1) throw new Error("Duplicate example identities were found. No examples were removed.");
+  const caseProgress = progress?.version === ONBOARDING_CLEANUP_VERSION && progress.caseStageStarted;
+  const receipts = caseProgress && Array.isArray(progress.archivedCases) ? progress.archivedCases : [];
+  const archivedPaths = /* @__PURE__ */ new Set();
+  if (caseProgress && cases.length) {
+    const archiveRoot = plugin.p("Admin/Backups/Deleted Cases");
+    for (const file of plugin.filesWithin(archiveRoot, "json")) {
+      const entry = await readEntry(file);
+      let manifest;
       try {
-        if (folder.children.length || vault.getAbstractFileByPath(owned.folderPath)) throw new Error("The example surgeon folder changed during cleanup.");
-        await plugin.applyAdminRegistryChanges([{ specialty: "General", surgeon: "Dr. Example", expected: current.data, data: null }]);
-        if (folder.children.length || vault.getAbstractFileByPath(owned.folderPath)) {
-          await plugin.applyAdminRegistryChanges([{ specialty: "General", surgeon: "Dr. Example", expected: null, data: current.data }]);
-          throw new Error("The example surgeon gained content during cleanup. Its registry record was restored.");
-        }
+        manifest = JSON.parse(entry.text);
+      } catch {
+        continue;
+      }
+      if (manifest.version === 1 && manifest.state === "archived" && manifest.surgeon_record?.cst_id === owned.surgeonId && typeof manifest.archive_path === "string" && manifest.archive_path.startsWith(archiveRoot + "/") && manifest.archive_path.replace(/\.md$/, ".json") === entry.path && typeof manifest.original_path === "string" && manifest.original_path.startsWith(owned.folderPath + "/")) {
+        archivedPaths.add(manifest.original_path);
+      }
+    }
+  }
+  const candidates = cases.filter((entry) => !archivedPaths.has(entry.path) && !receipts.some((receipt) => receipt.path === entry.path || entry.caseId && receipt.caseId === entry.caseId));
+  const exampleCount = candidates.filter((entry) => entry.example).length;
+  const marker = templateMarker(owned.token);
+  const hasMarker = (text) => text.replace(/\r\n/g, "\n").startsWith(marker + "\n");
+  const revisions = plugin.templateVersionFilesReadOnly(owned.templatePath).map((entry) => entry.file);
+  const backendPaths = [
+    plugin.surgeonGraphPath("General", "Dr. Example"),
+    plugin.surgeonDataPath("General", "Dr. Example"),
+    plugin.legacySurgeonDataPath("General", "Dr. Example")
+  ];
+  const observed = [owned.templatePath, ...revisions.map((file) => file.path), ...backendPaths].map((path) => ({ path, file: vault.getAbstractFileByPath(path) }));
+  const templates = [], backend = [];
+  for (const item of observed) {
+    if (!(item.file instanceof TFile2)) continue;
+    const entry = await readEntry(item.file);
+    if (!backendPaths.includes(item.path)) {
+      if (hasMarker(entry.text)) templates.push(entry);
+      continue;
+    }
+    let fm;
+    try {
+      fm = item.file.extension === "json" ? JSON.parse(entry.text) : parseFrontmatterObject2(entry.text);
+    } catch {
+      continue;
+    }
+    const graph = item.path === backendPaths[0];
+    if (graph ? fm.cst_type === "surgeon-node" && fm.generated === true && fm.surgeon_id === owned.surgeonId : fm.cst_id === owned.surgeonId && fm.specialty === "General" && fm.surgeon === "Dr. Example") backend.push(entry);
+  }
+  const current = await plugin.getRegistrySurgeon("General", "Dr. Example", { create: false });
+  assertContext();
+  if (recordKey(current.data) !== recordKey(registry.data) || current.file !== registry.file || vault.getAbstractFileByPath(owned.folderPath) !== folder) throw changed();
+  return {
+    owned,
+    choice,
+    registry,
+    folder,
+    retiredFolder,
+    resuming,
+    cases,
+    candidates,
+    templates,
+    backend,
+    observed,
+    children: (folder?.children || []).map((file) => ({ file, path: file.path })),
+    revisions,
+    caseCount: candidates.length,
+    practiceCaseCount: candidates.length - exampleCount,
+    retainedCaseCount: cases.length - candidates.length,
+    casePaths: candidates.map((entry) => entry.path),
+    templatePaths: templates.map((entry) => entry.path),
+    backendPaths: backend.map((entry) => entry.path)
+  };
+}
+async function cleanOwnedExamples(plugin, deps, confirmed) {
+  const plan = await previewOnboardingCleanup(plugin, deps);
+  if (confirmed && (plan.owned !== confirmed.owned || plan.choice !== confirmed.choice || plan.folder !== confirmed.folder || recordKey(plan.registry.data) !== recordKey(confirmed.registry.data) || !sameEntries(plan.candidates, confirmed.candidates) || !sameEntries(plan.templates, confirmed.templates) || !sameEntries(plan.backend, confirmed.backend))) {
+    throw new Error("The cleanup preview changed. Review the updated case list and choose Start fresh again.");
+  }
+  const { owned, registry, folder, candidates, templates, backend } = plan;
+  const vault = plugin.app.vault, removed = /* @__PURE__ */ new Set();
+  let surgeonRemoved = plan.resuming;
+  const identity = () => recordKey([owned.version, owned.token, owned.caseId, owned.surgeonId, owned.folderPath, owned.templatePath, owned.state]);
+  const expectedIdentity = identity();
+  const assertContext = () => {
+    if (plugin.settings.onboardingExample !== owned || identity() !== expectedIdentity || plugin.settings.onboardingCompletionChoice !== plan.choice || plugin.settings.resetNeedsReview || plugin.unloading) throw changed();
+  };
+  const assertState = async () => {
+    assertContext();
+    const current = await plugin.getRegistrySurgeon("General", "Dr. Example", { create: false });
+    assertContext();
+    if (current.file !== registry.file || recordKey(current.data) !== recordKey(surgeonRemoved ? null : registry.data)) throw changed();
+    if (vault.getAbstractFileByPath(owned.folderPath) !== (surgeonRemoved ? null : folder)) throw changed();
+    if (surgeonRemoved && (folder || plan.retiredFolder)?.children.length) throw changed();
+    const cases = plugin.allCaseFiles().filter((file) => file.path.startsWith(owned.folderPath + "/"));
+    if (cases.length !== plan.cases.filter((entry) => !removed.has(entry.file)).length || cases.some((file) => !plan.cases.some((entry) => entry.file === file && entry.path === file.path && !removed.has(file)))) throw changed();
+    const revisions = plugin.templateVersionFilesReadOnly(owned.templatePath).map((entry) => entry.file);
+    if (revisions.length !== plan.revisions.filter((file) => !removed.has(file)).length || revisions.some((file) => !plan.revisions.includes(file))) throw changed();
+    for (const item of plan.observed) {
+      if (vault.getAbstractFileByPath(item.path) !== (removed.has(item.file) ? null : item.file)) throw changed();
+    }
+    if (!surgeonRemoved && (folder.children.length !== plan.children.filter((entry) => !removed.has(entry.file)).length || folder.children.some((file) => !plan.children.some((entry) => entry.file === file && entry.path === file.path && !removed.has(file))))) throw changed();
+  };
+  const verifyEntry = async (entry) => {
+    plugin.assertVaultFilePath(entry.file, entry.path, "Example cleanup paused because a file moved or was replaced.");
+    const text = await vault.read(entry.file);
+    await assertState();
+    plugin.assertVaultFilePath(entry.file, entry.path, "Example cleanup paused because a file moved or was replaced.");
+    if (text !== entry.text) throw changed();
+  };
+  await assertState();
+  const canRetireSurgeon = surgeonRemoved || folder.children.every((file) => candidates.some((entry) => entry.file === file));
+  const entries = [...candidates, ...templates, ...canRetireSurgeon ? backend : []];
+  if (entries.length || !surgeonRemoved && canRetireSurgeon) {
+    await plugin.snapshotFiles("Onboarding examples", entries.map((entry) => entry.file).concat(registry.file || []));
+  }
+  await assertState();
+  for (const entry of entries) await verifyEntry(entry);
+  if (!owned.cleanupProgress?.caseStageStarted || owned.cleanupProgress.version !== ONBOARDING_CLEANUP_VERSION) {
+    owned.cleanupProgress = {
+      ...owned.cleanupProgress?.version === ONBOARDING_CLEANUP_VERSION ? owned.cleanupProgress : {},
+      version: ONBOARDING_CLEANUP_VERSION,
+      caseStageStarted: true,
+      archivedCases: []
+    };
+    await plugin.saveSettings();
+    await assertState();
+  }
+  for (const entry of candidates) {
+    await verifyEntry(entry);
+    await plugin.archiveCaseDeletion(entry.file, entry.path, entry.text);
+    removed.add(entry.file);
+    assertContext();
+    owned.cleanupProgress.archivedCases = [...owned.cleanupProgress.archivedCases || [], { path: entry.path, caseId: entry.caseId }];
+    await plugin.saveSettings();
+    await assertState();
+    await plugin.cleanupDeletedCaseState?.(entry.path);
+  }
+  if (owned.cleanupProgress.caseStageVersion !== ONBOARDING_CLEANUP_VERSION) {
+    owned.cleanupProgress.caseStageVersion = ONBOARDING_CLEANUP_VERSION;
+    await plugin.saveSettings();
+    await assertState();
+  }
+  for (const entry of templates) {
+    await verifyEntry(entry);
+    await plugin.quarantineManagedFile(entry.file, entry.path, "Onboarding example template");
+    removed.add(entry.file);
+    await assertState();
+  }
+  await assertState();
+  if (!surgeonRemoved && folder.children.length === 0) {
+    const target = await plugin.quarantineEmptySurgeonFolder(folder, owned.folderPath, "Onboarding example surgeon");
+    try {
+      assertContext();
+      if (folder.children.length || vault.getAbstractFileByPath(owned.folderPath)) throw changed();
+      owned.cleanupProgress = { ...owned.cleanupProgress, version: ONBOARDING_CLEANUP_VERSION, folderArchivePath: target, surgeonRecord: registry.data };
+      await plugin.saveSettings();
+      assertContext();
+      if (folder.children.length || vault.getAbstractFileByPath(owned.folderPath)) throw changed();
+      await plugin.applyAdminRegistryChanges([{ specialty: "General", surgeon: "Dr. Example", expected: registry.data, data: null }]);
+      surgeonRemoved = true;
+      await assertState();
+    } catch (error) {
+      const current = await plugin.getRegistrySurgeon("General", "Dr. Example", { create: false });
+      if (!current.data) await plugin.applyAdminRegistryChanges([{ specialty: "General", surgeon: "Dr. Example", expected: null, data: registry.data }]);
+      if (!vault.getAbstractFileByPath(owned.folderPath)) await plugin.renameVaultItem(folder, owned.folderPath, target);
+      throw error;
+    }
+  }
+  try {
+    if (surgeonRemoved) for (const entry of backend) {
+      await verifyEntry(entry);
+      await plugin.quarantineManagedFile(entry.file, entry.path, "Onboarding example backend");
+      removed.add(entry.file);
+      await assertState();
+    }
+    await plugin.findExampleCase();
+    await assertState();
+    const result = {
+      surgeonKept: !surgeonRemoved,
+      templateKept: !!vault.getAbstractFileByPath(owned.templatePath),
+      caseKept: !!plugin.exampleCase(),
+      archivedCaseCount: candidates.length,
+      retainedCaseCount: plan.retainedCaseCount,
+      caseStageComplete: owned.cleanupProgress.caseStageVersion === ONBOARDING_CLEANUP_VERSION,
+      complete: surgeonRemoved
+    };
+    if (result.complete) {
+      const previous = owned.cleanupVersion;
+      owned.cleanupVersion = ONBOARDING_CLEANUP_VERSION;
+      try {
+        await plugin.saveSettings();
+        await assertState();
       } catch (error) {
-        if (!vault.getAbstractFileByPath(owned.folderPath)) await plugin.renameVaultItem(folder, owned.folderPath, target);
+        if (previous === void 0) delete owned.cleanupVersion;
+        else owned.cleanupVersion = previous;
+        await plugin.saveSettings();
         throw error;
       }
-    } else if (current.data || folder) surgeonKept = true;
-    await plugin.findExampleCase();
+    }
     plugin.scheduleGraphRebuild(250);
-    return { surgeonKept, templateKept: !!vault.getAbstractFileByPath(owned.templatePath), caseKept: !!plugin.exampleCase() };
+    return result;
+  } catch (error) {
+    const liveFolder = vault.getAbstractFileByPath(owned.folderPath);
+    const retired = folder || plan.retiredFolder;
+    const record = registry.data || owned.cleanupProgress?.surgeonRecord;
+    if (surgeonRemoved && (liveFolder instanceof deps.TFolder || retired?.children.length) && record?.cst_id === owned.surgeonId) {
+      const current = await plugin.getRegistrySurgeon("General", "Dr. Example", { create: false });
+      if (!current.data) await plugin.applyAdminRegistryChanges([{ specialty: "General", surgeon: "Dr. Example", expected: null, data: record }]);
+      if (!liveFolder && retired?.children.length) await plugin.renameVaultItem(retired, owned.folderPath, retired.path);
+    }
+    throw error;
+  }
+}
+async function cleanOnboardingExamples(plugin, deps, confirmed = null) {
+  return runMutation(plugin, () => cleanOwnedExamples(plugin, deps, confirmed));
+}
+async function migrateExampleTemplate(plugin, deps) {
+  if (!canCleanOwnedExamples(plugin) || plugin.settings.resetNeedsReview || plugin.unloading) return false;
+  const owned = plugin.settings.onboardingExample, vault = plugin.app.vault;
+  const file = vault.getAbstractFileByPath(owned.templatePath);
+  if (!(file instanceof deps.TFile)) return false;
+  const expected = `${templateMarker(owned.token)}
+
+${EXAMPLE_BODY}`;
+  const text = await vault.read(file);
+  plugin.assertVaultFilePath(file, owned.templatePath, "Example template moved during migration.");
+  if (text.replace(/\r\n/g, "\n") !== expected) return false;
+  await plugin.snapshotFiles("Onboarding template update", [file]);
+  await plugin.ensureTemplateVersion(file, false, owned.templatePath);
+  if (plugin.settings.onboardingExample !== owned || !canCleanOwnedExamples(plugin) || plugin.settings.resetNeedsReview || plugin.unloading) throw changed();
+  await plugin.replaceFileTextExpected(
+    file,
+    text,
+    `${templateMarker(owned.token)}
+
+${EXAMPLE_TEMPLATE_BODY}`,
+    "Example template changed during migration. User edits were preserved.",
+    owned.templatePath
+  );
+  await plugin.ensureTemplateVersion(file, false, owned.templatePath);
+  return true;
+}
+async function updateOnboardingExamples(plugin, deps) {
+  return runMutation(plugin, async () => {
+    const choice = plugin.settings.onboardingCompletionChoice;
+    const owned = plugin.settings.onboardingExample;
+    if (choice === "fresh" && owned?.cleanupVersion === ONBOARDING_CLEANUP_VERSION) return { cleanup: "already-complete", templateMigrated: false };
+    try {
+      if (choice === "fresh" && plugin.onboardingTasks().every(([key4]) => plugin.settings.onboardingCompleted?.[key4] === true)) {
+        const result = await cleanOwnedExamples(plugin, deps, null);
+        return { ...result, cleanup: result.complete ? "complete" : "pending", templateMigrated: false };
+      }
+      const templateMigrated = await migrateExampleTemplate(plugin, deps);
+      return { cleanup: "skipped", reason: choice === "continue" ? "continue" : "incomplete-or-unknown-choice", templateMigrated };
+    } catch (error) {
+      return { cleanup: "pending", templateMigrated: false, reason: error.message || String(error) };
+    }
   });
 }
-async function finishOnboarding(plugin, choice, deps) {
+async function finishOnboarding(plugin, choice, deps, confirmed = null) {
   if (plugin.onboardingFinishing || plugin.settings.onboardingCompletionChoice || !plugin.onboardingDone()) return false;
   if (!["fresh", "continue"].includes(choice)) throw new Error("Choose Start fresh or Continue from here.");
   plugin.onboardingFinishing = true;
   try {
     await plugin.onboardingSave;
-    const result = choice === "fresh" ? await cleanOnboardingExamples(plugin, deps) : null;
+    if (plugin.settings.onboardingCompletionChoice || !plugin.onboardingDone()) return false;
+    const result = choice === "fresh" ? await cleanOnboardingExamples(plugin, deps, confirmed) : null;
     plugin.settings.onboardingCompletionChoice = choice;
     plugin.showCompletedOnboarding = false;
     try {
@@ -4549,6 +5566,7 @@ async function finishOnboarding(plugin, choice, deps) {
       delete plugin.settings.onboardingCompletionChoice;
       throw error;
     }
+    if (result && !result.complete) plugin.scheduleOnboardingUpdate?.();
     plugin.onboardingWelcomeUntil = Date.now() + 1e4;
     await plugin.activateSidebar({ specialty: "", surgeon: "", query: "" });
     plugin.refreshOnboarding();
@@ -4567,34 +5585,60 @@ function openOnboardingCompletion(plugin, deps) {
   class CompletionModal extends Modal2 {
     onOpen() {
       this.contentEl.createEl("h2", { text: "You’re ready to start!" });
-      this.contentEl.createEl("p", { text: "Start fresh to remove the example case, Dr. Example, and Example template—including edits you made to them. Or keep the examples to continue practicing." });
-      this.contentEl.createEl("p", { text: "Separately created cases and other user content are kept. Removed examples remain recoverable in Admin → Recovery.", cls: "cst-muted" });
+      this.contentEl.createEl("p", { text: "Start fresh to remove all cases in the owned General / Dr. Example folder, including cases you created for practice and edits you made. This also removes the owned Example template, its revisions, and the example surgeon profile and backend when the folder is empty. Or keep the examples to continue practicing." });
+      this.contentEl.createEl("p", { text: "General, shared images, and cases outside this example surgeon are kept. Removed content remains recoverable in Admin → Recovery.", cls: "cst-muted" });
       const canClean = canCleanOwnedExamples(plugin);
       if (!canClean) this.contentEl.createEl("p", { text: "These examples were added by an earlier version or their locations have changed. Continue from here to keep them; remove unwanted cases individually using Delete. Automatic cleanup is unavailable so your notes and surgeon information stay safe.", cls: "cst-muted" });
       const actions = this.contentEl.createDiv({ cls: "cst-actions" });
       const fresh = actions.createEl("button", { text: "Start fresh", cls: "mod-cta" });
-      fresh.disabled = !canClean;
+      fresh.disabled = true;
       fresh.setAttribute("aria-describedby", "cst-onboarding-recommended");
       if (canClean) this.contentEl.createEl("p", { text: "Recommended: start fresh with your own cases.", attr: { id: "cst-onboarding-recommended" }, cls: "cst-muted" });
       const keep = actions.createEl("button", { text: "Continue from here" });
+      const previewEl = this.contentEl.createDiv({ cls: "cst-onboarding-cleanup-preview" });
+      const loadPreview = async () => {
+        this.preview = null;
+        fresh.disabled = true;
+        previewEl.empty();
+        if (!canClean) return;
+        previewEl.createEl("p", { text: "Checking the cases included in Start fresh…" });
+        try {
+          const preview = await previewOnboardingCleanup(plugin, deps);
+          if (plugin.onboardingCompletionPrompt !== this) return;
+          this.preview = preview;
+          previewEl.empty();
+          previewEl.createEl("p", { text: `Start fresh will archive ${preview.caseCount} case${preview.caseCount === 1 ? "" : "s"}, including ${preview.practiceCaseCount} practice case${preview.practiceCaseCount === 1 ? "" : "s"}:` });
+          const list = previewEl.createEl("ul");
+          for (const path of preview.casePaths) list.createEl("li", { text: path });
+          if (preview.retainedCaseCount) previewEl.createEl("p", { text: `${preview.retainedCaseCount} previously archived case${preview.retainedCaseCount === 1 ? "" : "s"} now restored will be kept.` });
+          fresh.disabled = this.running || false;
+        } catch (error) {
+          if (plugin.onboardingCompletionPrompt !== this) return;
+          previewEl.empty();
+          previewEl.createEl("p", { text: error.message || String(error), cls: "cst-muted" });
+        }
+      };
       const choose = async (choice) => {
-        if (this.running || choice === "fresh" && !canClean) return;
+        if (this.running || choice === "fresh" && !this.preview) return;
         this.running = true;
         fresh.disabled = keep.disabled = true;
         try {
-          await finishOnboarding(plugin, choice, deps);
+          await finishOnboarding(plugin, choice, deps, this.preview);
           this.running = false;
           this.close();
         } catch (error) {
           new Notice2("Onboarding completion paused: " + (error.message || error));
+          await loadPreview();
         } finally {
           this.running = false;
-          fresh.disabled = !canClean;
+          fresh.disabled = !this.preview;
           keep.disabled = false;
         }
       };
       fresh.onclick = () => choose("fresh");
       keep.onclick = () => choose("continue");
+      this.previewReady = loadPreview();
+      return this.previewReady;
     }
     close() {
       if (!this.running) super.close();
@@ -4609,10 +5653,676 @@ function openOnboardingCompletion(plugin, deps) {
   modal.open();
 }
 
+// src/glove-settings.mjs
+var glove_settings_exports = {};
+__export(glove_settings_exports, {
+  DEFAULT_GLOVE_LABELS: () => DEFAULT_GLOVE_LABELS,
+  DEFAULT_GLOVE_SIZES: () => DEFAULT_GLOVE_SIZES,
+  DEFAULT_GLOVE_TYPES: () => DEFAULT_GLOVE_TYPES,
+  GloveValidationError: () => GloveValidationError,
+  createGloveSettingsDraft: () => createGloveSettingsDraft,
+  gloveHelpText: () => gloveHelpText,
+  gloveLegend: () => gloveLegend,
+  initializeGloveSettings: () => initializeGloveSettings,
+  installGloveSettingsRuntime: () => installGloveSettingsRuntime,
+  migrateGloveRegistry: () => migrateGloveRegistry,
+  migrateGloveValue: () => migrateGloveValue,
+  normalizeGloveConfig: () => normalizeGloveConfig,
+  normalizeGloveLabels: () => normalizeGloveLabels,
+  normalizeGloveSizes: () => normalizeGloveSizes,
+  normalizeGloveTypes: () => normalizeGloveTypes,
+  normalizeGloves: () => normalizeGloves,
+  parseGloves: () => parseGloves,
+  prepareGloveSettingsSave: () => prepareGloveSettingsSave,
+  renderGloveSettingsEditor: () => renderGloveSettingsEditor
+});
+var DEFAULT_GLOVE_SIZES = Object.freeze(["5.5", "6", "6.5", "7", "7.5", "8", "8.5", "9", "9.5"]);
+var DEFAULT_GLOVE_LABELS = Object.freeze({ O: "Ortho", B: "Blue", W: "White" });
+var GOWNS = Object.freeze(["XL", "XL-Long", "2X", "2X-Long", "Unknown"]);
+var LEGACY_ALIASES = Object.freeze({ O: ["ortho", "othro", "orthopedic"], B: ["blue"], W: ["white"] });
+var DEFAULT_GLOVE_TYPES = Object.freeze(Object.entries(DEFAULT_GLOVE_LABELS).map(([code, label]) => Object.freeze({ code, label, aliases: Object.freeze([...LEGACY_ALIASES[code]]) })));
+var own2 = (object2, key4) => Object.prototype.hasOwnProperty.call(object2, key4);
+var equal2 = (left, right) => JSON.stringify(left) === JSON.stringify(right);
+var phraseKey = (value) => value.trim().replace(/\s+/g, " ").normalize("NFKC").toUpperCase().toLowerCase();
+var escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+var isObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+var reserved = /* @__PURE__ */ new Set(["x", "unknown", "two", "three", "four"]);
+var GloveValidationError = class extends Error {
+  constructor(message, input, field = "gloves") {
+    super(message);
+    this.name = "GloveValidationError";
+    this.input = input;
+    this.field = field;
+  }
+};
+function invalid(message, input, field) {
+  throw new GloveValidationError(message, input, field);
+}
+function decimalSize(value) {
+  if (typeof value !== "string" && typeof value !== "number") invalid("Glove sizes must be positive decimal numbers.", value, "gloveSizes");
+  const raw = String(value).trim();
+  if (!/^(?:\d+(?:\.\d+)?|\.\d+)$/.test(raw)) invalid(`Invalid glove size: "${raw}". Use a positive decimal number.`, value, "gloveSizes");
+  const [whole, fraction = ""] = raw.split(".");
+  const integer = whole.replace(/^0+/, "") || "0";
+  const decimal = fraction.replace(/0+$/, "");
+  const normalized = integer + (decimal ? `.${decimal}` : "");
+  if (!Number.isFinite(Number(normalized)) || Number(normalized) <= 0 || Number(normalized) > Number.MAX_SAFE_INTEGER) {
+    invalid(`Invalid glove size: "${raw}". Use a finite positive decimal number.`, value, "gloveSizes");
+  }
+  return normalized;
+}
+function compareDecimals(left, right) {
+  const [li, lf = ""] = left.split("."), [ri, rf = ""] = right.split(".");
+  if (li.length !== ri.length) return li.length - ri.length;
+  if (li !== ri) return li < ri ? -1 : 1;
+  const width = Math.max(lf.length, rf.length);
+  const lp = lf.padEnd(width, "0"), rp = rf.padEnd(width, "0");
+  return lp === rp ? 0 : lp < rp ? -1 : 1;
+}
+function normalizeGloveSizes(input = DEFAULT_GLOVE_SIZES) {
+  let values;
+  if (Array.isArray(input)) values = [...input];
+  else if (typeof input === "string") {
+    const trimmed = input.trim();
+    if (!trimmed || /(?:^|,)\s*(?:,|$)/.test(trimmed)) invalid("Enter glove sizes separated by commas or spaces; a size is missing.", input, "gloveSizes");
+    values = trimmed.split(/[\s,]+/);
+  } else invalid("Glove sizes must be a list of decimal numbers.", input, "gloveSizes");
+  if (!values.length) invalid("Enter at least one glove size.", input, "gloveSizes");
+  try {
+    return [...new Set(values.map(decimalSize))].sort(compareDecimals);
+  } catch (error) {
+    if (error instanceof GloveValidationError) error.input = input;
+    throw error;
+  }
+}
+function typeCode(value) {
+  if (typeof value !== "string" || !/^[a-z]+$/i.test(value.trim()) || reserved.has(value.trim().toLowerCase())) {
+    invalid("Glove type codes must contain letters only; X, Unknown, Two, Three and Four are reserved.", value, "gloveTypes");
+  }
+  return value.trim().toUpperCase();
+}
+function inputPhrase(value) {
+  if (typeof value !== "string" || !value.trim() || /[\u0000-\u001f\u007f,;/+&|#]/.test(value) || /^[\d.]/.test(value.trim()) || /\d/.test(value) || reserved.has(phraseKey(value))) {
+    invalid("Glove labels and aliases must be nonempty text without numbers, list separators or reserved quantity words.", value, "gloveTypes");
+  }
+  return value.trim().replace(/\s+/g, " ");
+}
+function displayLabel(value) {
+  if (typeof value !== "string" || !value.trim() || /[\u0000-\u001f\u007f]/.test(value)) {
+    invalid("Enter a nonempty, single-line glove display label.", value, "gloveTypes");
+  }
+  return value.trim().replace(/\s+/g, " ");
+}
+function labelAliases(label) {
+  try {
+    return [inputPhrase(label)];
+  } catch (error) {
+    if (error instanceof GloveValidationError) return [];
+    throw error;
+  }
+}
+function uniqueAliases(values) {
+  const seen = /* @__PURE__ */ new Set();
+  return values.filter((value) => {
+    const key4 = phraseKey(value);
+    if (seen.has(key4)) return false;
+    seen.add(key4);
+    return true;
+  });
+}
+function makeTypeIndex(types) {
+  const index = /* @__PURE__ */ new Map();
+  for (const type of types) {
+    for (const phrase of [type.code, ...labelAliases(type.label), ...type.aliases]) {
+      const key4 = phraseKey(phrase);
+      const previous = index.get(key4);
+      if (previous && previous.code !== type.code) invalid(`Ambiguous glove code or label "${phrase}" belongs to both ${previous.code} and ${type.code}.`, phrase, "gloveTypes");
+      index.set(key4, { phrase, code: type.code });
+    }
+  }
+  for (const key4 of index.keys()) {
+    if (/x$/.test(key4) && (index.has(key4.slice(0, -1).trim()) || reserved.has(key4.slice(0, -1).trim()))) {
+      invalid(`Glove code or label "${index.get(key4).phrase}" is ambiguous with the quantity marker x.`, key4, "gloveTypes");
+    }
+    const suffix = /\s+(?:two|three|four|unknown)$/.exec(key4);
+    if (suffix && index.has(key4.slice(0, suffix.index))) {
+      invalid(`Glove label "${index.get(key4).phrase}" is ambiguous with another glove entry or quantity.`, key4, "gloveTypes");
+    }
+  }
+  return [...index.values()].sort((left, right) => right.phrase.length - left.phrase.length).map((entry) => ({
+    ...entry,
+    pattern: new RegExp(`^${escapeRegex(entry.phrase).replace(/ /g, "\\s+")}`, "iu")
+  }));
+}
+function normalizeGloveTypes(input = DEFAULT_GLOVE_TYPES) {
+  if (!Array.isArray(input)) invalid("Glove types must be a list of codes and display labels.", input, "gloveTypes");
+  const seen = /* @__PURE__ */ new Set();
+  const types = input.map((row) => {
+    if (!isObject(row)) invalid("Invalid glove type row.", row, "gloveTypes");
+    const code = typeCode(row.code), label = displayLabel(row.label);
+    if (seen.has(code)) invalid(`Duplicate glove type code: ${code}.`, row.code, "gloveTypes");
+    seen.add(code);
+    const aliases = row.aliases === void 0 ? LEGACY_ALIASES[code] || [] : row.aliases;
+    if (!Array.isArray(aliases)) invalid(`Aliases for ${code} must be a list.`, aliases, "gloveTypes");
+    return { code, label, aliases: uniqueAliases(aliases.map(inputPhrase)) };
+  });
+  makeTypeIndex(types);
+  return types;
+}
+function normalizeGloveConfig(settings = {}) {
+  if (!isObject(settings)) invalid("Invalid glove settings.", settings, "settings");
+  let types = settings.gloveTypes;
+  if (types === void 0) {
+    if (settings.gloveLabels !== void 0 && !isObject(settings.gloveLabels)) invalid("Invalid glove labels.", settings.gloveLabels, "gloveTypes");
+    const labels = { ...DEFAULT_GLOVE_LABELS, ...settings.gloveLabels };
+    types = Object.entries(labels).map(([code, label]) => ({ code, label: label || DEFAULT_GLOVE_LABELS[code] }));
+  }
+  const gloveTypes = normalizeGloveTypes(types);
+  return {
+    gloveSizes: normalizeGloveSizes(settings.gloveSizes),
+    gloveTypes,
+    gloveLabels: Object.fromEntries(gloveTypes.map(({ code, label }) => [code, label]))
+  };
+}
+function normalizeGloveLabels(labels) {
+  return normalizeGloveConfig(labels === void 0 ? {} : { gloveLabels: labels }).gloveLabels;
+}
+function parseDetailed(input, config) {
+  if (input !== void 0 && input !== null && typeof input !== "string") invalid("Gloves must be text.", input);
+  const raw = input ?? "";
+  if (!raw.trim()) return [{ unknown: true }];
+  const index = makeTypeIndex(config.gloveTypes), sizes = new Set(config.gloveSizes);
+  const entries = [];
+  let offset = 0;
+  const fail2 = () => invalid(`Could not normalize glove entry: "${raw}" (near "${raw.slice(offset)}").`, raw);
+  const skipSpace = () => {
+    offset += /^\s*/.exec(raw.slice(offset))[0].length;
+  };
+  while (offset < raw.length) {
+    offset += /^[\s,;/+&|]*/.exec(raw.slice(offset))[0].length;
+    if (offset === raw.length) break;
+    const unknown = /^unknown(?![\p{L}\p{M}_])/iu.exec(raw.slice(offset));
+    if (unknown) {
+      entries.push({ unknown: true });
+      offset += unknown[0].length;
+      continue;
+    }
+    const sizeMatch = /^#?\s*(?:\d+(?:\.\d+)?|\.\d+)/.exec(raw.slice(offset));
+    if (!sizeMatch) fail2();
+    let size;
+    try {
+      size = decimalSize(sizeMatch[0].replace(/^#?\s*/, ""));
+    } catch {
+      fail2();
+    }
+    if (!sizes.has(size)) fail2();
+    offset += sizeMatch[0].length;
+    skipSpace();
+    let code = "", typeStart = offset, typeEnd = offset;
+    for (const entry of index) {
+      const match = entry.pattern.exec(raw.slice(offset));
+      if (!match) continue;
+      const rest = raw.slice(offset + match[0].length);
+      if (/^[\p{L}\p{M}_]/u.test(rest) && !/^x\s*\d/i.test(rest)) continue;
+      code = entry.code;
+      offset += match[0].length;
+      typeEnd = offset;
+      break;
+    }
+    skipSpace();
+    let quantity = 1;
+    const count = /^x\s*(\d+)/i.exec(raw.slice(offset));
+    const word = /^(two|three|four)(?![\p{L}\p{M}\d_])/iu.exec(raw.slice(offset));
+    if (count) {
+      quantity = Number(count[1]);
+      offset += count[0].length;
+      if (!Number.isSafeInteger(quantity) || quantity < 1 || quantity > 99 || raw[offset] === ".") fail2();
+    } else if (word) {
+      quantity = { two: 2, three: 3, four: 4 }[word[1].toLowerCase()];
+      offset += word[0].length;
+    }
+    entries.push({ size, code, quantity, typeStart, typeEnd });
+    if (raw[offset] === ".") fail2();
+  }
+  if (!entries.length) fail2();
+  return entries;
+}
+function parseGloves(input, settings = {}) {
+  return parseDetailed(input, normalizeGloveConfig(settings)).map((entry) => entry.unknown ? { unknown: true } : { size: entry.size, code: entry.code, quantity: entry.quantity });
+}
+function normalizeGloves(input, settings = {}) {
+  return parseGloves(input, settings).map((entry) => entry.unknown ? "Unknown" : `${entry.size}${entry.code}${entry.quantity > 1 ? `x${entry.quantity}` : ""}`).join(" / ");
+}
+function gloveLegend(value, settings = {}) {
+  const config = normalizeGloveConfig(settings);
+  const used = new Set(parseDetailed(value, config).filter((entry) => !entry.unknown).map((entry) => entry.code));
+  return config.gloveTypes.filter((type) => used.has(type.code)).map((type) => `${type.code} = ${type.label}`).join(" · ");
+}
+function gloveHelpText(settings = {}) {
+  const config = normalizeGloveConfig(settings);
+  return {
+    legend: config.gloveTypes.map((type) => `${type.code} = ${type.label}`).join(" · "),
+    sizes: config.gloveSizes.join(", "),
+    example: `${config.gloveSizes[0]}${config.gloveTypes[0]?.code || ""}x2`,
+    description: "Enter size, optional type code, and optional x quantity (1–99). Use / between entries. Unknown is always available."
+  };
+}
+function createGloveSettingsDraft(settings = {}, { includeOrdinarySettings = false } = {}) {
+  const config = normalizeGloveConfig(settings);
+  return {
+    gloveSizes: config.gloveSizes.join(", "),
+    gloveTypes: config.gloveTypes.map((type) => ({ ...type, aliases: [...type.aliases], originalCode: type.code })),
+    ...includeOrdinarySettings ? { defaultGown: settings.defaultGown ?? "XL" } : {},
+    ...includeOrdinarySettings && settings.developerMode === true ? { verificationDebounceSeconds: String((settings.verificationDebounceMs ?? 45e3) / 1e3) } : {}
+  };
+}
+function validateOrdinaryValue(key4, value) {
+  if (key4 === "defaultGown" && GOWNS.includes(value)) return value;
+  if (key4 === "verificationDebounceMs" && Number.isSafeInteger(value) && value >= 5e3 && value <= 2147483647) return value;
+  invalid(key4 === "defaultGown" ? "Choose a supported default gown." : "Verification debounce must be at least 5 seconds and within the timer limit.", value, key4);
+}
+function ordinaryValue(settings, key4) {
+  return settings?.[key4] ?? (key4 === "defaultGown" ? "XL" : 45e3);
+}
+function ordinaryChanges(baseline, current, draft) {
+  const changes = {};
+  const set = (key4, value) => {
+    validateOrdinaryValue(key4, value);
+    const before = ordinaryValue(current, key4);
+    const merged = mergeField(ordinaryValue(baseline, key4), value, before, key4);
+    if (!equal2(merged, before)) changes[key4] = { before, value: merged };
+  };
+  if (own2(draft, "defaultGown")) set("defaultGown", draft.defaultGown);
+  if (own2(draft, "verificationDebounceSeconds")) {
+    const text = String(draft.verificationDebounceSeconds).trim();
+    if (!/^(?:\d+(?:\.\d+)?|\.\d+)$/.test(text)) invalid("Enter a valid verification debounce in seconds.", draft.verificationDebounceSeconds, "verificationDebounceMs");
+    const [seconds, rawFraction = ""] = text.split(".");
+    const fraction = rawFraction.replace(/0+$/, "");
+    if (fraction.length > 3) invalid("Verification debounce supports millisecond precision (three decimal places).", draft.verificationDebounceSeconds, "verificationDebounceMs");
+    const value = Number(seconds || "0") * 1e3 + Number(fraction.padEnd(3, "0"));
+    if (current?.developerMode !== true && value !== ordinaryValue(baseline, "verificationDebounceMs")) {
+      invalid("Developer mode is required to change verification debounce.", text, "verificationDebounceMs");
+    }
+    set("verificationDebounceMs", value);
+  }
+  return changes;
+}
+function resolveOrdinaryChanges(changes, current) {
+  const patch = {};
+  for (const [key4, change] of Object.entries(changes || {})) {
+    validateOrdinaryValue(key4, change.value);
+    patch[key4] = mergeField(change.before, change.value, ordinaryValue(current, key4), key4);
+  }
+  return patch;
+}
+function conflict2(field) {
+  invalid(`Glove ${field} changed in another window or device. Reload settings before saving.`, field, "conflict");
+}
+function mergeField(base, draft, current, field) {
+  if (equal2(base, draft)) return current;
+  if (!equal2(base, current) && !equal2(draft, current)) conflict2(field);
+  return draft;
+}
+function prepareGloveSettingsSave({ baselineSettings, currentSettings = baselineSettings, draft }) {
+  const base = normalizeGloveConfig(baselineSettings), current = normalizeGloveConfig(currentSettings);
+  if (!isObject(draft) || !Array.isArray(draft.gloveTypes)) invalid("Invalid glove settings draft.", draft, "settings");
+  const ordinary = ordinaryChanges(baselineSettings, currentSettings, draft);
+  const desiredSizes = normalizeGloveSizes(draft.gloveSizes);
+  const gloveSizes = mergeField(base.gloveSizes, desiredSizes, current.gloveSizes, "sizes");
+  const desired = draft.gloveTypes.map((row) => ({ ...normalizeGloveTypes([row])[0], originalCode: row.originalCode }));
+  const baselineRows = new Map(base.gloveTypes.map((row) => [row.code, row]));
+  const latestRows = new Map(current.gloveTypes.map((row) => [row.code, { ...row, aliases: [...row.aliases] }]));
+  const seen = /* @__PURE__ */ new Set(), renames = {};
+  for (const row of desired) {
+    if (row.originalCode == null) {
+      if (baselineRows.has(row.code) || latestRows.has(row.code)) conflict2(`type code ${row.code}`);
+      latestRows.set(row.code, { code: row.code, label: row.label, aliases: [...row.aliases] });
+      continue;
+    }
+    const original = row.originalCode;
+    if (!baselineRows.has(original) || seen.has(original)) invalid("Invalid or duplicate original glove type row.", original, "gloveTypes");
+    seen.add(original);
+    const before = baselineRows.get(original), latest = latestRows.get(original);
+    const requested = { code: row.code, label: row.label, aliases: row.aliases };
+    if (equal2(before, requested)) continue;
+    if (!latest) conflict2(`type ${original}`);
+    const merged = {
+      code: mergeField(before.code, row.code, latest.code, `code ${original}`),
+      label: mergeField(before.label, row.label, latest.label, `label ${original}`),
+      aliases: mergeField(before.aliases, row.aliases, latest.aliases, `aliases ${original}`)
+    };
+    if (merged.code !== original && (baselineRows.has(merged.code) || latestRows.has(merged.code))) {
+      invalid(`Code ${merged.code} already belongs to another glove type; choose an unused code.`, merged.code, "gloveTypes");
+    }
+    merged.aliases = uniqueAliases([
+      ...merged.aliases,
+      ...merged.code !== original ? [original] : [],
+      ...merged.label !== latest.label ? labelAliases(latest.label) : []
+    ]);
+    if (merged.code === original) latestRows.set(original, merged);
+    else {
+      const ordered = [...latestRows].map(([key4, value]) => key4 === original ? [merged.code, merged] : [key4, value]);
+      latestRows.clear();
+      for (const [key4, value] of ordered) latestRows.set(key4, value);
+    }
+    if (merged.code !== original) renames[original] = merged.code;
+  }
+  for (const before of base.gloveTypes) {
+    if (seen.has(before.code)) continue;
+    const latest = latestRows.get(before.code);
+    if (latest && !equal2(before, latest)) conflict2(`type ${before.code}`);
+    latestRows.delete(before.code);
+  }
+  const config = normalizeGloveConfig({ gloveSizes, gloveTypes: [...latestRows.values()] });
+  const settingsPatch = resolveOrdinaryChanges(ordinary, currentSettings);
+  if (!equal2(current.gloveSizes, config.gloveSizes)) settingsPatch.gloveSizes = config.gloveSizes;
+  if (!equal2(current.gloveTypes, config.gloveTypes)) {
+    settingsPatch.gloveTypes = config.gloveTypes;
+    settingsPatch.gloveLabels = config.gloveLabels;
+  }
+  const remaining = new Set(config.gloveTypes.map((type) => type.code));
+  const migrationRequired = Object.keys(renames).length > 0 || current.gloveSizes.some((size) => !config.gloveSizes.includes(size)) || current.gloveTypes.some((type) => !remaining.has(type.code) || type.aliases.some((alias) => !config.gloveTypes.find((row) => row.code === type.code)?.aliases.includes(alias)));
+  return { settingsPatch, ordinaryChanges: ordinary, config, previousConfig: current, renames, migrationRequired, changed: Object.keys(settingsPatch).length > 0 };
+}
+function migrationContext(plan) {
+  const previousConfig = normalizeGloveConfig(plan.previousConfig), config = normalizeGloveConfig(plan.config);
+  if (!isObject(plan.renames)) invalid("Invalid glove code migration map.", plan.renames, "migration");
+  const oldCodes = new Set(previousConfig.gloveTypes.map((type) => type.code));
+  const newCodes = new Set(config.gloveTypes.map((type) => type.code));
+  const targets = /* @__PURE__ */ new Set();
+  for (const [from, to] of Object.entries(plan.renames)) {
+    if (!oldCodes.has(from) || !newCodes.has(to) || targets.has(to) || from !== to && oldCodes.has(to)) {
+      invalid("Glove code migrations require distinct existing source codes and unused destination codes.", plan.renames, "migration");
+    }
+    targets.add(to);
+  }
+  return { previousConfig, config, renames: plan.renames, newCodes };
+}
+function migrateValue(value, context) {
+  const { previousConfig, config, renames, newCodes } = context;
+  let entries, parsedCurrent = false;
+  try {
+    entries = parseDetailed(value, previousConfig);
+  } catch (previousError) {
+    try {
+      entries = parseDetailed(value, { ...config, gloveSizes: [.../* @__PURE__ */ new Set([...previousConfig.gloveSizes, ...config.gloveSizes])] });
+      parsedCurrent = true;
+    } catch {
+      throw previousError;
+    }
+  }
+  const previousIndex = parsedCurrent ? makeTypeIndex(previousConfig.gloveTypes) : [];
+  let next = value;
+  for (const entry of [...entries].reverse()) {
+    if (entry.unknown) continue;
+    let sourceCode = entry.code;
+    if (parsedCurrent && entry.code) {
+      const spelling = value.slice(entry.typeStart, entry.typeEnd);
+      const previous = previousIndex.find((type) => type.pattern.exec(spelling)?.[0].length === spelling.length);
+      if (previous && own2(renames, previous.code)) sourceCode = previous.code;
+    }
+    const code = own2(renames, sourceCode) ? renames[sourceCode] : entry.code;
+    if (code && !newCodes.has(code)) invalid(`Glove type ${entry.code} is still used by a profile. Keep it or rename it before saving.`, value, "migration");
+    if (!config.gloveSizes.includes(entry.size)) invalid(`Glove size ${entry.size} is still used by a profile. Keep it before saving.`, value, "migration");
+    if (code !== sourceCode) next = next.slice(0, entry.typeStart) + code + next.slice(entry.typeEnd);
+  }
+  parseDetailed(next, config);
+  return next;
+}
+function migrateGloveValue(value, plan) {
+  return migrateValue(value, migrationContext(plan));
+}
+function migrateGloveRegistry(registry, plan) {
+  if (!isObject(registry) || !isObject(registry.surgeons)) invalid("Invalid surgeon registry; glove migration stopped.", registry, "registry");
+  const context = migrationContext(plan), changedKeys = [];
+  const surgeons = Object.fromEntries(Object.entries(registry.surgeons).map(([key4, record]) => {
+    if (!isObject(record)) invalid(`Invalid surgeon record: ${key4}.`, record, "registry");
+    if (!own2(record, "gloves")) return [key4, record];
+    let gloves;
+    try {
+      gloves = migrateValue(record.gloves, context);
+    } catch (error) {
+      error.recordKey = key4;
+      throw error;
+    }
+    if (gloves === record.gloves) return [key4, record];
+    changedKeys.push(key4);
+    return [key4, { ...record, gloves }];
+  }));
+  return { registry: changedKeys.length ? { ...registry, surgeons } : registry, changedKeys };
+}
+function bridgeConfig(plan) {
+  const renamed = new Set(Object.keys(plan.renames));
+  const retained = new Set(plan.config.gloveTypes.map((type) => type.code));
+  return normalizeGloveConfig({
+    gloveSizes: [...plan.previousConfig.gloveSizes, ...plan.config.gloveSizes],
+    gloveTypes: [...plan.config.gloveTypes, ...plan.previousConfig.gloveTypes.filter((type) => !renamed.has(type.code) && !retained.has(type.code))]
+  });
+}
+function initializeGloveSettings(plugin) {
+  try {
+    Object.assign(plugin.settings, normalizeGloveConfig(plugin.settings));
+    plugin.gloveSettingsError = "";
+  } catch (error) {
+    plugin.gloveSettingsError = error.message;
+  }
+}
+async function persistGlovePatch(plugin, patch) {
+  if (plugin.unloading) throw new Error("CST Notes is unloading. Retry the glove update after reopening it.");
+  const before = Object.fromEntries(Object.keys(patch).map((key4) => [key4, { present: own2(plugin.settings, key4), value: plugin.settings[key4] }]));
+  Object.assign(plugin.settings, patch);
+  try {
+    await plugin.saveSettings();
+  } catch (error) {
+    for (const [key4, previous] of Object.entries(before)) {
+      if (!equal2(plugin.settings[key4], patch[key4])) continue;
+      if (previous.present) plugin.settings[key4] = previous.value;
+      else delete plugin.settings[key4];
+    }
+    throw error;
+  }
+}
+function installGloveSettingsRuntime(plugin, { refresh = async () => {
+} } = {}) {
+  if (plugin.gloveSettingsRuntimeInstalled) return;
+  plugin.gloveSettingsRuntimeInstalled = true;
+  const mutate = plugin.mutateSurgeonRegistry.bind(plugin);
+  plugin.mutateSurgeonRegistry = (mutator, options) => mutate((registry) => {
+    const previous = new Map(Object.entries(registry.surgeons).map(([key4, record]) => [key4, record?.gloves]));
+    const result = mutator(registry);
+    for (const [key4, record] of Object.entries(registry.surgeons)) {
+      if (record && record.gloves !== previous.get(key4)) {
+        const config = plugin.settings.gloveMigration?.config || plugin.settings;
+        normalizeGloves(record.gloves, config);
+      }
+    }
+    return result;
+  }, options);
+  const reload = async () => {
+    if (plugin.unloading) throw new Error("CST Notes is unloading. Retry the glove update after reopening it.");
+    const saved = await plugin.loadData();
+    if (saved && typeof saved === "object") {
+      Object.assign(plugin.settings, saved);
+      for (const key4 of ["gloveTypes", "gloveSizes", "gloveLabels", "gloveMigration"]) {
+        if (!own2(saved, key4)) delete plugin.settings[key4];
+      }
+    }
+    initializeGloveSettings(plugin);
+  };
+  const refreshAfterSave = async () => {
+    try {
+      await refresh();
+    } catch (error) {
+      plugin.gloveDisplayRefreshError = error.message || String(error);
+    }
+  };
+  const finish = async (plan) => {
+    const state = await plugin.readSurgeonRegistry({ create: false });
+    if (state.invalid) throw new Error(`Glove settings stopped: ${state.error}`);
+    if (state.missing && plugin.settings.initialized) throw new Error("The surgeon registry is missing. Wait for Sync before retrying the glove update.");
+    if (!state.missing) {
+      await plugin.mutateSurgeonRegistry((registry) => {
+        if (plugin.unloading) throw new Error("CST Notes is unloading. Retry the glove update after reopening it.");
+        if (!equal2(plugin.settings.gloveMigration, plan)) conflict2("pending update");
+        const migrated = migrateGloveRegistry(registry, plan);
+        registry.surgeons = migrated.registry.surgeons;
+        return migrated.changedKeys;
+      }, { create: false });
+    }
+    await reload();
+    if (!equal2(plugin.settings.gloveMigration, plan) || !equal2(normalizeGloveConfig(plugin.settings), bridgeConfig(plan))) conflict2("pending update");
+    await persistGlovePatch(plugin, { ...plan.config, ...resolveOrdinaryChanges(plan.ordinaryChanges, plugin.settings), gloveMigration: null });
+    initializeGloveSettings(plugin);
+    await refreshAfterSave();
+    return plugin.settings;
+  };
+  plugin.resumeGloveConfiguration = () => plugin.serializedAdminMutation(async () => {
+    await reload();
+    const plan = plugin.settings.gloveMigration;
+    if (!plan) return plugin.settings;
+    if (plan.version !== 1) throw new Error("Unsupported pending glove update. Keep the saved settings for review.");
+    migrationContext(plan);
+    return finish(plan);
+  });
+  plugin.saveGloveConfiguration = (draft, baselineSettings) => plugin.serializedAdminMutation(async () => {
+    await reload();
+    if (plugin.settings.gloveMigration) throw new Error("A glove update is pending. Use Retry glove update before making more changes.");
+    const plan = prepareGloveSettingsSave({ baselineSettings, currentSettings: plugin.settings, draft });
+    if (!plan.changed) return plugin.settings;
+    if (!plan.migrationRequired) {
+      await persistGlovePatch(plugin, plan.settingsPatch);
+      initializeGloveSettings(plugin);
+      await refreshAfterSave();
+      return plugin.settings;
+    }
+    const state = await plugin.readSurgeonRegistry({ create: false });
+    if (state.invalid) throw new Error(`Glove settings stopped: ${state.error}`);
+    if (state.missing && plugin.settings.initialized) throw new Error("The surgeon registry is missing. Wait for Sync before changing glove types or sizes.");
+    if (!state.missing) migrateGloveRegistry(state.registry, plan);
+    const journal = { version: 1, previousConfig: plan.previousConfig, config: plan.config, renames: plan.renames, ordinaryChanges: plan.ordinaryChanges };
+    await persistGlovePatch(plugin, { ...bridgeConfig(plan), gloveMigration: journal });
+    return finish(journal);
+  });
+}
+function renderGloveSettingsEditor(parent3, plugin, { rows = [] } = {}) {
+  const root = parent3.createDiv({ cls: "cst-glove-settings cst-settings-editor" });
+  let baseline, draft;
+  try {
+    baseline = { ...plugin.settings, ...normalizeGloveConfig(plugin.settings) };
+    draft = createGloveSettingsDraft(baseline, { includeOrdinarySettings: true });
+  } catch (error2) {
+    root.createEl("p", { text: `Glove settings need correction: ${error2.message}`, cls: "cst-warning" });
+    return root;
+  }
+  const controls = [];
+  const input = (parentEl, value, name) => {
+    const field = parentEl.createEl("input", { type: "text", attr: { "aria-label": name } });
+    field.value = value;
+    field.onkeydown = exitSingleLineOnEnter;
+    controls.push(field);
+    return field;
+  };
+  const table = root.createEl("table", { cls: "cst-table" });
+  const summary = (name, value) => {
+    const row = table.createEl("tr");
+    row.createEl("th", { text: name });
+    return row.createEl("td", { text: value });
+  };
+  for (const [name, value] of rows) summary(name, String(value));
+  const gown = summary("Default gown", "").createEl("select", { attr: { "aria-label": "Default gown" } });
+  for (const value of GOWNS) gown.createEl("option", { value, text: value });
+  gown.value = draft.defaultGown;
+  gown.onchange = () => {
+    draft.defaultGown = gown.value;
+  };
+  controls.push(gown);
+  let debounce;
+  if (own2(draft, "verificationDebounceSeconds")) {
+    debounce = input(summary("Verification debounce (seconds)", ""), draft.verificationDebounceSeconds, "Verification debounce (seconds)");
+    debounce.oninput = () => {
+      draft.verificationDebounceSeconds = debounce.value;
+    };
+  }
+  const sizeCell = summary("Glove sizes", "");
+  const sizes = input(sizeCell, draft.gloveSizes, "Glove sizes");
+  sizes.oninput = () => {
+    draft.gloveSizes = sizes.value;
+  };
+  const typeSummary = summary("Glove types", gloveHelpText(baseline).legend);
+  typeSummary.setAttribute("aria-readonly", "true");
+  root.createEl("p", { text: "Edit type codes and labels below. X is reserved for quantities. Unknown is always available. Changes apply only when you select Save.", cls: "cst-muted" });
+  const editor = root.createDiv({ cls: "cst-glove-type-editor" });
+  const renderTypes = () => {
+    editor.empty();
+    for (const row of draft.gloveTypes) {
+      const line = editor.createDiv({ cls: "cst-modal-grid" });
+      const code = input(line, row.code, "Glove type code");
+      code.oninput = () => {
+        row.code = code.value;
+      };
+      const label = input(line, row.label, "Glove display label");
+      label.oninput = () => {
+        row.label = label.value;
+      };
+      const remove = line.createEl("button", { text: "Remove type" });
+      controls.push(remove);
+      remove.onclick = () => {
+        draft.gloveTypes.splice(draft.gloveTypes.indexOf(row), 1);
+        renderTypes();
+      };
+    }
+  };
+  renderTypes();
+  const add = root.createEl("button", { text: "Add label" });
+  controls.push(add);
+  add.onclick = () => {
+    draft.gloveTypes.push({ originalCode: null, code: "", label: "", aliases: [] });
+    renderTypes();
+  };
+  const error = root.createEl("p", { cls: "cst-warning", attr: { role: "alert", "aria-live": "polite" } });
+  const save = root.createEl("button", { text: "Save", cls: "mod-cta" });
+  controls.push(save);
+  const retry = root.createEl("button", { text: "Retry glove update" });
+  const updatePending = () => {
+    retry.hidden = !plugin.settings.gloveMigration;
+    for (const control of controls) control.disabled = !!plugin.settings.gloveMigration;
+  };
+  updatePending();
+  if (plugin.settings.gloveMigration) error.setText("A glove update is pending. Select Retry glove update to finish before editing these settings.");
+  const persist = async (action) => {
+    if (root.gloveSaveBusy) return;
+    root.gloveSaveBusy = true;
+    for (const control of controls) control.disabled = true;
+    retry.disabled = true;
+    error.setText("");
+    try {
+      const saved = await action();
+      baseline = { ...saved, ...normalizeGloveConfig(saved) };
+      draft = createGloveSettingsDraft(baseline, { includeOrdinarySettings: true });
+      gown.value = draft.defaultGown;
+      if (debounce) debounce.value = draft.verificationDebounceSeconds ?? String((saved.verificationDebounceMs ?? 45e3) / 1e3);
+      sizes.value = draft.gloveSizes;
+      typeSummary.setText(gloveHelpText(baseline).legend);
+      renderTypes();
+      error.setText("Settings saved.");
+    } catch (failure) {
+      error.setText(`${failure.message || failure}${plugin.settings.gloveMigration ? " The compatible settings were retained. Select Retry glove update to finish." : ""}`);
+    } finally {
+      root.gloveSaveBusy = false;
+      for (const control of controls) control.disabled = false;
+      retry.disabled = false;
+      updatePending();
+    }
+  };
+  save.onclick = () => save.disabled ? void 0 : persist(() => plugin.saveGloveConfiguration(draft, baseline));
+  retry.onclick = () => retry.disabled ? void 0 : persist(() => plugin.resumeGloveConfiguration());
+  return root;
+}
+
 // src/main.js
 var {
   Plugin,
-  Modal,
+  Modal: ObsidianModal,
   Notice,
   PluginSettingTab,
   Setting,
@@ -4624,13 +6334,35 @@ var {
   normalizePath,
   moment,
   parseYaml,
-  setIcon
+  setIcon,
+  addIcon
 } = require("obsidian");
-var PLUGIN_VERSION = "0.1.10";
+var PLUGIN_VERSION = "0.1.11";
+var Modal = class extends ObsidianModal {
+  constructor(...args) {
+    super(...args);
+    this.modalEl?.addClass?.("cst-accessible-modal");
+    this.contentEl?.addEventListener?.("keydown", exitSingleLineOnEnter);
+  }
+  open() {
+    const result = super.open();
+    this.cstViewport?.removeEventListener?.("resize", this.cstResize);
+    const viewport = this.cstViewport = this.modalEl?.ownerDocument?.defaultView?.visualViewport;
+    this.cstResize = () => this.modalEl?.style?.setProperty?.("--cst-dialog-height", `${viewport?.height || this.modalEl?.ownerDocument?.defaultView?.innerHeight || 800}px`);
+    this.cstResize();
+    viewport?.addEventListener?.("resize", this.cstResize);
+    return result;
+  }
+  close() {
+    this.cstViewport?.removeEventListener?.("resize", this.cstResize);
+    this.cstViewport = null;
+    this.cstResize = null;
+    return super.close();
+  }
+};
 var SCHEMA_VERSION = 3;
-var GLOVE_SIZES = ["Unknown", "5.5", "6", "6.5", "7", "7.5", "8", "8.5", "9", "9.5"];
-var DEFAULT_GLOVE_LABELS = Object.freeze({ O: "Ortho", B: "Blue", W: "White" });
-var GOWNS = ["XL", "XL-Long", "2X", "2X-Long", "Unknown"];
+var DEFAULT_GLOVE_LABELS2 = Object.freeze({ O: "Ortho", B: "Blue", W: "White" });
+var GOWNS2 = ["XL", "XL-Long", "2X", "2X-Long", "Unknown"];
 var CASE_HEADER_LANG = "cst-surgeon-header";
 var CASE_HEADER_BLOCK = "```cst-surgeon-header\n```";
 var MIGRATION_V011 = "v0.1.1-live-surgeon-header";
@@ -4652,7 +6384,7 @@ var DEFAULT_SETTINGS = {
   pluginVersion: "",
   autoOpenSidebar: true,
   autoOpenDefaultVersion: "",
-  gloveLabels: DEFAULT_GLOVE_LABELS,
+  gloveLabels: DEFAULT_GLOVE_LABELS2,
   templateDefaultsVersion: "",
   templateReviewCompleted: false,
   onboardingCompleted: {},
@@ -4734,17 +6466,17 @@ function setFrontmatterScalars(text, fields, removeKeys = []) {
     seen.add(match[1]);
     return [`${match[1]}: ${frontmatterScalar(entries.get(match[1]))}`];
   });
-  for (const [key3, fieldValue] of entries) {
-    if (!seen.has(key3)) lines.push(`${key3}: ${frontmatterScalar(fieldValue)}`);
+  for (const [key4, fieldValue] of entries) {
+    if (!seen.has(key4)) lines.push(`${key4}: ${frontmatterScalar(fieldValue)}`);
   }
   return `${bom}---${newline}${lines.join(newline)}${lines.length ? newline : ""}---${newline}${tail}`;
 }
-function frontmatterTopLevelScalar(text, key3) {
+function frontmatterTopLevelScalar(text, key4) {
   const block = frontmatterBlock(text);
   if (!block) return "";
   for (const line of block.text.replace(/^\uFEFF?---\r?\n/, "").split(/\r?\n/)) {
     const match = /^([A-Za-z0-9_-]+)\s*:\s*(.*?)\s*$/.exec(line);
-    if (!match || match[1] !== key3) continue;
+    if (!match || match[1] !== key4) continue;
     const value = String(match[2] || "").trim();
     return /^(?:null|~|""|'')$/i.test(value) ? "" : value;
   }
@@ -4864,33 +6596,34 @@ function vaultPathsOverlap(first, second) {
   return !!a && !!b && (a === b || a.startsWith(b + "/") || b.startsWith(a + "/"));
 }
 var controlSequence = 0;
-function associatePreviousLabel(parent2, control) {
-  const previous = control?.previousElementSibling || parent2?.lastElementChild;
+function associatePreviousLabel(parent3, control) {
+  const previous = control?.previousElementSibling || parent3?.lastElementChild;
   if (previous?.tagName === "LABEL" && !previous.htmlFor) {
     if (!control.id) control.id = `cst-control-${++controlSequence}`;
     previous.htmlFor = control.id;
   }
   return control;
 }
-function makeInput(parent2, opts = {}) {
-  const input = associatePreviousLabel(parent2, parent2.createEl("input"));
+function makeInput(parent3, opts = {}) {
+  const input = associatePreviousLabel(parent3, parent3.createEl("input"));
   input.type = opts.type || "text";
   if (opts.value != null) input.value = String(opts.value);
   if (opts.placeholder) input.placeholder = String(opts.placeholder);
   if (opts.ariaLabel) input.setAttribute("aria-label", String(opts.ariaLabel));
   else if (opts.placeholder && !input.labels?.length) input.setAttribute("aria-label", String(opts.placeholder));
+  input.addEventListener("keydown", exitSingleLineOnEnter);
   return input;
 }
 function blurOnEnter(input) {
   input.addEventListener("keydown", (event) => {
-    if (event.key !== "Enter") return;
+    if (event.key !== "Enter" || event.isComposing || event.keyCode === 229) return;
     event.preventDefault();
     input.blur();
   });
   return input;
 }
-function makeSelect(parent2, ariaLabel = "") {
-  const select = associatePreviousLabel(parent2, parent2.createEl("select"));
+function makeSelect(parent3, ariaLabel = "") {
+  const select = associatePreviousLabel(parent3, parent3.createEl("select"));
   if (ariaLabel && !select.labels?.length) select.setAttribute("aria-label", ariaLabel);
   return select;
 }
@@ -4951,52 +6684,28 @@ function shortHash(text) {
   for (let i = 0; i < text.length; i++) h = (h << 5) + h ^ text.charCodeAt(i);
   return `v-${(h >>> 0).toString(16).padStart(8, "0")}`;
 }
-function normalizeGloves(input) {
-  const raw = String(input ?? "").trim();
-  if (!raw || /^unknown$/i.test(raw)) return "Unknown";
-  let s = raw.replace(/#/g, "").replace(/\b(?:ortho|othro|orthopedic)\b/gi, "O").replace(/\bwhite\b/gi, "W").replace(/\bblue\b/gi, "B").replace(/\btwo\b/gi, "x2").replace(/\bthree\b/gi, "x3").replace(/\bfour\b/gi, "x4");
-  const tokenRe = /(?:unknown|(?:5\.5|6(?:\.5)?|7(?:\.5)?|8(?:\.5)?|9(?:\.5)?)(?:\s*[OWB])?(?:\s*[xX]\s*\d+)?)/gi;
-  const found = [...s.matchAll(tokenRe)].map((m) => m[0]);
-  const leftover = s.replace(tokenRe, "").replace(/[\s,;/+&|]+/g, "");
-  if (!found.length || leftover.length) {
-    throw new Error(`Could not normalize glove entry: "${raw}"`);
-  }
-  const normalized = found.map((token) => {
-    if (/^unknown$/i.test(token.trim())) return "Unknown";
-    const compact = token.replace(/\s+/g, "").toUpperCase();
-    const m = compact.match(/^(5\.5|6(?:\.5)?|7(?:\.5)?|8(?:\.5)?|9(?:\.5)?)([OWB])?(?:X(\d+))?$/);
-    if (!m) throw new Error(`Invalid glove entry: "${token.trim()}"`);
-    const size = m[1];
-    const type = m[2] || "";
-    const qty = m[3] ? Number(m[3]) : 1;
-    if (!GLOVE_SIZES.includes(size) || qty < 1 || qty > 99) {
-      throw new Error(`Invalid glove entry: "${token.trim()}"`);
-    }
-    return `${size}${type}${qty > 1 ? `x${qty}` : ""}`;
-  });
-  return normalized.join(" / ");
-}
-function normalizeGloveLabels(value) {
-  const source = value && typeof value === "object" ? value : {};
-  return Object.fromEntries(Object.entries(DEFAULT_GLOVE_LABELS).map(([code, fallback]) => [
-    code,
-    String(source[code] || "").trim() || fallback
-  ]));
+function normalizeGloves2(input, settings = {}) {
+  return glove_settings_exports.normalizeGloves(input, settings);
 }
 function formatGloves(value) {
   return String(value || "Unknown").replace(/x(\d+)/gi, " x$1");
 }
-function gloveLegend(value, labels) {
-  const normalized = normalizeGloveLabels(labels);
-  const codes = [...String(value || "").toUpperCase().matchAll(/(?:5\.5|6(?:\.5)?|7(?:\.5)?|8(?:\.5)?|9(?:\.5)?)([OBW])/g)].map((match) => match[1]);
-  const used = new Set(codes);
-  return ["O", "B", "W"].filter((code) => used.has(code)).map((code) => `${code} = ${normalized[code]}`).join(" · ");
+function gloveLegend2(value, settings) {
+  try {
+    return glove_settings_exports.gloveLegend(value, settings);
+  } catch (_) {
+    return "Glove value needs review";
+  }
 }
-function addGloveHelp(parent2, labels) {
-  const normalized = normalizeGloveLabels(labels);
-  const help = parent2.createDiv({ cls: "cst-field-help cst-glove-help" });
-  help.createDiv({ text: `o = ${normalized.O} · b = ${normalized.B} · w = ${normalized.W}` });
-  help.createDiv({ text: 'Examples: "8b8w" → 8B / 8W · "8wx2" → 8W x2' });
+function addGloveHelp(parent3, settings) {
+  const help = parent3.createDiv({ cls: "cst-field-help cst-glove-help" });
+  try {
+    const guidance = glove_settings_exports.gloveHelpText(settings);
+    help.createDiv({ text: guidance.legend });
+    help.createDiv({ text: `Sizes: ${guidance.sizes}. ${guidance.description} Example: "${guidance.example}".` });
+  } catch (error) {
+    help.createDiv({ text: error.message || String(error) });
+  }
   return help;
 }
 function contextFromPath(path, root) {
@@ -5170,7 +6879,8 @@ var CSTNotesPlugin = class extends Plugin {
   async onload() {
     const loadedSettings = await this.loadData();
     this.settings = Object.assign({}, DEFAULT_SETTINGS, loadedSettings);
-    this.settings.gloveLabels = normalizeGloveLabels(loadedSettings?.gloveLabels);
+    glove_settings_exports.initializeGloveSettings(this);
+    glove_settings_exports.installGloveSettingsRuntime(this, { refresh: () => this.refreshGloveSettingsDisplays() });
     this.unloading = false;
     this.onboardingCaseBodies = /* @__PURE__ */ new Map();
     this.verifyTimers = /* @__PURE__ */ new Map();
@@ -5203,16 +6913,17 @@ var CSTNotesPlugin = class extends Plugin {
       parseFrontmatterObject,
       id,
       yamlString,
-      normalizeGloves,
+      normalizeGloves: (value) => normalizeGloves2(value, this.settings),
       CASE_HEADER_BLOCK,
       LegacyTemplateMigrationModal,
       shortHash,
       setIcon,
       defaultSpecialties: DEFAULT_SPECIALTIES
     });
-    this.registerView(VIEW_TYPE_CST_SIDEBAR, (leaf) => new CSTSidebarView(leaf, this));
+    this.registerView(VIEW_TYPE_CST_SIDEBAR, (leaf2) => new CSTSidebarView(leaf2, this));
+    addIcon?.("cst-open-kelly", KELLY_ICON);
     this.addRibbonIcon("plus-circle", "CST: New Case", () => this.openNewCase());
-    this.addRibbonIcon("panel-right", "CST: Open App", () => this.navigateFromUI("Open CST app", () => this.activateSidebar()));
+    this.addRibbonIcon("cst-open-kelly", "CST: Open App", () => this.navigateFromUI("Open CST app", () => this.activateSidebar()));
     this.addRibbonIcon("settings", "CST: Open Admin", () => this.navigateFromUI("Open CST Admin", () => this.openAdmin()));
     this.addCommand({ id: "new-case", name: "New Case", callback: () => this.openNewCase() });
     this.addCommand({ id: "quick-case", name: "Quick Case", callback: () => new QuickCaseModal(this).open() });
@@ -5250,6 +6961,7 @@ var CSTNotesPlugin = class extends Plugin {
     this.registerMarkdownCodeBlockProcessor("cst-onboarding", async (_src, el) => this.renderOnboardingAdmin(el));
     this.registerMarkdownPostProcessor(async (el, ctx) => {
       const path = normalizePath(ctx.sourcePath || "");
+      if (path === this.p("Admin/Images.md")) return;
       if (!path.startsWith(this.p() + "/") || path.startsWith(this.p("Admin/Backups") + "/") || path.startsWith(this.p("_Graph/Surgeons") + "/")) return;
       const section = ctx.getSectionInfo?.(el);
       if (!section || el.querySelector(".cst-admin-home")) return;
@@ -5311,11 +7023,24 @@ var CSTNotesPlugin = class extends Plugin {
     this.registerEvent(this.app.workspace.on("layout-change", () => this.updateManagedBodyClass()));
     this.app.workspace.onLayoutReady(() => {
       if (this.unloading) return;
+      this.dispatchVaultEvent("interface preferences", async () => {
+        const result = await applyUIPreferences(this.app, { mobile: Platform.isMobile, pluginId: this.manifest?.id || "cst-notes" });
+        this.uiPreferencesStatus = result;
+        this.refreshNavigationPreference();
+        if (result.unsupported.length) console.warn("CST Notes retained navigation fallback:", result.unsupported.join(", "));
+      });
+      this.registerEvent(this.app.vault.on("config-changed", () => this.refreshNavigationPreference()));
+      for (const doc of this.workspaceDocuments()) {
+        this.registerDomEvent?.(doc, "keydown", (event) => {
+          if (event.target?.closest?.(".cst-profile-card, .cst-live-header, .cst-settings-editor, .cst-app-view, .cst-managed-leaf")) exitSingleLineOnEnter(event);
+        });
+      }
       this.registerEvent(this.app.vault.on("create", (file) => this.dispatchVaultEvent("create", () => this.onCreated(file))));
       this.registerEvent(this.app.vault.on("modify", (file) => this.onModified(file)));
       this.registerEvent(this.app.vault.on("rename", (file, oldPath) => this.dispatchVaultEvent("rename", () => this.onRenamed(file, oldPath))));
       this.registerEvent(this.app.vault.on("delete", (file) => this.dispatchVaultEvent("delete", () => this.onDeleted(file))));
       const refreshExample = (file) => {
+        if (this.onboardingUpdatePending) this.scheduleOnboardingUpdate();
         if (file === this.exampleFile || !this.exampleCase() && file instanceof TFile && this.isCasePath(file.path)) {
           if (this.exampleRefreshTimer) window.clearTimeout(this.exampleRefreshTimer);
           this.exampleRefreshTimer = window.setTimeout(() => this.dispatchVaultEvent("example presence", () => this.findExampleCase()), 300);
@@ -5326,6 +7051,7 @@ var CSTNotesPlugin = class extends Plugin {
       this.startupTimer = window.setTimeout(async () => {
         this.startupTimer = null;
         if (this.unloading) return;
+        this.onboardingStartupRunning = true;
         try {
           if (this.settings.resetNeedsReview) {
             new Notice("CST Notes reset needs review. Open Admin → Recovery before resuming automatic work.");
@@ -5334,20 +7060,37 @@ var CSTNotesPlugin = class extends Plugin {
           if (!this.settings.initialized) new SetupModal(this, false).open();
           else {
             const ready = await this.quickStructureCheck({ allowMissingRegistryForMigration: true });
-            if (!ready || this.unloading) return;
+            if (this.unloading) return;
+            if (!ready) {
+              this.onboardingUpgradePending = true;
+              this.onboardingStartupPending = "resources";
+              this.scheduleOnboardingUpdate();
+              return;
+            }
             const upgraded = await this.runUpgradeMigrations();
-            if (upgraded) await this.startResourceCollection();
+            if (upgraded) {
+              const status = await this.startResourceCollection({ cleanupLegacyMarkers: this.settings.resourceMarkerCleanupRevision !== 1 });
+              if (!status?.error && this.resourceFeatures?.lastMarkerCleanup && !this.resourceFeatures.lastMarkerCleanup.skipped?.length) {
+                this.settings.resourceMarkerCleanupRevision = 1;
+                await this.saveSettings();
+              }
+            }
             await this.findExampleCase();
             if (!this.unloading && this.settings.autoOpenSidebar) await this.activateSidebar();
           }
         } catch (error) {
           console.error("CST startup", error);
           if (!this.unloading) new Notice(`CST startup paused safely: ${error.message || error}`);
+        } finally {
+          this.onboardingStartupRunning = false;
         }
       }, 600);
     });
   }
   onunload() {
+    if (this.onboardingUpdateTimer) window.clearTimeout(this.onboardingUpdateTimer);
+    this.onboardingUpdateTimer = null;
+    for (const doc of this.workspaceDocuments()) doc.body?.classList?.remove("cst-mobile-shortcuts-ready");
     this.unloading = true;
     this.stopResourceCollection?.();
     for (const doc of this.workspaceDocuments()) {
@@ -5368,12 +7111,14 @@ var CSTNotesPlugin = class extends Plugin {
   async onExternalSettingsChange() {
     const loadedSettings = await this.loadData();
     this.settings = Object.assign({}, DEFAULT_SETTINGS, loadedSettings);
-    this.settings.gloveLabels = normalizeGloveLabels(loadedSettings?.gloveLabels);
+    glove_settings_exports.initializeGloveSettings(this);
     this.adminWorkspace?.refreshMode?.();
-    if (this.settings.initialized && !this.featureMutationActive) await this.startResourceCollection?.();
+    if (this.settings.initialized) this.scheduleOnboardingUpdate();
+    this.refreshOnboarding();
+    if (this.settings.initialized && !this.featureMutationActive && !this.onboardingStartupPending) await this.startResourceCollection?.();
     const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE_CST_SIDEBAR);
-    for (const leaf of leaves) {
-      if (leaf.view instanceof CSTSidebarView) leaf.view.queueRender();
+    for (const leaf2 of leaves) {
+      if (leaf2.view instanceof CSTSidebarView) leaf2.view.queueRender();
     }
   }
   async saveSettings() {
@@ -5392,13 +7137,20 @@ var CSTNotesPlugin = class extends Plugin {
       ["home", "Open CST Notes", "Tap a Home button or search for CST Notes: Open CST app."],
       ["hierarchy", `Explore a specialty (e.g., ${specialty})`, `From Home, tap ${specialty}, then ${surgeon2}.`],
       ["profile", "View a surgeon profile", `Open ${surgeon2} to see the live surgeon profile.`],
-      ["templateEdit", "View and edit a template", exampleTemplate instanceof TFile ? "Tap Templates, open Example template, and save an edit." : "Tap Templates, open a template, and save an edit."],
+      ["templateEdit", "View and edit a template", exampleTemplate instanceof TFile ? "Tap Templates, open Example template, and make an edit." : "Tap Templates, open a template, and make an edit."],
       ["caseEdit", "Create and edit a case", "Open a specialty and surgeon, tap New case, then edit your case."],
       ["admin", "Open Admin", "Tap Admin at the bottom of the CST Notes app screen."]
     ];
   }
+  onboardingCompletionState() {
+    const choice = this.settings.onboardingCompletionChoice;
+    const keptExamples = choice === "continue";
+    const checklistComplete = this.onboardingTasks().every(([key4]) => this.settings.onboardingCompleted?.[key4] === true);
+    return { completed: keptExamples || choice === "fresh" && checklistComplete, keptExamples, checklistComplete };
+  }
   onboardingDone() {
-    return this.onboardingTasks().every(([key3]) => this.settings.onboardingCompleted?.[key3]);
+    const state = this.onboardingCompletionState();
+    return state.keptExamples || state.checklistComplete;
   }
   async findExampleCase() {
     const revision = this.exampleLookupRevision = (this.exampleLookupRevision || 0) + 1;
@@ -5423,9 +7175,9 @@ var CSTNotesPlugin = class extends Plugin {
     this.exampleFile = found;
     this.refreshOnboarding();
   }
-  completeOnboarding(key3) {
-    if (!this.exampleCase() || this.onboardingDone() || this.settings.onboardingCompleted?.[key3]) return;
-    this.settings.onboardingCompleted = { ...this.settings.onboardingCompleted, [key3]: true };
+  completeOnboarding(key4) {
+    if (!this.exampleCase() || this.onboardingDone() || this.settings.onboardingCompleted?.[key4]) return;
+    this.settings.onboardingCompleted = { ...this.settings.onboardingCompleted, [key4]: true };
     this.onboardingSave = (this.onboardingSave || Promise.resolve()).catch(() => {
     }).then(() => this.saveSettings());
     this.onboardingSave.catch((error) => console.error("CST onboarding progress could not be saved", error));
@@ -5438,7 +7190,8 @@ var CSTNotesPlugin = class extends Plugin {
       const present = !!this.exampleCase();
       const done = this.onboardingDone();
       const welcome = (this.onboardingWelcomeUntil || 0) > Date.now();
-      const mode = welcome ? "welcome" : present && !this.settings.onboardingDismissed && (!done || this.showCompletedOnboarding) ? "checklist" : "hidden";
+      const keptExamples = this.onboardingCompletionState().keptExamples;
+      const mode = welcome ? "welcome" : present && !this.settings.onboardingDismissed && (!done || this.showCompletedOnboarding) ? keptExamples ? "completed-kept" : "checklist" : "hidden";
       for (const host of this.onboardingHosts || []) {
         if (host.isConnected === false) {
           this.onboardingHosts.delete(host);
@@ -5449,7 +7202,7 @@ var CSTNotesPlugin = class extends Plugin {
           this.renderOnboarding(host);
         }
       }
-      const count = this.onboardingTasks().filter(([key3]) => this.settings.onboardingCompleted?.[key3]).length;
+      const count = this.onboardingTasks().filter(([key4]) => this.settings.onboardingCompleted?.[key4]).length;
       for (const card of this.onboardingCards || []) {
         if (card.isConnected === false) {
           this.onboardingCards.delete(card);
@@ -5461,9 +7214,9 @@ var CSTNotesPlugin = class extends Plugin {
         if (heading) heading.textContent = `Getting started — ${count} of 6 complete`;
         const progress = card.querySelector("progress");
         if (progress) progress.value = count;
-        for (const [key3, label, hint] of this.onboardingTasks()) {
-          const row = card.querySelector(`[data-onboarding-task="${key3}"]`);
-          if (row) row.textContent = `${this.settings.onboardingCompleted?.[key3] ? "✓" : "○"} ${label} — ${hint}`;
+        for (const [key4, label, hint] of this.onboardingTasks()) {
+          const row = card.querySelector(`[data-onboarding-task="${key4}"]`);
+          if (row) row.textContent = `${this.settings.onboardingCompleted?.[key4] ? "✓" : "○"} ${label} — ${hint}`;
         }
       }
       if (this.onboardingTimer) window.clearTimeout(this.onboardingTimer);
@@ -5513,7 +7266,8 @@ var CSTNotesPlugin = class extends Plugin {
     this.onboardingHosts || (this.onboardingHosts = /* @__PURE__ */ new Set());
     this.onboardingHosts.add(el);
     const welcome = (this.onboardingWelcomeUntil || 0) > Date.now();
-    el.cstOnboardingMode = welcome ? "welcome" : !this.exampleCase() || this.settings.onboardingDismissed || this.onboardingDone() && !this.showCompletedOnboarding ? "hidden" : "checklist";
+    const keptExamples = this.onboardingCompletionState().keptExamples;
+    el.cstOnboardingMode = welcome ? "welcome" : !this.exampleCase() || this.settings.onboardingDismissed || this.onboardingDone() && !this.showCompletedOnboarding ? "hidden" : keptExamples ? "completed-kept" : "checklist";
     if (el.cstOnboardingMode === "hidden") return;
     const card = el.createDiv({ cls: "cst-onboarding-card" });
     this.onboardingCards || (this.onboardingCards = /* @__PURE__ */ new Set());
@@ -5525,6 +7279,14 @@ var CSTNotesPlugin = class extends Plugin {
       this.refreshOnboarding();
       return;
     }
+    if (keptExamples) {
+      card.createEl("h3", { text: "Completed — Kept examples" });
+      card.createEl("p", { text: "You finished onboarding and chose to keep the examples for practice." });
+      const hide = card.createDiv({ cls: "cst-actions" }).createEl("button", { text: "Hide checklist" });
+      hide.onclick = () => new OnboardingHideModal(this).open();
+      this.refreshOnboarding();
+      return;
+    }
     card.createEl("h3");
     const progress = card.createEl("progress");
     progress.max = 6;
@@ -5532,7 +7294,7 @@ var CSTNotesPlugin = class extends Plugin {
     card.createEl("p", { text: 'Reopen CST Notes using the available Home buttons or swipe down and search for "CST Notes: Open CST app".' });
     card.createEl("p", { text: "Steps complete as you use the app.", cls: "cst-muted" });
     const list = card.createEl("ul");
-    for (const [key3] of this.onboardingTasks()) list.createEl("li").setAttribute("data-onboarding-task", key3);
+    for (const [key4] of this.onboardingTasks()) list.createEl("li").setAttribute("data-onboarding-task", key4);
     const actions = card.createDiv({ cls: "cst-actions" });
     const template = actions.createEl("button", { text: "Explore templates" });
     template.onclick = () => this.navigateFromUI("Open templates", () => this.openPath(this.p("Admin/Backend/Templates.md")));
@@ -5546,8 +7308,104 @@ var CSTNotesPlugin = class extends Plugin {
     home.onclick = () => this.navigateFromUI("Home", () => this.activateSidebar({ specialty: "", surgeon: "", query: "" }));
     return home;
   }
+  refreshNavigationPreference() {
+    const ready = Platform.isMobile && mobileNavigationReady(this.app, this.manifest?.id || "cst-notes");
+    for (const doc of this.workspaceDocuments()) doc.body?.classList?.toggle("cst-mobile-shortcuts-ready", !!ready);
+  }
+  scheduleOnboardingUpdate(delay = 1500) {
+    if (this.unloading || !this.settings.initialized || this.settings.resetNeedsReview) return;
+    this.onboardingUpdatePending = true;
+    if (this.onboardingUpdateTimer) window.clearTimeout(this.onboardingUpdateTimer);
+    this.onboardingUpdateTimer = window.setTimeout(() => {
+      this.onboardingUpdateTimer = null;
+      if (this.unloading || !this.settings.initialized || this.settings.resetNeedsReview || !this.onboardingUpdatePending) return;
+      if (this.featureMutationActive || this.onboardingStartupRunning || this.onboardingUpdateRun) {
+        this.scheduleOnboardingUpdate();
+        return;
+      }
+      const run = Promise.resolve().then(async () => {
+        if (!await this.quickStructureCheck({ quiet: true, allowMissingRegistryForMigration: !!this.onboardingUpgradePending })) {
+          this.scheduleOnboardingUpdate(3e3);
+          return;
+        }
+        if (this.unloading || !this.settings.initialized || this.settings.resetNeedsReview) return;
+        if (this.featureMutationActive) {
+          this.scheduleOnboardingUpdate();
+          return;
+        }
+        if (this.onboardingUpgradePending) {
+          const upgraded = await this.runUpgradeMigrations();
+          this.onboardingUpgradePending = !upgraded;
+          if (!upgraded) this.onboardingUpdatePending = true;
+        } else {
+          const result = await updateOnboardingExamples(this, { TFile, TFolder, parseFrontmatterObject });
+          this.onboardingUpdatePending = result.cleanup === "pending";
+        }
+        if (this.onboardingStartupPending && !this.onboardingUpgradePending) {
+          if (this.unloading || !this.settings.initialized || this.settings.resetNeedsReview) return;
+          if (this.featureMutationActive) {
+            this.scheduleOnboardingUpdate();
+            return;
+          }
+          if (this.onboardingStartupPending === "resources") {
+            const status = await this.startResourceCollection({ cleanupLegacyMarkers: this.settings.resourceMarkerCleanupRevision !== 1 });
+            if (this.unloading || !this.settings.initialized || this.settings.resetNeedsReview) return;
+            if (status?.error || status?.paused || status?.stopped) {
+              this.scheduleOnboardingUpdate(3e3);
+              return;
+            }
+            this.onboardingStartupPending = "marker-revision";
+          }
+          if (this.featureMutationActive) {
+            this.scheduleOnboardingUpdate();
+            return;
+          }
+          if (this.onboardingStartupPending === "marker-revision") {
+            if (this.resourceFeatures?.lastMarkerCleanup && !this.resourceFeatures.lastMarkerCleanup.skipped?.length) {
+              const previous = this.settings.resourceMarkerCleanupRevision;
+              this.settings.resourceMarkerCleanupRevision = 1;
+              try {
+                await this.saveSettings();
+              } catch (error) {
+                this.settings.resourceMarkerCleanupRevision = previous;
+                throw error;
+              }
+            }
+            this.onboardingStartupPending = "navigation";
+          }
+          if (this.unloading || !this.settings.initialized || this.settings.resetNeedsReview) return;
+          await this.findExampleCase();
+          if (this.unloading || !this.settings.initialized || this.settings.resetNeedsReview) return;
+          if (this.featureMutationActive) {
+            this.scheduleOnboardingUpdate();
+            return;
+          }
+          if (this.settings.autoOpenSidebar) await this.activateSidebar();
+          this.onboardingStartupPending = null;
+        }
+        this.refreshOnboarding();
+      }).catch((error) => {
+        this.onboardingUpdatePending = true;
+        if (this.onboardingStartupPending) this.scheduleOnboardingUpdate(3e3);
+        console.warn("CST example cleanup deferred", error);
+      }).finally(() => {
+        if (this.onboardingUpdateRun === run) this.onboardingUpdateRun = null;
+      });
+      this.onboardingUpdateRun = run;
+      return run;
+    }, delay);
+  }
+  renderInterfaceStatus(el) {
+    el.createEl("h2", { text: "Navigation and updates" });
+    const status = this.uiPreferencesStatus;
+    el.createEl("p", { text: status?.updates ? "Community plugin update checks are enabled. Updates are not installed automatically." : "Automatic update checks could not be confirmed. Enable them in Obsidian Settings → Community plugins." });
+    el.createEl("p", { text: Platform.isMobile && status?.mobile ? "The ribbon shortcut and swipe-down action open CST Notes. Home stays available in its navigation panel." : "Home buttons remain available. On mobile, set the ribbon quick-access item and swipe-down Quick Action to Open CST Notes in Obsidian's Interface settings." });
+    el.createEl("p", { text: "CST Notes applies its navigation defaults once on this device for this update. Later manual changes are preserved until a new navigation-defaults update." });
+  }
   async renderOnboardingAdmin(el) {
     el.createEl("h2", { text: "Onboarding" });
+    const completion = this.onboardingCompletionState();
+    if (completion.completed) el.createEl("p", { text: completion.keptExamples ? "Completed — Kept examples" : "Completed — Start fresh chosen", attr: { role: "status" } });
     el.createEl("p", { text: "The checklist is available while the example case is in your CST Notes library." });
     const add = el.createEl("button", { text: "Add example case" });
     add.disabled = !!this.exampleCase();
@@ -5652,8 +7510,8 @@ var CSTNotesPlugin = class extends Plugin {
     const documents = /* @__PURE__ */ new Set();
     if (typeof document !== "undefined") documents.add(document);
     try {
-      this.app.workspace.iterateAllLeaves((leaf) => {
-        const doc = leaf?.view?.containerEl?.ownerDocument || leaf?.containerEl?.ownerDocument;
+      this.app.workspace.iterateAllLeaves((leaf2) => {
+        const doc = leaf2?.view?.containerEl?.ownerDocument || leaf2?.containerEl?.ownerDocument;
         if (doc) documents.add(doc);
       });
     } catch (_) {
@@ -5672,10 +7530,10 @@ var CSTNotesPlugin = class extends Plugin {
       doc.querySelectorAll?.(".cst-managed-leaf").forEach((el) => el.classList.remove("cst-managed-leaf"));
     }
     try {
-      this.app.workspace.iterateAllLeaves((leaf) => {
-        const doc = leaf?.view?.containerEl?.ownerDocument || leaf?.containerEl?.ownerDocument;
-        const path = leaf?.view?.file?.path || "";
-        const source = leaf?.view?.containerEl || leaf?.containerEl;
+      this.app.workspace.iterateAllLeaves((leaf2) => {
+        const doc = leaf2?.view?.containerEl?.ownerDocument || leaf2?.containerEl?.ownerDocument;
+        const path = leaf2?.view?.file?.path || "";
+        const source = leaf2?.view?.containerEl || leaf2?.containerEl;
         const container = source?.closest?.(".workspace-leaf") || (source?.matches?.(".workspace-leaf") ? source : null);
         if (doc && container && this.isCSTInterfacePath(path)) container.classList.add("cst-managed-leaf");
       });
@@ -5780,16 +7638,16 @@ var CSTNotesPlugin = class extends Plugin {
     return (this.ignoreCreateUntil.get(normalizePath(path)) || 0) > Date.now();
   }
   markInternalRename(oldPath, newPath) {
-    const key3 = `${normalizePath(oldPath)}\0${normalizePath(newPath)}`;
-    this.ignoreRenameUntil.set(key3, Date.now() + 5e3);
+    const key4 = `${normalizePath(oldPath)}\0${normalizePath(newPath)}`;
+    this.ignoreRenameUntil.set(key4, Date.now() + 5e3);
     window.setTimeout(() => {
-      if ((this.ignoreRenameUntil.get(key3) || 0) <= Date.now()) this.ignoreRenameUntil.delete(key3);
+      if ((this.ignoreRenameUntil.get(key4) || 0) <= Date.now()) this.ignoreRenameUntil.delete(key4);
     }, 5200);
   }
   isInternalRename(oldPath, newPath) {
-    const key3 = `${normalizePath(oldPath)}\0${normalizePath(newPath)}`;
-    const internal = (this.ignoreRenameUntil.get(key3) || 0) > Date.now();
-    if (internal) this.ignoreRenameUntil.delete(key3);
+    const key4 = `${normalizePath(oldPath)}\0${normalizePath(newPath)}`;
+    const internal = (this.ignoreRenameUntil.get(key4) || 0) > Date.now();
+    if (internal) this.ignoreRenameUntil.delete(key4);
     return internal;
   }
   async fileFrontmatter(file, expectedPath = "") {
@@ -5938,9 +7796,9 @@ var CSTNotesPlugin = class extends Plugin {
   }
   async importSurgeonRecordIfNewer(specialty, surgeon2, data) {
     const sourceRecord = this.adminRegistryRecord(data, specialty, surgeon2);
-    const key3 = this.surgeonKey(specialty, surgeon2);
+    const key4 = this.surgeonKey(specialty, surgeon2);
     const result = await this.mutateSurgeonRegistry((registry) => {
-      const current = registry.surgeons[key3] || null;
+      const current = registry.surgeons[key4] || null;
       const before = current ? JSON.parse(JSON.stringify(current)) : null;
       const sourceTime = Date.parse(sourceRecord.last_verified || sourceRecord.created || 0) || 0;
       const currentTime = Date.parse(current?.last_verified || current?.created || 0) || 0;
@@ -5948,23 +7806,23 @@ var CSTNotesPlugin = class extends Plugin {
         return { changed: false, before, record: before };
       }
       const record = JSON.parse(JSON.stringify(sourceRecord));
-      registry.surgeons[key3] = record;
+      registry.surgeons[key4] = record;
       return { changed: true, before, record: JSON.parse(JSON.stringify(record)) };
     });
     return { imported: !!result.value?.changed, ...result.value };
   }
   async seedSurgeonGlovesIfUnknown(specialty, surgeon2, gloves, verified = "") {
-    const canonical = normalizeGloves(gloves);
-    const key3 = this.surgeonKey(specialty, surgeon2);
+    const canonical = normalizeGloves2(gloves, this.settings);
+    const key4 = this.surgeonKey(specialty, surgeon2);
     const result = await this.mutateSurgeonRegistry((registry) => {
-      const current = registry.surgeons[key3] || null;
+      const current = registry.surgeons[key4] || null;
       const before = current ? JSON.parse(JSON.stringify(current)) : null;
       const timestamp = verified || nowISO();
       const base = current ? this.adminRegistryRecord(current, specialty, surgeon2) : this.adminRegistryRecord({
         cst_id: id("surgeon"),
         aliases: [],
         gloves: "Unknown",
-        gown: GOWNS.includes(this.settings.defaultGown) ? this.settings.defaultGown : "Unknown",
+        gown: GOWNS2.includes(this.settings.defaultGown) ? this.settings.defaultGown : "Unknown",
         schema_version: SCHEMA_VERSION,
         created: timestamp,
         last_verified: timestamp
@@ -5976,15 +7834,15 @@ var CSTNotesPlugin = class extends Plugin {
       next.gloves = canonical;
       next.last_verified = timestamp;
       next.schema_version = SCHEMA_VERSION;
-      registry.surgeons[key3] = next;
+      registry.surgeons[key4] = next;
       return { changed: true, before, record: JSON.parse(JSON.stringify(next)) };
     });
     return result.value;
   }
   async ensureMigrationSurgeonRecord(specialty, surgeon2) {
-    const key3 = this.surgeonKey(specialty, surgeon2);
+    const key4 = this.surgeonKey(specialty, surgeon2);
     const result = await this.mutateSurgeonRegistry((registry) => {
-      const current = registry.surgeons[key3] || null;
+      const current = registry.surgeons[key4] || null;
       if (current) {
         const record2 = this.adminRegistryRecord(current, specialty, surgeon2);
         return { changed: false, before: JSON.parse(JSON.stringify(current)), record: record2 };
@@ -5994,25 +7852,25 @@ var CSTNotesPlugin = class extends Plugin {
         cst_id: id("surgeon"),
         aliases: [],
         gloves: "Unknown",
-        gown: GOWNS.includes(this.settings.defaultGown) ? this.settings.defaultGown : "Unknown",
+        gown: GOWNS2.includes(this.settings.defaultGown) ? this.settings.defaultGown : "Unknown",
         schema_version: SCHEMA_VERSION,
         created: timestamp,
         last_verified: timestamp
       }, specialty, surgeon2);
-      registry.surgeons[key3] = JSON.parse(JSON.stringify(record));
+      registry.surgeons[key4] = JSON.parse(JSON.stringify(record));
       return { changed: true, before: null, record: JSON.parse(JSON.stringify(record)) };
     });
     return result.value;
   }
   rememberRegistryMutation(mutations, specialty, surgeon2, result) {
     if (!result?.changed) return;
-    const key3 = this.surgeonKey(specialty, surgeon2);
-    const existing = mutations.get(key3);
+    const key4 = this.surgeonKey(specialty, surgeon2);
+    const existing = mutations.get(key4);
     if (existing) {
       existing.expected = JSON.parse(JSON.stringify(result.record));
       return;
     }
-    mutations.set(key3, {
+    mutations.set(key4, {
       specialty,
       surgeon: surgeon2,
       expected: JSON.parse(JSON.stringify(result.record)),
@@ -6803,15 +8661,15 @@ ${body}
   async getRegistrySurgeon(specialty, surgeon2, options = {}) {
     const state = await this.readSurgeonRegistry(options);
     const { file, registry } = state;
-    const key3 = this.surgeonKey(specialty, surgeon2);
-    return { ...state, file, registry, key: key3, data: registry.surgeons[key3] || null };
+    const key4 = this.surgeonKey(specialty, surgeon2);
+    return { ...state, file, registry, key: key4, data: registry.surgeons[key4] || null };
   }
   async writeSurgeonRecord(specialty, surgeon2, data) {
     specialty = safeFileName(specialty);
     surgeon2 = canonicalPersonName(surgeon2);
-    const key3 = this.surgeonKey(specialty, surgeon2);
+    const key4 = this.surgeonKey(specialty, surgeon2);
     const result = await this.mutateSurgeonRegistry((registry) => {
-      const previous = registry.surgeons[key3] || {};
+      const previous = registry.surgeons[key4] || {};
       const normalized = {
         cst_type: "surgeon-data",
         cst_id: data.cst_id || data.id || previous.cst_id || id("surgeon"),
@@ -6819,22 +8677,22 @@ ${body}
         surgeon: surgeon2,
         aliases: Array.isArray(data.aliases) ? data.aliases : Array.isArray(previous.aliases) ? previous.aliases : [],
         gloves: data.gloves || previous.gloves || "Unknown",
-        gown: GOWNS.includes(data.gown) ? data.gown : GOWNS.includes(previous.gown) ? previous.gown : this.settings.defaultGown,
+        gown: GOWNS2.includes(data.gown) ? data.gown : GOWNS2.includes(previous.gown) ? previous.gown : this.settings.defaultGown,
         music: String(data.music ?? data.music_preferences ?? previous.music ?? "").trim(),
         schema_version: SCHEMA_VERSION,
         created: data.created || previous.created || nowISO(),
         last_verified: data.last_verified || previous.last_verified || nowISO()
       };
-      registry.surgeons[key3] = normalized;
+      registry.surgeons[key4] = normalized;
       return normalized;
     });
     return { file: result.file, surgeonId: result.value.cst_id, data: result.value };
   }
   async removeSurgeonRecord(specialty, surgeon2) {
-    const key3 = this.surgeonKey(specialty, surgeon2);
+    const key4 = this.surgeonKey(specialty, surgeon2);
     await this.mutateSurgeonRegistry((registry) => {
-      const existed = !!registry.surgeons[key3];
-      if (existed) delete registry.surgeons[key3];
+      const existed = !!registry.surgeons[key4];
+      if (existed) delete registry.surgeons[key4];
       return existed;
     });
   }
@@ -6849,16 +8707,16 @@ ${body}
       }
     }
     const foldersToCreate = [];
-    for (const [key3, record] of Object.entries(state.registry.surgeons || {})) {
+    for (const [key4, record] of Object.entries(state.registry.surgeons || {})) {
       const specialty = validatedPathSegment(record?.specialty, "Registry specialty");
       const surgeon2 = validatedPathSegment(record?.surgeon, "Registry surgeon", { person: true });
-      if (this.surgeonKey(specialty, surgeon2) !== key3) {
+      if (this.surgeonKey(specialty, surgeon2) !== key4) {
         throw new Error(`Registry reconciliation stopped because ${specialty} / ${surgeon2} has a mismatched key. No folders or records were changed.`);
       }
       const path = validatePortableVaultPath(cleanPath(this.contentRoot, specialty, surgeon2), "Recovered surgeon folder path");
-      if (!physical.has(key3)) foldersToCreate.push({ path, specialty, surgeon: surgeon2 });
+      if (!physical.has(key4)) foldersToCreate.push({ path, specialty, surgeon: surgeon2 });
     }
-    const recordsToCreate = [...physical.entries()].filter(([key3]) => !Object.prototype.hasOwnProperty.call(state.registry.surgeons || {}, key3)).map(([, value]) => value);
+    const recordsToCreate = [...physical.entries()].filter(([key4]) => !Object.prototype.hasOwnProperty.call(state.registry.surgeons || {}, key4)).map(([, value]) => value);
     for (const item of foldersToCreate) await this.ensureFolder(item.path);
     for (const item of recordsToCreate) {
       await this.ensureSurgeonData(item.specialty, item.surgeon, {}, { updateGraph: false });
@@ -6918,12 +8776,12 @@ ${body}
     if (!data && options.restoreIdentity && initial.cst_id) data = { ...initial };
     let gloves = initial.gloves || data?.gloves || "Unknown";
     try {
-      gloves = normalizeGloves(gloves);
+      gloves = normalizeGloves2(gloves, this.settings);
     } catch (_) {
       gloves = String(gloves || "Unknown");
     }
     const gownCandidate = initial.gown || data?.gown || this.settings.defaultGown;
-    const gown = GOWNS.includes(gownCandidate) ? gownCandidate : this.settings.defaultGown;
+    const gown = GOWNS2.includes(gownCandidate) ? gownCandidate : this.settings.defaultGown;
     const record = {
       cst_type: "surgeon-data",
       cst_id: data?.cst_id || id("surgeon"),
@@ -6997,8 +8855,8 @@ ${body}
   }
   async saveSurgeonData(specialty, surgeon2, gloves, gown) {
     const ensured = await this.ensureSurgeonData(specialty, surgeon2);
-    const canonical = normalizeGloves(gloves);
-    if (!GOWNS.includes(gown)) throw new Error("Invalid gown.");
+    const canonical = normalizeGloves2(gloves, this.settings);
+    if (!GOWNS2.includes(gown)) throw new Error("Invalid gown.");
     const data = Object.assign({}, ensured.data, {
       gloves: canonical,
       gown,
@@ -7014,12 +8872,12 @@ ${body}
     const dirtyGloves = !!updates?.dirtyGloves;
     const dirtyGown = !!updates?.dirtyGown;
     const dirtyMusic = !!updates?.dirtyMusic;
-    const canonicalGloves = dirtyGloves ? normalizeGloves(updates.gloves) : "";
+    const canonicalGloves = dirtyGloves ? normalizeGloves2(updates.gloves, this.settings) : "";
     const music = dirtyMusic ? String(updates.music || "").trim() : "";
-    if (dirtyGown && !GOWNS.includes(updates.gown)) throw new Error("Invalid gown.");
-    const key3 = this.surgeonKey(specialty, surgeon2);
+    if (dirtyGown && !GOWNS2.includes(updates.gown)) throw new Error("Invalid gown.");
+    const key4 = this.surgeonKey(specialty, surgeon2);
     const result = await this.mutateSurgeonRegistry((registry) => {
-      const current = registry.surgeons[key3];
+      const current = registry.surgeons[key4];
       if (!current) throw new Error("Surgeon registry record not found.");
       if (expectedFingerprint && this.surgeonRecordFingerprint(current) !== expectedFingerprint) {
         throw new Error("This surgeon profile changed in another window or device. Reload the card before saving.");
@@ -7030,7 +8888,7 @@ ${body}
       if (dirtyMusic) next.music = music;
       next.last_verified = nowISO();
       next.schema_version = SCHEMA_VERSION;
-      registry.surgeons[key3] = next;
+      registry.surgeons[key4] = next;
       return next;
     });
     try {
@@ -7128,28 +8986,28 @@ schema_version: ${SCHEMA_VERSION}
       const surgeons = this.getSurgeons(specialty);
       surgeonsBySpecialty.set(specialty, surgeons);
       for (const surgeon2 of surgeons) {
-        const key3 = this.surgeonKey(specialty, surgeon2);
-        if (physical.has(key3)) {
+        const key4 = this.surgeonKey(specialty, surgeon2);
+        if (physical.has(key4)) {
           throw new Error(`Graph rebuild paused: duplicate physical surgeon identity ${specialty} / ${surgeon2}.`);
         }
-        physical.set(key3, { specialty, surgeon: surgeon2 });
+        physical.set(key4, { specialty, surgeon: surgeon2 });
       }
     }
     const records = parsed.registry.surgeons || {};
     const registeredKeys = Object.keys(records);
-    const missingFolders = registeredKeys.filter((key3) => !physical.has(key3));
-    const missingRecords = [...physical.keys()].filter((key3) => !Object.prototype.hasOwnProperty.call(records, key3));
+    const missingFolders = registeredKeys.filter((key4) => !physical.has(key4));
+    const missingRecords = [...physical.keys()].filter((key4) => !Object.prototype.hasOwnProperty.call(records, key4));
     if (missingFolders.length || missingRecords.length) {
       throw new Error(`Graph rebuild paused: surgeon folders and registry records differ (${missingFolders.length} folder${missingFolders.length === 1 ? "" : "s"} missing, ${missingRecords.length} record${missingRecords.length === 1 ? "" : "s"} missing). Wait for Sync or run explicit Initialize / Repair after verification.`);
     }
-    for (const [key3, item] of physical) {
-      const record = records[key3];
+    for (const [key4, item] of physical) {
+      const record = records[key4];
       if (!record || typeof record !== "object" || Array.isArray(record)) {
         throw new Error(`Graph rebuild paused: the registry record for ${item.specialty} / ${item.surgeon} is invalid.`);
       }
       const recordSpecialty = String(record.specialty || "").trim();
       const recordSurgeon = canonicalPersonName(record.surgeon || "");
-      if (recordSpecialty !== item.specialty || recordSurgeon !== item.surgeon || this.surgeonKey(recordSpecialty, recordSurgeon) !== key3) {
+      if (recordSpecialty !== item.specialty || recordSurgeon !== item.surgeon || this.surgeonKey(recordSpecialty, recordSurgeon) !== key4) {
         throw new Error(`Graph rebuild paused: the registry identity for ${item.specialty} / ${item.surgeon} does not match its exact folder key.`);
       }
       if (!String(record.cst_id || record.id || "").trim()) {
@@ -7268,12 +9126,12 @@ schema_version: ${SCHEMA_VERSION}
     }
   }
   async getTemplate(specialty, variant = "") {
-    let key3 = specialty;
+    let key4 = specialty;
     let path;
     if (specialty.toLowerCase() === "spine") {
       if (!["Cervical", "Lumbar", "Thoracic"].includes(variant)) throw new Error("Choose a Spine template: Cervical, Lumbar, or Thoracic.");
       const v = variant;
-      key3 = `Spine-${v}`;
+      key4 = `Spine-${v}`;
       path = this.p(`_Templates/Cases/Spine/${v}.md`);
     } else {
       path = this.p(`_Templates/Cases/${specialty}.md`);
@@ -7282,7 +9140,7 @@ schema_version: ${SCHEMA_VERSION}
     if (!(file instanceof TFile)) {
       path = this.p("_Templates/Cases/_Default.md");
       file = this.app.vault.getAbstractFileByPath(path);
-      key3 = `${specialty}-Default`;
+      key4 = `${specialty}-Default`;
     }
     if (!(file instanceof TFile)) throw new Error("No CST case template found.");
     for (let attempt = 0; attempt < 5; attempt++) {
@@ -7298,19 +9156,19 @@ schema_version: ${SCHEMA_VERSION}
       const latestBody = await this.app.vault.read(file);
       this.assertVaultFilePath(file, path, "Case template moved or was replaced while verifying its version.");
       if (body === latestBody && body === versionBody) {
-        return { key: key3, path, body, version: `v${versionNumber || 1}`, legacyHash: shortHash(body) };
+        return { key: key4, path, body, version: `v${versionNumber || 1}`, legacyHash: shortHash(body) };
       }
     }
     throw new Error("The case template kept changing while its version was being captured. Wait for Sync to finish, then retry.");
   }
   async getTemplateReadOnly(specialty, variant = "") {
-    let key3 = specialty;
+    let key4 = specialty;
     let path;
     if (specialty.toLowerCase() === "spine") {
       if (!["Cervical", "Lumbar", "Thoracic"].includes(variant)) {
         throw new Error("Cannot determine the Spine template variant.");
       }
-      key3 = `Spine-${variant}`;
+      key4 = `Spine-${variant}`;
       path = this.p(`_Templates/Cases/Spine/${variant}.md`);
     } else {
       path = this.p(`_Templates/Cases/${specialty}.md`);
@@ -7319,7 +9177,7 @@ schema_version: ${SCHEMA_VERSION}
     if (!(file instanceof TFile)) {
       path = this.p("_Templates/Cases/_Default.md");
       file = this.app.vault.getAbstractFileByPath(path);
-      key3 = `${specialty}-Default`;
+      key4 = `${specialty}-Default`;
     }
     if (!(file instanceof TFile)) throw new Error("No CST case template found.");
     const body = await this.app.vault.read(file);
@@ -7329,7 +9187,7 @@ schema_version: ${SCHEMA_VERSION}
     if (await this.app.vault.read(latest.file) !== body) {
       throw new Error(`Template changes in ${file.path} have not been recorded in version history yet.`);
     }
-    return { key: key3, path, body, version: `v${latest.n}`, legacyHash: shortHash(body) };
+    return { key: key4, path, body, version: `v${latest.n}`, legacyHash: shortHash(body) };
   }
   async createCase({ specialty, surgeon: surgeon2, title, variant = "" }) {
     if (this.settings.initialized && !await this.quickStructureCheck()) {
@@ -7812,6 +9670,9 @@ Diagnostic persistence also failed: ${diagnosticError?.stack || diagnosticError}
     if (settingsChanged) {
       await this.saveSettings();
     }
+    this.onboardingUpdatePending = true;
+    const examples = await updateOnboardingExamples(this, { TFile, TFolder, parseFrontmatterObject });
+    this.onboardingUpdatePending = examples.cleanup === "pending";
     return true;
   }
   async migrateV011() {
@@ -7835,7 +9696,7 @@ Diagnostic persistence also failed: ${diagnosticError?.stack || diagnosticError}
       let canonical = null;
       if (legacy) {
         try {
-          canonical = normalizeGloves(legacy.mdRaw);
+          canonical = normalizeGloves2(legacy.mdRaw, this.settings);
         } catch (_) {
           invalidGlovePaths.push(file.path);
         }
@@ -7843,9 +9704,9 @@ Diagnostic persistence also failed: ${diagnosticError?.stack || diagnosticError}
       casePlans.push({ file, path: file.path, text, legacy, hasAnchor, canonical, context: c, frontmatter: fm });
       if (legacy || !hasAnchor || fm.surgeon_profile) affected.set(file.path, file);
       if (canonical) {
-        const key3 = `${c.specialty}\0${c.surgeon}`;
-        if (!gloveCandidates.has(key3)) gloveCandidates.set(key3, []);
-        gloveCandidates.get(key3).push({
+        const key4 = `${c.specialty}\0${c.surgeon}`;
+        if (!gloveCandidates.has(key4)) gloveCandidates.set(key4, []);
+        gloveCandidates.get(key4).push({
           value: canonical,
           file,
           mtime: file.stat.mtime,
@@ -7865,9 +9726,9 @@ Diagnostic persistence also failed: ${diagnosticError?.stack || diagnosticError}
         if (parts.length < 2) throw new Error("legacy surgeon path is incomplete");
         const specialty = validatedPathSegment(fm.specialty || parts[0], "Legacy specialty");
         const surgeon2 = validatedPathSegment(fm.surgeon || parts.slice(1).join("/"), "Legacy surgeon", { person: true });
-        const gloves = normalizeGloves(fm.gloves || "Unknown");
+        const gloves = normalizeGloves2(fm.gloves || "Unknown", this.settings);
         const gown = fm.gown == null || fm.gown === "" ? this.settings.defaultGown : String(fm.gown);
-        if (!GOWNS.includes(gown)) throw new Error("invalid gown");
+        if (!GOWNS2.includes(gown)) throw new Error("invalid gown");
         const sourceTime = new Date(legacy.stat?.mtime || Date.now()).toISOString();
         const record = this.adminRegistryRecord({
           cst_id: fm.cst_id || id("surgeon"),
@@ -7942,8 +9803,8 @@ ${next.slice(at).replace(/^\s+/, "")}`;
         this.rememberRegistryMutation(registryMutations, plan.specialty, plan.surgeon, result);
         if (result.imported) importedLegacy++;
       }
-      for (const [key3, candidates] of gloveCandidates.entries()) {
-        const [specialty, surgeon2] = key3.split("\0");
+      for (const [key4, candidates] of gloveCandidates.entries()) {
+        const [specialty, surgeon2] = key4.split("\0");
         const unique = [...new Set(candidates.map((x) => x.value))];
         candidates.sort((a, b) => b.mtime - a.mtime);
         const selected = candidates[0];
@@ -8029,7 +9890,7 @@ ${conflicts.length ? conflicts.map((x) => `- ${x}`).join("\n") : "None"}
         record = this.adminRegistryRecord({
           cst_id: data.cst_id || data.id || id("surgeon"),
           aliases: Array.isArray(data.aliases) ? data.aliases.map(String) : [],
-          gloves: normalizeGloves(data.gloves || "Unknown"),
+          gloves: normalizeGloves2(data.gloves || "Unknown", this.settings),
           gown: data.gown == null || data.gown === "" ? this.settings.defaultGown : String(data.gown),
           schema_version: SCHEMA_VERSION,
           created: data.created || sourceTime,
@@ -8039,13 +9900,13 @@ ${conflicts.length ? conflicts.map((x) => `- ${x}`).join("\n") : "None"}
         invalidJson.push(file.path);
         continue;
       }
-      const key3 = this.surgeonKey(record.specialty, record.surgeon);
-      if (stagedKeys.has(key3)) {
+      const key4 = this.surgeonKey(record.specialty, record.surgeon);
+      if (stagedKeys.has(key4)) {
         invalidJson.push(file.path);
         continue;
       }
-      stagedKeys.add(key3);
-      stagedJson.push({ file, path: stagedPath, raw, data: record, key: key3 });
+      stagedKeys.add(key4);
+      stagedJson.push({ file, path: stagedPath, raw, data: record, key: key4 });
     }
     if (invalidJson.length) {
       const error = new Error(`v0.1.2 migration stopped before writing because ${invalidJson.length} surgeon JSON file${invalidJson.length === 1 ? " is" : "s are"} invalid or duplicated.`);
@@ -8063,7 +9924,7 @@ ${conflicts.length ? conflicts.map((x) => `- ${x}`).join("\n") : "None"}
       let legacyGloves = "";
       if (legacy) {
         try {
-          legacyGloves = normalizeGloves(legacy.mdRaw);
+          legacyGloves = normalizeGloves2(legacy.mdRaw, this.settings);
         } catch (_) {
           invalidLegacyGlovePaths.push(f.path);
         }
@@ -8554,7 +10415,7 @@ Surgeon glove/gown data now uses the Markdown registry at \`${this.surgeonRegist
         throw error;
       }
       const legacy = this.parseLegacyGloveRegion(original);
-      const legacyGloves = legacy ? normalizeGloves(legacy.mdRaw) : "";
+      const legacyGloves = legacy ? normalizeGloves2(legacy.mdRaw, this.settings) : "";
       let next = legacy ? this.removeLegacyMdGlovePreamble(original, legacy) : original;
       next = next.replace(/\n?```cst-surgeon-header\s*\n?```\n?/g, "\n");
       const title = this.findCaseTitle(next);
@@ -8675,10 +10536,10 @@ ${next.slice(at).replace(/^\s+/, "")}`;
         for (const surgeon2 of this.getSurgeons(specialty)) physicalKeys.add(this.surgeonKey(specialty, surgeon2));
       }
       const registeredKeys = new Set(Object.keys(registryState.registry.surgeons || {}));
-      const missingFolders = [...registeredKeys].filter((key3) => !physicalKeys.has(key3));
-      const missingRecords = [...physicalKeys].filter((key3) => !registeredKeys.has(key3));
+      const missingFolders = [...registeredKeys].filter((key4) => !physicalKeys.has(key4));
+      const missingRecords = [...physicalKeys].filter((key4) => !registeredKeys.has(key4));
       const allowedRecords = new Set((allowedMissingRegistryKeys || []).map(String));
-      const unexpectedMissingRecords = missingRecords.filter((key3) => !allowedRecords.has(key3));
+      const unexpectedMissingRecords = missingRecords.filter((key4) => !allowedRecords.has(key4));
       if (missingFolders.length || unexpectedMissingRecords.length) {
         this.lastStructureCheckRegistryMismatch = {
           missingFolders: [...missingFolders],
@@ -8750,13 +10611,13 @@ ${next.slice(at).replace(/^\s+/, "")}`;
         if (gloves === "Unknown") missingGloves++;
         else {
           try {
-            normalizeGloves(gloves);
+            normalizeGloves2(gloves, this.settings);
           } catch (_) {
             invalidGloves++;
             issues.push(["Invalid gloves", `${specialty} / ${surgeon2}`]);
           }
         }
-        if (gown === "Unknown" || !GOWNS.includes(gown)) unknownGowns++;
+        if (gown === "Unknown" || !GOWNS2.includes(gown)) unknownGowns++;
       }
     }
     const duplicateSurgeons = this.duplicateSurgeonCandidates();
@@ -9093,8 +10954,44 @@ Diagnostic persistence also failed: ${diagnosticError?.stack || diagnosticError}
   async openFile(file) {
     const active = this.app.workspace.activeLeaf;
     const inCSTApp = active?.view?.getViewType?.() === VIEW_TYPE_CST_SIDEBAR;
-    const leaf = inCSTApp ? this.app.workspace.getLeaf("tab") : this.app.workspace.getLeaf(false);
-    await leaf.openFile(file);
+    const leaf2 = inCSTApp ? this.app.workspace.getLeaf("tab") : this.app.workspace.getLeaf(false);
+    await leaf2.openFile(file);
+    await this.app.workspace.revealLeaf?.(leaf2);
+  }
+  async clearCSTTabs() {
+    const workspace = this.app.workspace;
+    let kept = 0;
+    for (const leaf2 of [...workspace.getLeavesOfType("markdown")]) {
+      const view = leaf2.view, file = view?.file;
+      if (!file || !(this.isCasePath(file.path) || file.path.startsWith(this.p() + "/") || file.path === this.settings.launcherPath)) continue;
+      if (leaf2.getViewState?.().pinned) {
+        kept++;
+        continue;
+      }
+      const path = file.path;
+      if (view.editor?.getValue) {
+        let saved;
+        try {
+          saved = await this.app.vault.read(file);
+        } catch {
+          kept++;
+          continue;
+        }
+        if (view.editor.getValue() !== saved) {
+          kept++;
+          continue;
+        }
+      }
+      if (leaf2.view !== view || view.file !== file || file.path !== path || leaf2.getViewState?.().pinned) {
+        kept++;
+        continue;
+      }
+      leaf2.detach();
+    }
+    const apps = [...workspace.getLeavesOfType(VIEW_TYPE_CST_SIDEBAR)];
+    for (const leaf2 of apps.slice(1)) if (!leaf2.getViewState?.().pinned) leaf2.detach();
+    await this.activateSidebar({ specialty: "", surgeon: "", query: "" });
+    if (kept) new Notice(`${kept} pinned or unsaved CST Notes tab${kept === 1 ? " was" : "s were"} kept open.`);
   }
   navigateFromUI(label, operation) {
     void Promise.resolve().then(operation).catch((error) => {
@@ -9325,8 +11222,18 @@ Diagnostic persistence also failed: ${diagnosticError?.stack || diagnosticError}
       if (await this.app.vault.read(manifestFile) !== manifestText) throw new Error("Recovery manifest changed. Retry after Sync.");
       this.assertVaultFilePath(file, archivePath, "Archive moved before restoration.");
       if (await this.app.vault.read(file) !== original) throw new Error("Archive changed before restoration. Retry.");
+      const recoveredText = this.stripResourceMarkers?.(original) ?? original;
+      const images = await this.attachmentRecovery?.prepareRestore({ text: recoveredText, originalPath: target, targetPath: target });
+      const restoredText = images?.text ?? recoveredText;
+      if (restoredText !== original) await this.snapshotFiles("Restored case preimage", [file]);
+      await images?.assertUnchanged();
+      if (await this.app.vault.read(file) !== original) throw new Error("Archive changed during image recovery.");
+      this.assertVaultFilePath(manifestFile, archivePath.replace(/\.md$/i, ".json"), "Recovery manifest moved during image recovery.");
+      if (await this.app.vault.read(manifestFile) !== manifestText) throw new Error("Recovery manifest changed during image recovery.");
       const restored = await this.renameVaultItem(file, target, archivePath);
       if (await this.app.vault.read(restored) !== original) throw new Error("Restored note changed concurrently. Its content was retained; review before continuing.");
+      if (restoredText !== original) await this.replaceFileTextExpected(restored, original, restoredText, "Restored case changed during image repair.", target);
+      await images?.assertUnchanged();
       try {
         await this.restoreCaseSession(manifest);
         await this.applyExpectedTextPlans([{
@@ -9342,6 +11249,8 @@ Diagnostic persistence also failed: ${diagnosticError?.stack || diagnosticError}
       this.scheduleGraphRebuild(250);
       await this.findExampleCase();
       await this.openFile(restored);
+      const activeView = this.app.workspace?.activeLeaf?.view;
+      if (activeView?.file === restored) activeView.previewMode?.rerender?.(true);
       new Notice("Case restored.");
       return restored;
     };
@@ -9530,19 +11439,19 @@ Diagnostic persistence also failed: ${diagnosticError?.stack || diagnosticError}
     if (targetRoute) this.sidebarActivationTargetRevision = (this.sidebarActivationTargetRevision || 0) + 1;
     if (this.sidebarActivationPromise) return await this.sidebarActivationPromise;
     const activation = (async () => {
-      let leaf = this.app.workspace.getLeavesOfType(VIEW_TYPE_CST_SIDEBAR)[0];
-      if (!leaf) {
-        if (Platform.isMobile) leaf = this.app.workspace.getLeaf("tab");
-        else leaf = this.app.workspace.getRightLeaf(false) || this.app.workspace.getLeaf("tab");
+      let leaf2 = this.app.workspace.getLeavesOfType(VIEW_TYPE_CST_SIDEBAR)[0];
+      if (!leaf2) {
+        if (Platform.isMobile) leaf2 = this.app.workspace.getLeaf("tab");
+        else leaf2 = this.app.workspace.getRightLeaf(false) || this.app.workspace.getLeaf("tab");
         const initialRoute = this.sidebarActivationTarget;
-        if (initialRoute) this.pendingSidebarRoutes.set(leaf, initialRoute);
+        if (initialRoute) this.pendingSidebarRoutes.set(leaf2, initialRoute);
         try {
-          await leaf.setViewState({ type: VIEW_TYPE_CST_SIDEBAR, active: true });
+          await leaf2.setViewState({ type: VIEW_TYPE_CST_SIDEBAR, active: true });
         } finally {
-          this.pendingSidebarRoutes.delete(leaf);
+          this.pendingSidebarRoutes.delete(leaf2);
         }
       }
-      const view = leaf?.view;
+      const view = leaf2?.view;
       if (view instanceof CSTSidebarView) {
         let appliedRevision = -1;
         const applyLatestRoute = async (force = false) => {
@@ -9556,12 +11465,12 @@ Diagnostic persistence also failed: ${diagnosticError?.stack || diagnosticError}
           }
         };
         await applyLatestRoute(true);
-        await this.app.workspace.revealLeaf(leaf);
+        await this.app.workspace.revealLeaf(leaf2);
         await applyLatestRoute();
       } else {
-        await this.app.workspace.revealLeaf(leaf);
+        await this.app.workspace.revealLeaf(leaf2);
       }
-      return leaf;
+      return leaf2;
     })();
     this.sidebarActivationPromise = activation;
     try {
@@ -9710,7 +11619,7 @@ Diagnostic persistence also failed: ${diagnosticError?.stack || diagnosticError}
   refreshSurgeonHeaderDisplays(specialty, surgeon2, data = null) {
     const gloves = formatGloves(data?.gloves || "Unknown");
     const gown = data?.gown || "Unknown";
-    const legend = gloveLegend(data?.gloves, this.settings.gloveLabels);
+    const legend = gloveLegend2(data?.gloves, this.settings);
     const music = String(data?.music || "").trim();
     for (const doc of this.workspaceDocuments()) {
       doc.querySelectorAll(".cst-live-header").forEach((el) => {
@@ -9743,7 +11652,7 @@ Diagnostic persistence also failed: ${diagnosticError?.stack || diagnosticError}
     el.dataset.cstSurgeon = available ? ctx.surgeon : "";
     const gloves = formatGloves(data?.gloves || "Unknown");
     const gown = data?.gown || "Unknown";
-    const legend = available ? gloveLegend(data?.gloves, this.settings.gloveLabels) : "";
+    const legend = available ? gloveLegend2(data?.gloves, this.settings) : "";
     const music = available ? String(data?.music || "").trim() : "";
     const row = el.createDiv({
       cls: `cst-live-header-row${available ? "" : " cst-warning"}`,
@@ -9803,13 +11712,15 @@ Diagnostic persistence also failed: ${diagnosticError?.stack || diagnosticError}
     const grid = el.createDiv({ cls: "cst-modal-grid" });
     grid.createEl("label", { text: "Gloves" });
     const glove = makeInput(grid, { value: data.gloves });
-    addGloveHelp(grid, this.settings.gloveLabels);
+    glove.onkeydown = exitSingleLineOnEnter;
+    addGloveHelp(grid, this.settings);
     grid.createEl("label", { text: "Gown" });
     const gown = makeSelect(grid, "Gown");
-    for (const g of GOWNS) addOption(gown, g);
+    for (const g of GOWNS2) addOption(gown, g);
     gown.value = data.gown;
     grid.createEl("label", { text: "Music preferences" });
     const music = makeInput(grid, { value: data.music || "", placeholder: "Optional" });
+    music.onkeydown = exitSingleLineOnEnter;
     let expectedFingerprint = this.surgeonRecordFingerprint(data);
     let dirtyGloves = false;
     let dirtyGown = false;
@@ -10214,61 +12125,32 @@ Diagnostic persistence also failed: ${diagnosticError?.stack || diagnosticError}
       }
     };
   }
-  async renderConfig(el) {
-    const labels = normalizeGloveLabels(this.settings.gloveLabels);
-    const table = el.createEl("table", { cls: "cst-table" });
-    const values = [
-      ["Content root", this.contentRoot],
-      ["Backend root", this.settings.backendRoot],
-      ["Default gown", this.settings.defaultGown],
-      ["Verification debounce", `${Math.round(this.settings.verificationDebounceMs / 1e3)} sec`],
-      ["Glove sizes", GLOVE_SIZES.join(", ")],
-      ["Glove types", ["O", "B", "W"].map((code) => `${code} = ${labels[code]}`).join(", ")]
-    ];
-    for (const [k, v] of values) {
-      const tr = table.createEl("tr");
-      tr.createEl("th", { text: k });
-      tr.createEl("td", { text: String(v) });
-    }
-    el.createEl("h3", { text: "Glove labels" });
-    el.createEl("p", { text: "Change what O, B, and W mean. Stored glove codes stay compatible; guidance and live headers update automatically.", cls: "cst-muted" });
-    const grid = el.createDiv({ cls: "cst-modal-grid" });
-    const inputs = {};
-    for (const code of ["O", "B", "W"]) {
-      grid.createEl("label", { text: code });
-      inputs[code] = makeInput(grid, { value: labels[code], ariaLabel: `${code} glove label` });
-    }
-    const save = el.createEl("button", { text: "Save glove labels", cls: "mod-cta" });
-    save.onclick = async () => {
-      if (save.disabled) return;
-      save.disabled = true;
-      try {
-        const next = normalizeGloveLabels(Object.fromEntries(["O", "B", "W"].map((code) => [code, inputs[code].value])));
-        this.settings.gloveLabels = next;
-        await this.saveSettings();
-        for (const doc of this.workspaceDocuments()) {
-          doc.querySelectorAll(".cst-glove-help").forEach((help) => {
-            const lines = help.querySelectorAll("div");
-            if (lines[0]) lines[0].textContent = `o = ${next.O} · b = ${next.B} · w = ${next.W}`;
-          });
-          const visible = /* @__PURE__ */ new Map();
-          doc.querySelectorAll(".cst-live-header").forEach((header) => {
-            const specialty = header.dataset.cstSpecialty;
-            const surgeon2 = header.dataset.cstSurgeon;
-            if (specialty && surgeon2) visible.set(`${specialty}\0${surgeon2}`, { specialty, surgeon: surgeon2 });
-          });
-          for (const item of visible.values()) {
-            const data = await this.getSurgeonData(item.specialty, item.surgeon, { createIfMissing: false });
-            if (data && !data.unavailable) this.refreshSurgeonHeaderDisplays(item.specialty, item.surgeon, data);
-          }
-        }
-        new Notice("Glove labels updated.");
-      } catch (error) {
-        new Notice(error.message || String(error));
-      } finally {
-        if (save.isConnected) save.disabled = false;
+  async refreshGloveSettingsDisplays() {
+    const guidance = glove_settings_exports.gloveHelpText(this.settings);
+    for (const doc of this.workspaceDocuments()) {
+      doc.querySelectorAll(".cst-glove-help").forEach((help) => {
+        const lines = help.querySelectorAll("div");
+        if (lines[0]) lines[0].textContent = guidance.legend;
+        if (lines[1]) lines[1].textContent = `Sizes: ${guidance.sizes}. ${guidance.description} Example: "${guidance.example}".`;
+      });
+      const visible = /* @__PURE__ */ new Map();
+      doc.querySelectorAll(".cst-live-header").forEach((header) => {
+        const specialty = header.dataset.cstSpecialty, surgeon2 = header.dataset.cstSurgeon;
+        if (specialty && surgeon2) visible.set(`${specialty}\0${surgeon2}`, { specialty, surgeon: surgeon2 });
+      });
+      for (const { specialty, surgeon: surgeon2 } of visible.values()) {
+        const data = await this.getSurgeonData(specialty, surgeon2, { createIfMissing: false });
+        if (data && !data.unavailable) this.refreshSurgeonHeaderDisplays(specialty, surgeon2, data);
       }
-    };
+    }
+    this.scheduleGraphRebuild?.(500);
+  }
+  async renderConfig(el) {
+    const rows = [
+      ["Content root", this.contentRoot],
+      ["Backend root", this.settings.backendRoot]
+    ];
+    return glove_settings_exports.renderGloveSettingsEditor(el, this, { rows });
   }
   async createSurgeon({ specialty, surgeon: surgeon2, gloves = "Unknown", gown = "", music = "" }) {
     return await this.serializedAdminMutation(async () => {
@@ -10280,8 +12162,8 @@ Diagnostic persistence also failed: ${diagnosticError?.stack || diagnosticError}
       if (!this.getSpecialties().includes(specialty)) throw new Error(`Specialty not found: ${specialty}`);
       const collision = this.getSurgeons(specialty).find((existing) => existing.normalize("NFC").toLocaleLowerCase() === surgeon2.normalize("NFC").toLocaleLowerCase());
       if (collision) throw new Error(`${collision} already exists in ${specialty}.`);
-      gloves = normalizeGloves(gloves || "Unknown");
-      gown = GOWNS.includes(gown) ? gown : this.settings.defaultGown;
+      gloves = normalizeGloves2(gloves || "Unknown", this.settings);
+      gown = GOWNS2.includes(gown) ? gown : this.settings.defaultGown;
       const folderPath = validatePortableVaultPath(cleanPath(this.contentRoot, specialty, surgeon2), "New surgeon path");
       validatePortableVaultPath(this.specialtyGraphPath(specialty), "Surgeon specialty graph path");
       validatePortableVaultPath(this.surgeonGraphPath(specialty, surgeon2), "Surgeon graph path");
@@ -10400,11 +12282,11 @@ Diagnostic persistence also failed: ${diagnosticError?.stack || diagnosticError}
       throw new Error(`Surgeon creation timestamp is missing for ${specialty} / ${surgeon2}. Repair the registry before retrying Admin.`);
     }
     try {
-      record.gloves = normalizeGloves(record.gloves || "Unknown");
+      record.gloves = normalizeGloves2(record.gloves || "Unknown", this.settings);
     } catch (error) {
       throw new Error(`Invalid glove profile for ${specialty} / ${surgeon2}: ${error.message || error}`);
     }
-    if (!GOWNS.includes(record.gown)) {
+    if (!GOWNS2.includes(record.gown)) {
       throw new Error(`Invalid gown profile for ${specialty} / ${surgeon2}.`);
     }
     return record;
@@ -10413,24 +12295,24 @@ Diagnostic persistence also failed: ${diagnosticError?.stack || diagnosticError}
     await this.mutateSurgeonRegistry((registry) => {
       for (const change of changes) {
         if (!Object.prototype.hasOwnProperty.call(change, "expected")) continue;
-        const key3 = this.surgeonKey(change.specialty, change.surgeon);
-        const current = registry.surgeons[key3] || null;
+        const key4 = this.surgeonKey(change.specialty, change.surgeon);
+        const current = registry.surgeons[key4] || null;
         const expected = change.expected == null ? null : JSON.parse(JSON.stringify(change.expected));
         if (JSON.stringify(current) !== JSON.stringify(expected)) {
           throw new Error(`Surgeon registry changed during the Admin operation at ${change.specialty} / ${change.surgeon}.`);
         }
       }
       for (const change of changes) {
-        const key3 = this.surgeonKey(change.specialty, change.surgeon);
-        if (change.data == null) delete registry.surgeons[key3];
-        else registry.surgeons[key3] = JSON.parse(JSON.stringify(change.data));
+        const key4 = this.surgeonKey(change.specialty, change.surgeon);
+        if (change.data == null) delete registry.surgeons[key4];
+        else registry.surgeons[key4] = JSON.parse(JSON.stringify(change.data));
       }
     }, options);
   }
   async captureAdminCasePreimages(files) {
     return await Promise.all((files || []).map(async (file) => {
       const text = await this.app.vault.read(file);
-      const missing = ["cst_id", "created", "last_verified"].filter((key3) => !frontmatterTopLevelScalar(text, key3));
+      const missing = ["cst_id", "created", "last_verified"].filter((key4) => !frontmatterTopLevelScalar(text, key4));
       if (missing.length) {
         throw new Error(`Admin stopped because ${file.path} is missing persistent metadata (${missing.join(", ")}). Run Initialize / Repair before moving surgeon cases.`);
       }
@@ -10458,14 +12340,14 @@ Diagnostic persistence also failed: ${diagnosticError?.stack || diagnosticError}
         graph_parent: `[[${graphNode}|${context.surgeon}]]`,
         schema_version: SCHEMA_VERSION
       }, ["surgeon_profile", "gloves", "gown"]);
-      const changed = await this.replaceFileTextExpected(
+      const changed2 = await this.replaceFileTextExpected(
         file,
         preimage.text,
         routedText,
         `Admin routing stopped because ${path} was edited after the operation began. The newer edit was left untouched. It may also have moved or been replaced.`,
         path
       );
-      if (changed) changedTexts.set(path, routedText);
+      if (changed2) changedTexts.set(path, routedText);
     }
   }
   async restoreAdminCasePreimages(preimages, folderPath, changedTexts) {
@@ -10836,7 +12718,7 @@ Diagnostic persistence also failed: ${diagnosticError?.stack || diagnosticError}
   }
   canonicalCaseHeading(label) {
     const raw = String(label || "").trim().replace(/:$/, "").replace(/\s+/g, " ");
-    const key3 = raw.toLowerCase().replace(/[-_]+/g, " ").replace(/\s+/g, " ").trim();
+    const key4 = raw.toLowerCase().replace(/[-_]+/g, " ").replace(/\s+/g, " ").trim();
     const aliases = {
       "case": "Case",
       "overview": "Case",
@@ -10884,7 +12766,7 @@ Diagnostic persistence also failed: ${diagnosticError?.stack || diagnosticError}
       "other": "Notes",
       "other notes": "Notes"
     };
-    return aliases[key3] || raw;
+    return aliases[key4] || raw;
   }
   async inferSpineVariant(file, rawText = null, expectedPath = "") {
     expectedPath = normalizePath(String(expectedPath || file?.path || ""));
@@ -11008,19 +12890,19 @@ ${content}`.trim());
     const canon = this.canonicalCaseHeading(label);
     const direct = templateHeadings.find((x) => x.canonical.toLowerCase() === canon.toLowerCase());
     if (direct) return direct.label;
-    const key3 = String(label || "").toLowerCase();
+    const key4 = String(label || "").toLowerCase();
     const prefer = (name) => templateHeadings.find((x) => x.canonical === name || x.label === name)?.label || name;
-    if (/pearl|tip/.test(key3)) return prefer("Tips");
-    if (/position/.test(key3)) return prefer("Position");
-    if (/drap/.test(key3)) return prefer("Drape");
-    if (/mayo.*flow|sequence|order/.test(key3)) return prefer("Mayo Flow");
-    if (/mayo/.test(key3)) return prefer("Mayo");
-    if (/basin/.test(key3)) return prefer("Basin");
-    if (/back.*table/.test(key3)) return prefer("Back Table");
-    if (/tray|set|instrument|equipment|implant|retractor|kerrison|karlin|special.*setup|setup/.test(key3)) return prefer("Trays");
-    if (/sutur|clos(?:ing|ure)/.test(key3)) return prefer("Sutures");
-    if (/dressings/.test(key3)) return prefer("Dressings");
-    if (/dressing|bandage/.test(key3)) return prefer("Dressings");
+    if (/pearl|tip/.test(key4)) return prefer("Tips");
+    if (/position/.test(key4)) return prefer("Position");
+    if (/drap/.test(key4)) return prefer("Drape");
+    if (/mayo.*flow|sequence|order/.test(key4)) return prefer("Mayo Flow");
+    if (/mayo/.test(key4)) return prefer("Mayo");
+    if (/basin/.test(key4)) return prefer("Basin");
+    if (/back.*table/.test(key4)) return prefer("Back Table");
+    if (/tray|set|instrument|equipment|implant|retractor|kerrison|karlin|special.*setup|setup/.test(key4)) return prefer("Trays");
+    if (/sutur|clos(?:ing|ure)/.test(key4)) return prefer("Sutures");
+    if (/dressings/.test(key4)) return prefer("Dressings");
+    if (/dressing|bandage/.test(key4)) return prefer("Dressings");
     return prefer("Notes");
   }
   migrationLabelFromLine(line) {
@@ -11305,8 +13187,8 @@ ${body}`;
     if (!path.startsWith(undoRoot + "/")) {
       throw new Error(`${label} is outside this migration session's managed Undo folder.`);
     }
-    const leaf = path.slice(undoRoot.length + 1);
-    if (leaf.includes("/") || !/^(?:preimage|pre)-[A-Za-z0-9-]{8,80}\.[A-Za-z0-9]{1,12}$/i.test(leaf)) {
+    const leaf2 = path.slice(undoRoot.length + 1);
+    if (leaf2.includes("/") || !/^(?:preimage|pre)-[A-Za-z0-9-]{8,80}\.[A-Za-z0-9]{1,12}$/i.test(leaf2)) {
       throw new Error(`${label} is not a managed migration snapshot.`);
     }
     return path;
@@ -11483,14 +13365,14 @@ ${JSON.stringify(state, null, 2)}
         const mapped = normalizePath(String(mapper(value) || value));
         return mapped || value;
       };
-      let changed = false;
+      let changed2 = false;
       const remappedPaths = /* @__PURE__ */ new Set();
       const remapObject = (source) => {
         const target = {};
         for (const [path, value] of Object.entries(source || {})) {
           const mapped = mapPath(path);
           if (mapped !== path) {
-            changed = true;
+            changed2 = true;
             remappedPaths.add(mapped);
           }
           if (Object.prototype.hasOwnProperty.call(target, mapped) && mapped !== path) {
@@ -11504,7 +13386,7 @@ ${JSON.stringify(state, null, 2)}
       const seen = /* @__PURE__ */ new Set();
       for (const path of state.order || []) {
         const mapped = mapPath(path);
-        if (mapped !== path) changed = true;
+        if (mapped !== path) changed2 = true;
         if (!seen.has(mapped)) {
           seen.add(mapped);
           mappedOrder.push(mapped);
@@ -11517,17 +13399,17 @@ ${JSON.stringify(state, null, 2)}
         for (const mapped of remappedPaths) {
           if (Object.prototype.hasOwnProperty.call(state.working, mapped)) {
             delete state.working[mapped];
-            changed = true;
+            changed2 = true;
           }
           if (Object.prototype.hasOwnProperty.call(state.status, mapped) && state.status[mapped] !== "needs-review") {
             state.status[mapped] = "needs-review";
-            changed = true;
+            changed2 = true;
           }
         }
       }
       if (state.currentPath) {
         const mapped = mapPath(state.currentPath);
-        if (mapped !== state.currentPath) changed = true;
+        if (mapped !== state.currentPath) changed2 = true;
         state.currentPath = mapped;
       }
       if (state.lastSaved?.path) {
@@ -11536,13 +13418,13 @@ ${JSON.stringify(state, null, 2)}
         const lastSavedMapped = mapped !== originalLastPath;
         if (lastSavedMapped && invalidateLastSavedIfMapped) {
           state.lastSaved = null;
-          changed = true;
+          changed2 = true;
         } else {
-          if (lastSavedMapped) changed = true;
+          if (lastSavedMapped) changed2 = true;
           state.lastSaved.path = mapped;
           const context = contextFromPath(mapped, this.contentRoot);
           if (updateLastSavedProfile && context?.depth === 3 && context.surgeon) {
-            if (state.lastSaved.specialty !== context.specialty || state.lastSaved.surgeon !== context.surgeon) changed = true;
+            if (state.lastSaved.specialty !== context.specialty || state.lastSaved.surgeon !== context.surgeon) changed2 = true;
             state.lastSaved.specialty = context.specialty;
             state.lastSaved.surgeon = context.surgeon;
             if (state.lastSaved.preSurgeonRecord) {
@@ -11554,9 +13436,9 @@ ${JSON.stringify(state, null, 2)}
       }
       if (invalidateLastSaved && state.lastSaved) {
         state.lastSaved = null;
-        changed = true;
+        changed2 = true;
       }
-      if (!changed) return false;
+      if (!changed2) return false;
       try {
         await this.saveMigrationSession(state);
         return true;
@@ -11586,26 +13468,26 @@ ${JSON.stringify(state, null, 2)}
     for (let attempt = 0; attempt < 3; attempt++) {
       const state = await this.loadMigrationSession();
       if (!state) return false;
-      let changed = false;
+      let changed2 = false;
       const originalLength = (state.order || []).length;
       state.order = (state.order || []).filter((path) => !matches(path));
-      changed = changed || state.order.length !== originalLength;
+      changed2 = changed2 || state.order.length !== originalLength;
       for (const collection of [state.status, state.working]) {
-        for (const key3 of Object.keys(collection || {})) {
-          if (!matches(key3)) continue;
-          delete collection[key3];
-          changed = true;
+        for (const key4 of Object.keys(collection || {})) {
+          if (!matches(key4)) continue;
+          delete collection[key4];
+          changed2 = true;
         }
       }
       if (matches(state.currentPath)) {
         state.currentPath = "";
-        changed = true;
+        changed2 = true;
       }
       if (matches(state.lastSaved?.path)) {
         state.lastSaved = null;
-        changed = true;
+        changed2 = true;
       }
-      if (!changed) return false;
+      if (!changed2) return false;
       this.reconcileMigrationSessionState(state);
       try {
         await this.saveMigrationSession(state);
@@ -11774,7 +13656,7 @@ ${JSON.stringify(state, null, 2)}
     const c = this.caseContext(file);
     if (!c) throw new Error("Selected note is not a managed case.");
     const working = state.working[path] || (state.working[path] = {});
-    const hasWorking = (key3) => Object.prototype.hasOwnProperty.call(working, key3);
+    const hasWorking = (key4) => Object.prototype.hasOwnProperty.call(working, key4);
     const raw = await this.app.vault.read(file);
     if (c.specialty.toLowerCase() === "spine" && !working.variant) working.variant = await this.inferSpineVariant(file, raw) || "";
     const variant = working.variant || "";
@@ -11816,7 +13698,7 @@ ${JSON.stringify(state, null, 2)}
     let legacyMdCanonical = "";
     if (legacyMdRaw) {
       try {
-        legacyMdCanonical = normalizeGloves(legacyMdRaw);
+        legacyMdCanonical = normalizeGloves2(legacyMdRaw, this.settings);
       } catch (_) {
       }
     }
@@ -11946,7 +13828,7 @@ ${CASE_HEADER_BLOCK}
     }
     let pendingGloves = String(working.pendingGloves || "Unknown").trim() || "Unknown";
     try {
-      pendingGloves = normalizeGloves(pendingGloves);
+      pendingGloves = normalizeGloves2(pendingGloves, this.settings);
     } catch (e) {
       state.status[path] = "needs-review";
       working.gloveError = e.message || String(e);
@@ -12045,7 +13927,7 @@ ${CASE_HEADER_BLOCK}
           rollbackErrors.push(rollback.message || String(rollback));
         }
       }
-      for (const key3 of Object.keys(state)) delete state[key3];
+      for (const key4 of Object.keys(state)) delete state[key4];
       Object.assign(state, preCommitState);
       if (preCommitBaseline != null) this.setMigrationSessionBaseline(state, preCommitBaseline);
       if (rollbackErrors.length) {
@@ -12087,7 +13969,10 @@ ${CASE_HEADER_BLOCK}
     }
     const backup = this.app.vault.getAbstractFileByPath(backupPath);
     if (!(target instanceof TFile) || !(backup instanceof TFile)) throw new Error("Undo snapshot is missing.");
-    const original = await this.app.vault.read(backup);
+    const savedOriginal = await this.app.vault.read(backup);
+    const restoredBody = this.stripResourceMarkers?.(savedOriginal) ?? savedOriginal;
+    const images = await this.attachmentRecovery?.prepareRestore({ text: restoredBody, originalPath: targetPath, targetPath });
+    const original = images?.text ?? restoredBody;
     const migratedCaseText = await this.app.vault.read(target);
     if (shortHash(migratedCaseText) !== postCaseHash) {
       throw new Error("Undo stopped because the migrated case was edited after Save & Next. Copy those edits elsewhere before retrying.");
@@ -12105,8 +13990,8 @@ ${CASE_HEADER_BLOCK}
       } else {
         const parsedBackup = this.parseSurgeonRegistryText(await this.app.vault.read(registryBackup));
         if (parsedBackup.invalid) throw new Error(`Undo surgeon snapshot is invalid: ${parsedBackup.error}.`);
-        const key3 = this.surgeonKey(checkpointSpecialty, checkpointSurgeon);
-        originalSurgeon = parsedBackup.registry.surgeons?.[key3] || null;
+        const key4 = this.surgeonKey(checkpointSpecialty, checkpointSurgeon);
+        originalSurgeon = parsedBackup.registry.surgeons?.[key4] || null;
       }
       migratedSurgeon = registryState.data;
       if (!originalSurgeon || !migratedSurgeon) throw new Error("Undo surgeon checkpoint is incomplete.");
@@ -12121,6 +14006,9 @@ ${CASE_HEADER_BLOCK}
     let caseRestored = false;
     let surgeonRestored = false;
     try {
+      await images?.assertUnchanged();
+      this.assertVaultFilePath(backup, backupPath, "Undo snapshot moved during image recovery.");
+      if (await this.app.vault.read(backup) !== savedOriginal) throw new Error("Undo snapshot changed during image recovery.");
       caseRestored = await this.replaceFileTextExpected(
         target,
         migratedCaseText,
@@ -12128,6 +14016,7 @@ ${CASE_HEADER_BLOCK}
         "Undo stopped because the migrated case changed in another window or device, or moved or was replaced.",
         targetPath
       );
+      await images?.assertUnchanged();
       if (registryBackupPath) {
         await this.applyAdminRegistryChanges([{
           specialty: checkpointSpecialty,
@@ -12168,7 +14057,7 @@ ${CASE_HEADER_BLOCK}
           rollbackErrors.push(rollback.message || String(rollback));
         }
       }
-      for (const key3 of Object.keys(state)) delete state[key3];
+      for (const key4 of Object.keys(state)) delete state[key4];
       Object.assign(state, preUndoState);
       if (preUndoBaseline != null) this.setMigrationSessionBaseline(state, preUndoBaseline);
       if (rollbackErrors.length) {
@@ -12362,10 +14251,10 @@ var OnboardingHideModal = class extends Modal {
   }
 };
 var CSTSidebarView = class extends ItemView {
-  constructor(leaf, plugin) {
-    super(leaf);
+  constructor(leaf2, plugin) {
+    super(leaf2);
     this.plugin = plugin;
-    const initialRoute = plugin.pendingSidebarRoutes?.get(leaf) || {};
+    const initialRoute = plugin.pendingSidebarRoutes?.get(leaf2) || {};
     this.query = String(initialRoute.query || "");
     this.specialty = String(initialRoute.specialty || "");
     this.surgeon = String(initialRoute.surgeon || "");
@@ -12397,7 +14286,7 @@ var CSTSidebarView = class extends ItemView {
     return "CST Notes";
   }
   getIcon() {
-    return "clipboard-list";
+    return "cst-open-kelly";
   }
   isSidebarDependency(path) {
     path = normalizePath(String(path || ""));
@@ -12443,8 +14332,8 @@ var CSTSidebarView = class extends ItemView {
     this.contentEl.empty();
     this.shellReady = false;
   }
-  makeAction(parent2, text, fn, primary = false) {
-    const b = parent2.createEl("button", { text });
+  makeAction(parent3, text, fn, primary = false) {
+    const b = parent3.createEl("button", { text });
     if (primary) b.addClass("mod-cta");
     b.onclick = fn;
     return b;
@@ -12461,7 +14350,7 @@ var CSTSidebarView = class extends ItemView {
     this.makeAction(actions, "+ New Case", () => this.plugin.openNewCase(), true);
     this.makeAction(actions, "Templates", () => this.plugin.navigateFromUI("Templates", () => this.plugin.openPath(this.plugin.p("Admin/Backend/Templates.md"))));
     this.makeAction(actions, "+ Surgeon", () => this.plugin.openNewSurgeon());
-    const home = el.createDiv({ cls: "cst-app-home-nav" });
+    const home = el.createDiv({ cls: "cst-app-home-nav cst-panel-home-nav" });
     this.homeButton = this.makeAction(home, "Home", () => this.navigateHome());
     this.searchInput = makeInput(el, { value: this.query, placeholder: "Search surgeon or case…" });
     this.searchInput.addClass("cst-app-search");
@@ -12664,8 +14553,8 @@ var CSTSidebarView = class extends ItemView {
     const nav = el.createDiv({ cls: "cst-surgeon-nav" });
     const back = nav.createEl("button", { text: `← ${specialty}` });
     back.onclick = () => this.navigateSpecialty(specialty);
-    const graph = nav.createEl("button", { text: "Open Surgeon Note" });
-    graph.onclick = () => this.plugin.navigateFromUI(`Open ${surgeon2} note`, () => this.plugin.openPath(this.plugin.surgeonGraphPath(specialty, surgeon2)));
+    const graph = nav.createEl("button", { text: "Open surgeon profile" });
+    graph.onclick = () => this.plugin.navigateFromUI(`Open ${surgeon2} profile`, () => this.plugin.openPath(this.plugin.surgeonGraphPath(specialty, surgeon2)));
     graph.disabled = !available;
     if (!available) graph.setAttribute("title", "Wait for the surgeon registry record to sync.");
     const card = el.createDiv({ cls: "cst-profile-card" });
@@ -12924,18 +14813,20 @@ var NewSurgeonModal = class extends Modal {
     grid.createEl("label", { text: "Name" });
     const name = makeInput(grid, { placeholder: "Surgeon name" });
     grid.createEl("label", { text: "Gloves" });
-    const gloves = makeInput(grid, { placeholder: "7.5 white / 8 ortho x3" });
-    addGloveHelp(grid, this.plugin.settings.gloveLabels);
+    const gloves = makeInput(grid, { placeholder: glove_settings_exports.gloveHelpText(this.plugin.settings).example });
+    gloves.onkeydown = exitSingleLineOnEnter;
+    addGloveHelp(grid, this.plugin.settings);
     grid.createEl("label", { text: "Gown" });
     const gown = makeSelect(grid, "Gown");
-    for (const g of GOWNS) addOption(gown, g);
+    for (const g of GOWNS2) addOption(gown, g);
     gown.value = this.plugin.settings.defaultGown;
     grid.createEl("label", { text: "Music preferences" });
     const music = makeInput(grid, { placeholder: "Optional" });
+    music.onkeydown = exitSingleLineOnEnter;
     const preview = el.createDiv({ cls: "cst-preview" });
     const update = () => {
       try {
-        preview.setText(`Stored: ${formatGloves(normalizeGloves(gloves.value || "Unknown"))} · ${gown.value}`);
+        preview.setText(`Stored: ${formatGloves(normalizeGloves2(gloves.value || "Unknown", this.plugin.settings))} · ${gown.value}`);
       } catch (e) {
         preview.setText(e.message);
       }
@@ -12956,7 +14847,7 @@ var NewSurgeonModal = class extends Modal {
         const n = validatedPathSegment(name.value, "Surgeon", { person: true });
         const collision = this.plugin.getSurgeons(this.specialty).find((s) => s.normalize("NFC").toLocaleLowerCase() === n.normalize("NFC").toLocaleLowerCase());
         if (collision) throw new Error(`${collision} already exists in ${this.specialty}.`);
-        const canon = normalizeGloves(gloves.value || "Unknown");
+        const canon = normalizeGloves2(gloves.value || "Unknown", this.plugin.settings);
         await this.plugin.createSurgeon({ specialty: this.specialty, surgeon: n, gloves: canon, gown: gown.value, music: music.value });
         new Notice(`${n} added to ${this.specialty}.`);
         this.close();
@@ -14261,7 +16152,8 @@ var LegacyTemplateMigrationModal = class extends Modal {
     if (!Object.prototype.hasOwnProperty.call(working, "pendingGloves")) working.pendingGloves = sd.gloves || "Unknown";
     const surgeonControls = destPane.createDiv({ cls: "cst-migration-surgeon-controls" });
     surgeonControls.createEl("label", { text: "MD Gloves" });
-    const gloveInput = makeInput(surgeonControls, { value: working.pendingGloves ?? "", placeholder: "e.g. 7.5W / 8Ox3" });
+    const gloveInput = makeInput(surgeonControls, { value: working.pendingGloves ?? "", placeholder: glove_settings_exports.gloveHelpText(this.plugin.settings).example });
+    gloveInput.onkeydown = exitSingleLineOnEnter;
     this.gloveInput = gloveInput;
     const gloveHint = surgeonControls.createEl("div", { text: "Migration-only control. On successful Save & Next this updates the surgeon record; it is never written as static text into the case.", cls: "cst-muted" });
     gloveHint.id = `${this.accessibilityId}-glove-hint`;
@@ -14276,7 +16168,7 @@ var LegacyTemplateMigrationModal = class extends Modal {
       working.pendingGloves = raw;
       if (userInitiated) working.pendingGlovesTouched = true;
       try {
-        const canon = normalizeGloves(raw);
+        const canon = normalizeGloves2(raw, this.plugin.settings);
         gloveError.setText("");
         if (normalize) {
           gloveInput.value = canon;
@@ -14298,10 +16190,10 @@ var LegacyTemplateMigrationModal = class extends Modal {
     };
     updateGlovePreview(false, false);
     if (working.gloveConflict && working.legacyMdGloves) {
-      const conflict2 = destPane.createDiv({ cls: "cst-glove-conflict" });
-      conflict2.createEl("strong", { text: "Legacy MD glove conflict" });
-      conflict2.createEl("div", { text: `Current surgeon: ${formatGloves(sd.gloves || "Unknown")} · Legacy MD: ${formatGloves(working.legacyMdGloves)}`, cls: "cst-muted" });
-      const buttons = conflict2.createDiv({ cls: "cst-actions" });
+      const conflict3 = destPane.createDiv({ cls: "cst-glove-conflict" });
+      conflict3.createEl("strong", { text: "Legacy MD glove conflict" });
+      conflict3.createEl("div", { text: `Current surgeon: ${formatGloves(sd.gloves || "Unknown")} · Legacy MD: ${formatGloves(working.legacyMdGloves)}`, cls: "cst-muted" });
+      const buttons = conflict3.createDiv({ cls: "cst-actions" });
       const keep = buttons.createEl("button", { text: "Keep Current" });
       this.bindMigrationAction(keep, "Keep current glove profile", async () => {
         working.pendingGloves = sd.gloves || "Unknown";
@@ -14503,16 +16395,18 @@ var CSTSettingsTab = class extends PluginSettingTab {
   display() {
     const { containerEl } = this;
     containerEl.empty();
+    containerEl.addClass("cst-settings-editor");
+    containerEl.onkeydown = exitSingleLineOnEnter;
     containerEl.createEl("h2", { text: "CST Notes" });
     let stagedContentRoot = this.plugin.settings.contentRoot;
     let stagedBackendRoot = this.plugin.settings.backendRoot;
-    const persistSetting = async (key3, value, label) => {
-      const previous = this.plugin.settings[key3];
-      this.plugin.settings[key3] = value;
+    const persistSetting = async (key4, value, label) => {
+      const previous = this.plugin.settings[key4];
+      this.plugin.settings[key4] = value;
       try {
         await this.plugin.saveSettings();
       } catch (error) {
-        this.plugin.settings[key3] = previous;
+        this.plugin.settings[key4] = previous;
         console.error(`CST setting save failed: ${label}`, error);
         new Notice(`${label} was not saved: ${error.message || error}`);
       }
@@ -14554,16 +16448,7 @@ var CSTSettingsTab = class extends PluginSettingTab {
         new Notice(error.message || String(error));
       }
     }));
-    new Setting(containerEl).setName("Default gown").addDropdown((d) => {
-      GOWNS.forEach((g) => d.addOption(g, g));
-      d.setValue(this.plugin.settings.defaultGown).onChange((v) => {
-        void persistSetting("defaultGown", v, "Default gown");
-      });
-    });
-    new Setting(containerEl).setName("Verification debounce").setDesc("Seconds after the last edit before hidden last_verified is updated.").addText((t) => t.setValue(String(Math.round(this.plugin.settings.verificationDebounceMs / 1e3))).onChange((v) => {
-      const n = Math.max(5, Number(v) || 45);
-      void persistSetting("verificationDebounceMs", n * 1e3, "Verification debounce");
-    }));
+    glove_settings_exports.renderGloveSettingsEditor(containerEl, this.plugin);
     new Setting(containerEl).setName("Open CST app at startup").setDesc("Desktop opens the CST view in the right sidebar; mobile opens it as a normal tab.").addToggle((t) => t.setValue(!!this.plugin.settings.autoOpenSidebar).onChange((v) => {
       void persistSetting("autoOpenSidebar", v, "Open CST app at startup");
     }));

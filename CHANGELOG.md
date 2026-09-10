@@ -1,5 +1,14 @@
 # CST Notes changelog
 
+## 0.1.11
+
+- Refined the General example template and onboarding completion; safely finish opted-in example cleanup while preserving Kept Examples and explicit recovery.
+- Added the mirrored, transparent open-Kelly icon, supported mobile shortcut/toolbar setup, community-plugin update checks, and verified Home-button fallback.
+- Made dialogs scrollable and single-line inputs escapable with Enter; clarified surgeon-profile navigation.
+- Added Save-based Admin settings, configurable glove labels/codes and normalized sizes, human-readable storage, protected tab clearing, and developer-only Resources/verification timing.
+- Added clipboard-button import with recipient review and fallback input; restoring cases now opens the restored note.
+- Moved resource-grab tracking out of case text and enabled recovery-aware image organization with protected backups.
+
 ## 0.1.10
 
 - Fresh setup opens the CST Notes app; onboarding stays visible when returning and provides clearer starting hints.

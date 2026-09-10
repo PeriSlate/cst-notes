@@ -161,12 +161,12 @@ body .cst-app-home-nav > button {
   display: block;
   width: 100%;
   min-height: 38px;
-  background-color: var(--interactive-accent);
+  background-color: color-mix(in srgb, var(--interactive-accent) 76%, #000);
   color: var(--text-on-accent);
 }
 body .cst-app-home-nav > button:hover,
 body .cst-app-home-nav > button:active {
-  background-color: var(--interactive-accent-hover);
+  background-color: color-mix(in srgb, var(--interactive-accent) 86%, #000);
 }
 
 .cst-live-header .cst-actions .cst-app-home-nav {
@@ -1142,3 +1142,41 @@ body .modal-container .modal.cst-transfer-modal .cst-transfer-content {
     --cst-transfer-viewport: 100dvh;
   }
 }
+
+/* Shared CST-only dialog boundaries; other Obsidian/plugin dialogs are untouched. */
+body .modal-container .modal.cst-accessible-modal {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  max-height: calc(var(--cst-dialog-height, 100dvh) - 24px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+  max-width: calc(100vw - 24px - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px));
+  overflow: hidden;
+}
+body .modal.cst-accessible-modal .modal-content {
+  min-height: 0;
+  min-width: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  overflow-wrap: anywhere;
+  padding-top: 28px;
+  padding-bottom: 16px;
+}
+.cst-accessible-modal input:not([type="checkbox"]),
+.cst-accessible-modal textarea,
+.cst-accessible-modal select,
+.cst-settings-editor input {
+  box-sizing: border-box;
+  max-width: 100%;
+  min-width: 0;
+  font-size: 16px;
+}
+.cst-accessible-modal button {
+  min-height: 44px;
+  height: auto;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+body.cst-mobile-shortcuts-ready .cst-app-home-nav:not(.cst-panel-home-nav) { display: none; }
+.cst-settings-editor .cst-settings-status { min-height: 1.5em; }
