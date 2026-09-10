@@ -2,6 +2,7 @@
 
 ## Onboarding and examples
 
+- Silent wording correction: onboarding teaches swipe-down navigation on mobile, with Command Palette fallback and desktop Kelly-icon guidance, instead of directing users to Home buttons.
 - The Example template is now a reusable General template with an empty Case section. The filled Lap Chole example remains available for learning the note structure.
 - Onboarding uses clearer "make an edit" wording and recognizes completed users who chose to keep their examples.
 - Start fresh removes the owned example surgeon, practice cases, and example-template backend from the active workspace using recoverable archives. This includes user-created cases under the owned Dr. Example. A one-time update cleanup finishes earlier Start fresh requests; Kept Examples and unrelated notes are preserved.

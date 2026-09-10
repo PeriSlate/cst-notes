@@ -19,6 +19,8 @@ PeriSlate authorizes the Obsidian Community directory to access the private sour
 
 The private source repository includes a pinned deterministic JavaScript bundler and release verification checks. Rebuilding the private source must produce the exact public `main.js` for v0.1.11. Source files themselves are not individual release assets.
 
+For the approved silent onboarding correction, the original 0.1.11 tags remain historical snapshots. The updated release notes identify the replacement runtime's public commit and workflow; its fresh attestation is bound to that commit rather than the original tag. Reproduce the replacement from the corresponding recorded private-source revision. The manifest, stylesheet, and version number are unchanged.
+
 ## Maintainer action before submission
 
 1. Push the public distribution repository to GitHub.

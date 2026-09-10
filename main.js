@@ -7291,7 +7291,7 @@ var CSTNotesPlugin = class extends Plugin {
     const progress = card.createEl("progress");
     progress.max = 6;
     progress.setAttribute("aria-label", "Getting started progress");
-    card.createEl("p", { text: 'Reopen CST Notes using the available Home buttons or swipe down and search for "CST Notes: Open CST app".' });
+    card.createEl("p", { text: 'On mobile, swipe down on a note to reopen CST Notes. If the Command Palette appears, search for "CST Notes: Open CST app". On desktop, use the Kelly icon in the ribbon.' });
     card.createEl("p", { text: "Steps complete as you use the app.", cls: "cst-muted" });
     const list = card.createEl("ul");
     for (const [key4] of this.onboardingTasks()) list.createEl("li").setAttribute("data-onboarding-task", key4);
