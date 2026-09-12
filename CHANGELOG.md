@@ -2,6 +2,7 @@
 
 ## 0.1.11
 
+- Silent input correction: fixed glove, music, and settings fields that blocked typing. Enter still exits single-line fields. Restored familiar glove shorthand examples.
 - Silent wording correction: onboarding teaches swipe-down navigation on mobile instead of Home buttons, with Command Palette and desktop Kelly-icon guidance.
 - Refined the General example template and onboarding completion; safely finish opted-in example cleanup while preserving Kept Examples and explicit recovery.
 - Added the mirrored, transparent open-Kelly icon, supported mobile shortcut/toolbar setup, community-plugin update checks, and verified Home-button fallback.

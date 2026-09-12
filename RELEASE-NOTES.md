@@ -1,5 +1,9 @@
 # CST Notes 0.1.11
 
+## Silent input correction
+
+- Fixed glove, music, and settings fields that blocked typing. Enter still exits single-line fields. Restored familiar glove shorthand examples.
+
 ## Onboarding and examples
 
 - Silent wording correction: onboarding teaches swipe-down navigation on mobile, with Command Palette fallback and desktop Kelly-icon guidance, instead of directing users to Home buttons.

@@ -2448,10 +2448,10 @@ function formatStorageBytes(value) {
   return `${i ? Number(n.toFixed(2)) : Math.round(n)} ${units[i]}`;
 }
 function exitSingleLineOnEnter(event) {
-  if (event.key !== "Enter" || event.isComposing || event.keyCode === 229 || event.defaultPrevented) return false;
+  if (event.key !== "Enter" || event.isComposing || event.keyCode === 229 || event.defaultPrevented) return;
   const input = event.target;
-  if (String(input?.tagName || "").toLowerCase() !== "input" || !["text", "search", "number", "email", "url", "tel", "password"].includes(input.type || "text")) return false;
-  if (input.getAttribute?.("aria-expanded") === "true") return false;
+  if (String(input?.tagName || "").toLowerCase() !== "input" || !["text", "search", "number", "email", "url", "tel", "password"].includes(input.type || "text")) return;
+  if (input.getAttribute?.("aria-expanded") === "true") return;
   event.preventDefault();
   input.blur();
   return true;
@@ -5900,10 +5900,23 @@ function gloveLegend(value, settings = {}) {
 }
 function gloveHelpText(settings = {}) {
   const config = normalizeGloveConfig(settings);
+  const example = `${config.gloveSizes[0]}${config.gloveTypes[0]?.code || ""}x2`;
+  const describe = (raw) => {
+    try {
+      return `"${raw}" → ${normalizeGloves(raw, config).replace(/x(\d+)/g, " x$1")}`;
+    } catch (error) {
+      if (error instanceof GloveValidationError) return "";
+      throw error;
+    }
+  };
+  const examples = ["8b8w", "8wx2"].map(describe).filter(Boolean);
+  if (!examples.length) examples.push(describe(example.toLowerCase()));
   return {
     legend: config.gloveTypes.map((type) => `${type.code} = ${type.label}`).join(" · "),
+    inputLegend: config.gloveTypes.map((type) => `${type.code.toLowerCase()} = ${type.label}`).join(" · "),
+    examples: `Examples: ${examples.join(" · ")}`,
     sizes: config.gloveSizes.join(", "),
-    example: `${config.gloveSizes[0]}${config.gloveTypes[0]?.code || ""}x2`,
+    example,
     description: "Enter size, optional type code, and optional x quantity (1–99). Use / between entries. Unknown is always available."
   };
 }
@@ -6701,8 +6714,8 @@ function addGloveHelp(parent3, settings) {
   const help = parent3.createDiv({ cls: "cst-field-help cst-glove-help" });
   try {
     const guidance = glove_settings_exports.gloveHelpText(settings);
-    help.createDiv({ text: guidance.legend });
-    help.createDiv({ text: `Sizes: ${guidance.sizes}. ${guidance.description} Example: "${guidance.example}".` });
+    help.createDiv({ text: guidance.inputLegend });
+    help.createDiv({ text: guidance.examples });
   } catch (error) {
     help.createDiv({ text: error.message || String(error) });
   }
@@ -12130,8 +12143,8 @@ Diagnostic persistence also failed: ${diagnosticError?.stack || diagnosticError}
     for (const doc of this.workspaceDocuments()) {
       doc.querySelectorAll(".cst-glove-help").forEach((help) => {
         const lines = help.querySelectorAll("div");
-        if (lines[0]) lines[0].textContent = guidance.legend;
-        if (lines[1]) lines[1].textContent = `Sizes: ${guidance.sizes}. ${guidance.description} Example: "${guidance.example}".`;
+        if (lines[0]) lines[0].textContent = guidance.inputLegend;
+        if (lines[1]) lines[1].textContent = guidance.examples;
       });
       const visible = /* @__PURE__ */ new Map();
       doc.querySelectorAll(".cst-live-header").forEach((header) => {
