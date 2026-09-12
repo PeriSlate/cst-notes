@@ -430,9 +430,9 @@ function createTransferService(plugin, deps) {
     await ready();
     await duplicate(bundle);
     const specialty = transferSegment(deps.validatedPathSegment(choice.specialty, "Specialty"), "Specialty");
-    const surgeon2 = transferSegment(deps.validatedPathSegment(choice.surgeon, "Surgeon", { person: true }), "Surgeon");
+    const surgeon = transferSegment(deps.validatedPathSegment(choice.surgeon, "Surgeon", { person: true }), "Surgeon");
     const title = transferSegment(deps.validatedPathSegment(choice.title, "Case title"), "Case title");
-    const specialtyPath = path(plugin.contentRoot, specialty), surgeonPath = path(specialtyPath, surgeon2);
+    const specialtyPath = path(plugin.contentRoot, specialty), surgeonPath = path(specialtyPath, surgeon);
     for (const p of [specialtyPath, surgeonPath]) {
       const existing = lookup(p);
       if (existing && !(existing instanceof deps.TFolder)) fail(`Destination is not a folder: ${p}`);
@@ -443,7 +443,7 @@ function createTransferService(plugin, deps) {
     const registryFile = lookup(plugin.surgeonRegistryPath());
     if (!isFile(registryFile)) fail("Surgeon registry unavailable.");
     const registry = await read(registryFile);
-    const current = await plugin.getRegistrySurgeon(specialty, surgeon2, { create: false });
+    const current = await plugin.getRegistrySurgeon(specialty, surgeon, { create: false });
     if (current.invalid) fail("Surgeon registry is invalid. Repair it before import.");
     const recipient = current.data ? JSON.parse(JSON.stringify(current.data)) : null;
     await check(registry);
@@ -460,7 +460,7 @@ function createTransferService(plugin, deps) {
     path(transferRoot, "source.cst.json");
     if (bundle.version === 1) path(transferRoot, "Sender template.md");
     for (const item of bundle.attachments) path(attachmentRoot, item.name);
-    return { parentGuards: parents([casePath, path(transferRoot, "source.cst.json"), path(attachmentRoot, "image-1.png")]), bundle, specialty, surgeon: surgeon2, title, casePath, specialtyPath, surgeonPath, specialtyObject: lookup(specialtyPath), surgeonObject: lookup(surgeonPath), registry, recipient, fingerprint: recipient ? plugin.surgeonRecordFingerprint(recipient) : "", resolved, transferRoot, attachmentRoot, caseId: unique("case") };
+    return { parentGuards: parents([casePath, path(transferRoot, "source.cst.json"), path(attachmentRoot, "image-1.png")]), bundle, specialty, surgeon, title, casePath, specialtyPath, surgeonPath, specialtyObject: lookup(specialtyPath), surgeonObject: lookup(surgeonPath), registry, recipient, fingerprint: recipient ? plugin.surgeonRecordFingerprint(recipient) : "", resolved, transferRoot, attachmentRoot, caseId: unique("case") };
   }
   async function commitImport(plan) {
     parseTransfer(JSON.stringify(plan.bundle));
@@ -860,16 +860,16 @@ function installTransferFeatures(plugin, deps) {
     const specialty = select(el, "Destination specialty", [["", "Create specialty…"], ...specialties.map((s) => [s, s])], initial);
     const newSpecialty = input(el, "New specialty name", defaults.specialty);
     const surgeonWrap = el.createDiv();
-    let surgeon2, newSurgeon;
+    let surgeon, newSurgeon;
     function surgeons() {
       newSpecialty.hidden = !!specialty.value;
       surgeonWrap.empty();
       const names = specialty.value ? plugin.getSurgeons(specialty.value) : [];
-      surgeon2 = select(surgeonWrap, "Destination surgeon", [["", "Create surgeon…"], ...names.map((s) => [s, s])], names.includes(defaults.surgeon) ? defaults.surgeon : "");
+      surgeon = select(surgeonWrap, "Destination surgeon", [["", "Create surgeon…"], ...names.map((s) => [s, s])], names.includes(defaults.surgeon) ? defaults.surgeon : "");
       newSurgeon = input(surgeonWrap, "New surgeon name", defaults.surgeon);
-      newSurgeon.hidden = !!surgeon2.value;
-      surgeon2.onchange = () => {
-        newSurgeon.hidden = !!surgeon2.value;
+      newSurgeon.hidden = !!surgeon.value;
+      surgeon.onchange = () => {
+        newSurgeon.hidden = !!surgeon.value;
         changed2();
       };
       newSurgeon.oninput = changed2;
@@ -882,7 +882,7 @@ function installTransferFeatures(plugin, deps) {
     newSpecialty.oninput = changed2;
     const title = input(el, "New case name (never overwrites an existing case)", defaults.title);
     title.oninput = changed2;
-    return () => ({ specialty: specialty.value || newSpecialty.value, surgeon: surgeon2.value || newSurgeon.value, title: title.value });
+    return () => ({ specialty: specialty.value || newSpecialty.value, surgeon: surgeon.value || newSurgeon.value, title: title.value });
   }
   function confirmImport(plan, sourceState, sourceView, afterImport) {
     if (sourceState) plan.sourceState = sourceState;
@@ -1021,41 +1021,64 @@ function installTransferFeatures(plugin, deps) {
       modal("Privacy preview", (preview, confirm) => {
         bundlePreview(preview, plan.bundle);
         for (const warning of plan.warnings) preview.createEl("p", { text: warning });
-        preview.createEl("p", { text: `Save shareable file in your vault: ${plan.exportPath}. On mobile or desktop, select the file in Obsidian’s Files pane and use the available share/open action or your device’s Files app.` });
-        preview.createEl("p", { text: "To receive this case: copy the shared JSON, then Admin → Import → Import from CST Notes → Import from clipboard → review and import. Older versions may need an update to read the new portable format." });
+        preview.createEl("p", { text: `Save package creates a self-contained .cst.json file in your vault: ${plan.exportPath}. Share that file using an available Obsidian share/open action or your device’s Files app.` });
+        preview.createEl("p", { text: "Copy package copies the same package as text. Send the complete text unchanged; no JSON editing is needed. To receive it: Admin → Import → Import from CST Notes → Import from clipboard → review and import. You can also choose the saved package file. Older versions may need an update to read the new portable format." });
         const consent = check(preview, "I reviewed all text and images and approve sharing this export.");
         const manual = preview.createDiv({ cls: "cst-transfer-manual-copy" });
         const actions = preview.createDiv({ cls: "cst-transfer-actions" });
-        button(actions, "Copy JSON", async () => {
+        function approved() {
+          if (!confirm.alive || !view.alive) return false;
           if (!consent.checked) throw new Error("Review the privacy preview and confirm before exporting.");
+          return true;
+        }
+        async function reviewedJSON() {
+          if (!approved()) return null;
           const json = await service.exportJSON(plan);
-          if (!confirm.alive || !view.alive) return;
-          const copy = deps.copyText || (globalThis.navigator?.clipboard?.writeText ? (text) => globalThis.navigator.clipboard.writeText(text) : null);
+          return approved() ? json : null;
+        }
+        consent.onchange = () => {
+          if (!consent.checked) manual.empty();
+        };
+        button(actions, "Copy package", async () => {
+          manual.empty();
+          const json = await reviewedJSON();
+          if (json === null) return;
           try {
-            if (!copy) throw new Error("Clipboard unavailable");
-            await copy(json);
-            notice("JSON copied. Send it to the recipient to use Import from clipboard in Import from CST Notes.");
+            const copy = deps.copyText;
+            let copied;
+            if (typeof copy === "function") copied = await copy(json);
+            else {
+              const clipboard = globalThis.navigator?.clipboard;
+              const writeText = clipboard?.writeText;
+              if (typeof writeText !== "function") throw new Error("Clipboard unavailable");
+              copied = await writeText.call(clipboard, json);
+            }
+            if (copied === false) throw new Error("Clipboard copy failed");
           } catch {
-            if (!confirm.alive || !view.alive) return;
-            manual.empty();
-            manual.createEl("p", { text: "Automatic copying is unavailable on this device. Select the JSON below and use Copy, or save the portable file instead." });
-            const area = manual.createEl("textarea", { cls: "cst-transfer-json", attr: { "aria-label": "JSON to copy manually", rows: "6", readonly: "", spellcheck: "false" } });
-            area.value = json;
-            button(manual, "Select JSON", async () => {
-              area.value = await service.exportJSON(plan);
-              if (!confirm.alive) return;
+            const fallback = await reviewedJSON();
+            if (fallback === null) return;
+            manual.createEl("p", { text: "Automatic copying is unavailable on this device. Select the complete package text below and use Copy, or choose Save package. Send it unchanged; no JSON editing is needed." });
+            const area = manual.createEl("textarea", { cls: "cst-transfer-json", attr: { "aria-label": "Package text to copy manually", rows: "6", readonly: "", spellcheck: "false" } });
+            area.value = fallback;
+            button(manual, "Select package text", async () => {
+              area.value = "";
+              const current = await reviewedJSON();
+              if (current === null) return;
+              area.value = current;
               area.focus?.();
               area.select?.();
               area.setSelectionRange?.(0, area.value.length);
             });
+            return;
           }
+          if (confirm.alive && view.alive) notice("Package text copied. Send it unchanged for the recipient to use Import from clipboard in Import from CST Notes.");
         });
-        button(actions, "Save portable export", async () => {
-          if (!consent.checked) throw new Error("Review the privacy preview and confirm before exporting.");
+        button(actions, "Save package", async () => {
+          if (!approved()) return;
           const exported = await service.saveExport(plan);
           confirm.close();
           view.close();
-          notice(`Portable export saved: ${exported.path}`);
+          notice(`Package saved: ${exported.path}`);
           await plugin.openFile(exported);
         });
       });
@@ -1063,7 +1086,7 @@ function installTransferFeatures(plugin, deps) {
   });
   plugin.openCSTImport = () => modal("Import from CST Notes", (el, view) => {
     el.classList?.add("cst-transfer-import");
-    el.createEl("p", { text: "Copy the JSON shared by another CST Notes user, then choose Import from clipboard. Clipboard access happens only when you choose that button. Review the case, destination and surgeon profile before confirming the import." });
+    el.createEl("p", { text: "Copy the complete package text shared by another CST Notes user, then choose Import from clipboard, or choose their saved .cst.json package file. No JSON editing is needed. Clipboard access happens only when you choose that button. Review the case, destination and surgeon profile before confirming the import." });
     let readClipboard = null;
     try {
       if (typeof deps.readClipboardText === "function") readClipboard = () => deps.readClipboardText();
@@ -1126,7 +1149,7 @@ function installTransferFeatures(plugin, deps) {
     button(actions, "Cancel", () => view.close());
     const manual = el.createDiv({ cls: "cst-transfer-manual-paste" });
     manual.hidden = true;
-    manual.createEl("p", { text: "Paste the exported JSON below. Choose Continue or press Enter to validate it and review the recipient details. Shift+Enter adds a line break." });
+    manual.createEl("p", { text: "Paste the complete package text unchanged below. No JSON editing is needed. Choose Continue or press Enter to validate it and review the recipient details. Shift+Enter adds a line break." });
     const pasted = manual.createEl("textarea", { cls: "cst-transfer-json", attr: { "aria-label": "Paste CST Notes JSON", placeholder: "Paste exported CST Notes JSON here", rows: "6", spellcheck: "false", autocapitalize: "off", autocomplete: "off", maxlength: String(TRANSFER_LIMITS.bytes + 1) } });
     const continueActions = manual.createDiv({ cls: "cst-transfer-actions" });
     const continueButton = button(continueActions, "Continue", () => review(() => ({ raw: pasted.value })));
@@ -2457,6 +2480,31 @@ function exitSingleLineOnEnter(event) {
   return true;
 }
 
+// src/surgeon-archive.mjs
+function surgeonArchiveMapping(data, { content, backend, manifestPath, validatePath, allowPrepared = false }) {
+  const fail2 = () => {
+    throw new Error("Invalid or incomplete surgeon archive mapping.");
+  };
+  const clean = (value) => {
+    if (typeof value !== "string") fail2();
+    validatePath(value);
+    return value;
+  };
+  if (data?.version !== 1 || data.type !== "cst-surgeon-archive" || !(data.state === "archived" || allowPrepared && data.state === "prepared") || data.content_root !== content || data.backend_root !== backend || !Array.isArray(data.entries)) fail2();
+  const target = clean(data.original_path), source = clean(data.archive_path);
+  const parts = target.startsWith(content + "/") ? target.slice(content.length + 1).split("/") : [];
+  if (parts.length !== 2 || source !== manifestPath.slice(0, manifestPath.lastIndexOf("/")) + "/Content" || data.surgeon_record?.specialty !== parts[0] || data.surgeon_record?.surgeon !== parts[1] || typeof data.surgeon_record?.cst_id !== "string" || !data.surgeon_record.cst_id) fail2();
+  const seen = /* @__PURE__ */ new Set();
+  const entries = data.entries.map((item) => {
+    const original = clean(item.original_path);
+    if (original !== target && !original.startsWith(target + "/") || !["folder", "file"].includes(item.kind) || seen.has(original.toLowerCase())) fail2();
+    seen.add(original.toLowerCase());
+    return { original, source: clean(source + original.slice(target.length)), kind: item.kind };
+  });
+  if (!entries.some((item) => item.original === target && item.kind === "folder")) fail2();
+  return { source, target, entries, specialty: parts[0], surgeon: parts[1] };
+}
+
 // src/admin-workspace.mjs
 var ADMIN_DEVELOPER_PAGES = Object.freeze([
   "system",
@@ -2615,6 +2663,14 @@ function installAdminWorkspace(plugin, deps) {
     if (live.length !== entries.length) throw new Error("CST folder contents changed. Preview again after Sync.");
     for (const entry of entries) await check(entry, currentRoot + entry.path.slice(originalRoot.length));
   }
+  function assertSavedEditors(entries) {
+    for (const leaf2 of plugin.app.workspace?.getLeavesOfType?.("markdown") || []) {
+      const view = leaf2.view, entry = entries.find((e) => e.object === view?.file);
+      if (entry && view.editor?.getValue && view.editor.getValue() !== entry.content) {
+        throw new Error("Save or close the unsaved editor before deleting: " + entry.path);
+      }
+    }
+  }
   function token(plan) {
     for (const name of ["source", "entry", "roots"]) if (plan[name]) Object.freeze(plan[name]);
     for (const name of ["content", "backend", "inventory", "affected"]) if (plan[name]) {
@@ -2692,6 +2748,228 @@ function installAdminWorkspace(plugin, deps) {
     if (!within(target, r.content)) return null;
     const parts = target.slice(r.content.length + 1).split("/");
     return parts.length === 3 && /\.md$/i.test(parts[2]) ? parts : null;
+  }
+  async function previewSurgeonDeletion(specialty, surgeon) {
+    if (needsResetReview() || !await plugin.quickStructureCheck()) throw new Error("Wait for Sync and finish recovery before deleting a surgeon.");
+    if (!plugin.getSpecialties().includes(specialty) || !plugin.getSurgeons(specialty).includes(surgeon)) throw new Error("Select an existing specialty and surgeon.");
+    const r = roots(), target = path(`${r.content}/${specialty}/${surgeon}`);
+    const content = await inventory(target);
+    const registry = await capture(get(plugin.surgeonRegistryPath()));
+    const parsed = plugin.parseSurgeonRegistryText(registry.content);
+    const key4 = plugin.surgeonKey(specialty, surgeon), record = parsed.registry?.surgeons?.[key4];
+    if (parsed.invalid || !record?.cst_id) throw new Error("The surgeon registry is incomplete. Wait for Sync before retrying.");
+    const recordJSON = JSON.stringify(plugin.adminRegistryRecord(record, specialty, surgeon));
+    const cases = content.filter((e) => isFile(e.object) && caseParts(e.path));
+    for (const entry of cases) {
+      const fm = parseFrontmatterObject2(entry.content);
+      if (fm.cst_type !== "case" || !fm.cst_id || fm.surgeon_id !== record.cst_id || fm.specialty !== specialty || fm.surgeon !== surgeon) {
+        throw new Error("A case has an unresolved identity: " + entry.path + ". Resolve it before deleting the surgeon.");
+      }
+    }
+    const backendPaths = [plugin.surgeonGraphPath(specialty, surgeon), plugin.surgeonDataPath(specialty, surgeon), plugin.legacySurgeonDataPath(specialty, surgeon)];
+    const backend = [];
+    for (const p of backendPaths) {
+      const object2 = get(p);
+      if (!object2) continue;
+      if (!isFile(object2)) throw new Error("A folder blocks the surgeon backend: " + p);
+      const entry = await capture(object2);
+      const fm = object2.extension === "json" ? JSON.parse(entry.content) : parseFrontmatterObject2(entry.content);
+      if ((p === backendPaths[0] ? fm.cst_type !== "surgeon-node" || fm.generated !== true || fm.surgeon_id !== record.cst_id : fm.cst_id !== record.cst_id) || fm.specialty !== specialty || fm.surgeon !== surgeon) throw new Error("Surgeon backend identity is ambiguous: " + p);
+      backend.push(entry);
+    }
+    const sessionPath = plugin.migrationSessionPath(), sessionFile = get(sessionPath);
+    if (sessionFile && !isFile(sessionFile)) throw new Error("Migration session path is not a file.");
+    const session = sessionFile ? Object.freeze(await capture(sessionFile)) : null;
+    let sessionNext = session?.content;
+    if (session) {
+      const state = plugin.parseMigrationSessionText(session.content);
+      const matches = (p) => p === target || p?.startsWith(target + "/");
+      state.order = state.order.filter((p) => !matches(p));
+      for (const collection of [state.status, state.working]) for (const p of Object.keys(collection || {})) if (matches(p)) delete collection[p];
+      if (matches(state.currentPath)) state.currentPath = "";
+      if (matches(state.lastSaved?.path)) state.lastSaved = null;
+      plugin.reconcileMigrationSessionState(state);
+      state.revision++;
+      sessionNext = plugin.migrationSessionText(state);
+    }
+    await checkInventory(content, target);
+    await check(registry);
+    if (session) await check(session);
+    assertSavedEditors([...content, ...backend, registry, ...session ? [session] : []]);
+    const archivePath = unique(path(`${r.archive}/Surgeon-${Date.now()}`));
+    return token({
+      kind: "surgeon-deletion",
+      rootKey: JSON.stringify(r),
+      target,
+      specialty,
+      surgeon,
+      key: key4,
+      recordJSON,
+      registry: Object.freeze(registry),
+      registryJSON: JSON.stringify(parsed.registry),
+      content,
+      backend,
+      backendPaths: Object.freeze(backendPaths),
+      sessionPath,
+      session,
+      sessionNext,
+      archivePath,
+      caseCount: cases.length
+    });
+  }
+  async function deleteSurgeon(plan) {
+    return exclusive(async () => {
+      consume(plan, "surgeon-deletion");
+      if (needsResetReview() || !await plugin.quickStructureCheck()) throw new Error("Wait for Sync before deleting the surgeon.");
+      const r = roots(), moves = [], moved = [];
+      const assertSources = async () => {
+        await checkInventory(plan.content, plan.target);
+        await check(plan.registry);
+        assertSavedEditors([...plan.content, ...plan.backend, plan.registry, ...plan.session ? [plan.session] : []]);
+        for (const entry of plan.backend) await check(entry);
+        for (const p of plan.backendPaths) if (!plan.backend.some((e) => e.path === p) && get(p)) throw new Error("New surgeon backend arrived after preview.");
+        if (plan.session) await check(plan.session);
+        else if (get(plan.sessionPath)) throw new Error("A migration session arrived after preview.");
+        if (occupied(plan.archivePath)) throw new Error("Archive destination changed. Preview again.");
+      };
+      await assertSources();
+      const manifestPath = plan.archivePath + "/Surgeon Manifest.json";
+      const data = {
+        version: 1,
+        type: "cst-surgeon-archive",
+        state: "prepared",
+        content_root: r.content,
+        backend_root: r.backend,
+        original_path: plan.target,
+        archive_path: plan.archivePath + "/Content",
+        surgeon_record: JSON.parse(plan.recordJSON),
+        entries: plan.content.map((e) => ({ original_path: e.path, kind: isFolder(e.object) ? "folder" : "file" }))
+      };
+      const prepared = JSON.stringify(data, null, 2) + "\n";
+      await ensureParents(manifestPath);
+      const manifest = await vault.create(manifestPath, prepared);
+      await vault.create(plan.archivePath + "/Registry.md", plan.registry.content);
+      if (plan.session) await vault.create(plan.archivePath + "/Migration Session.md", plan.session.content);
+      moves.push({ entry: plan.content[0], destination: data.archive_path, inventory: plan.content });
+      for (const entry of plan.backend) moves.push({ entry, destination: path(plan.archivePath + "/Backend" + entry.path.slice(r.backend.length)) });
+      let registryChanged = false, sessionChanged = false;
+      try {
+        await check(plan.registry);
+        if (plan.session) await check(plan.session);
+        for (const move of moves) {
+          await ensureParents(move.destination);
+          assertSavedEditors(move.inventory || [move.entry]);
+          if (move.inventory) await checkInventory(move.inventory, move.entry.path);
+          else await check(move.entry);
+          if (occupied(move.destination)) throw new Error("Archive destination is occupied.");
+          try {
+            await plugin.renameVaultItem(move.entry.object, move.destination, move.entry.path);
+          } finally {
+            if (get(move.destination) === move.entry.object && move.entry.object.path === move.destination) moved.push(move);
+          }
+          if (move.inventory) await checkInventory(move.inventory, move.entry.path, move.destination);
+          else await check(move.entry, move.destination);
+        }
+        if (get(plan.target)) throw new Error("Sync recreated the surgeon folder. Both copies were retained.");
+        await check(plan.registry);
+        assertSavedEditors([plan.registry, ...plan.session ? [plan.session] : []]);
+        await plugin.mutateSurgeonRegistry((registry) => {
+          if (JSON.stringify(registry) !== plan.registryJSON || get(plan.target)) throw new Error("Surgeon registry changed after preview.");
+          delete registry.surgeons[plan.key];
+          registryChanged = true;
+        }, { create: false });
+        if (plan.session) {
+          assertSavedEditors([plan.session]);
+          sessionChanged = true;
+          await plugin.replaceFileTextExpected(plan.session.object, plan.session.content, plan.sessionNext, "Migration session changed during surgeon deletion.", plan.session.path);
+        } else if (get(plan.sessionPath)) throw new Error("A migration session arrived during deletion.");
+        for (const move of moved) {
+          if (get(move.entry.path)) throw new Error("Sync recreated an original path during deletion.");
+          if (move.inventory) await checkInventory(move.inventory, move.entry.path, move.destination);
+          else await check(move.entry, move.destination);
+        }
+        const current = await plugin.getRegistrySurgeon(plan.specialty, plan.surgeon, { create: false });
+        if (current.data) throw new Error("Surgeon registry changed before archive commit.");
+        await plugin.replaceFileTextExpected(manifest, prepared, JSON.stringify({ ...data, state: "archived" }, null, 2) + "\n", "Surgeon recovery manifest changed.", manifestPath);
+      } catch (error) {
+        const issues = [];
+        if (sessionChanged) try {
+          assertObject(plan.session.object, plan.session.path);
+          const current = await vault.read(plan.session.object);
+          if (current !== plan.session.content) await plugin.replaceFileTextExpected(plan.session.object, plan.sessionNext, plan.session.content, "Migration rollback conflict.", plan.session.path);
+        } catch (e) {
+          issues.push(e.message);
+        }
+        for (const move of moved.reverse()) try {
+          if (get(move.entry.path)) throw new Error("Original path is occupied: " + move.entry.path);
+          if (move.inventory) await checkInventory(move.inventory, move.entry.path, move.destination);
+          else await check(move.entry, move.destination);
+          await plugin.renameVaultItem(move.entry.object, move.entry.path, move.destination);
+        } catch (e) {
+          issues.push(e.message);
+        }
+        if (registryChanged) try {
+          await plugin.mutateSurgeonRegistry((registry) => {
+            if (registry.surgeons[plan.key]) {
+              if (JSON.stringify(registry.surgeons[plan.key]) !== JSON.stringify(JSON.parse(plan.registryJSON).surgeons[plan.key])) throw new Error("Registry rollback conflict.");
+            } else {
+              const original = JSON.parse(plan.registryJSON).surgeons[plan.key];
+              if (Object.values(registry.surgeons).some((record) => record.cst_id === original.cst_id)) throw new Error("Surgeon identity moved during rollback.");
+              registry.surgeons[plan.key] = original;
+            }
+          }, { create: false });
+        } catch (e) {
+          issues.push(e.message);
+        }
+        if (issues.length) {
+          plugin.settings.resetNeedsReview = true;
+          try {
+            await plugin.saveSettings();
+          } catch {
+            issues.push("Could not persist automation pause.");
+          }
+          throw new Error(error.message + " Recovery review required; originals or archives retained at " + plan.archivePath + ". " + issues.join(" "));
+        }
+        throw error;
+      }
+      await plugin.finishAdminMutation("Delete surgeon", `${plan.specialty} / ${plan.surgeon} archived at ${plan.archivePath}`);
+      return { archivePath: plan.archivePath, caseCount: plan.caseCount };
+    }, "surgeon deletion");
+  }
+  function openDeleteSurgeon() {
+    class DeleteSurgeon extends Modal2 {
+      onOpen() {
+        const el = this.contentEl;
+        el.createEl("h2", { text: "Delete Surgeon" });
+        el.createEl("p", { text: "Select a surgeon to preview a recoverable deletion. Cases and the profile will be archived, not permanently erased." });
+        const choices = plugin.getSpecialties().flatMap((specialty) => plugin.getSurgeons(specialty).map((surgeon) => ({ specialty, surgeon })));
+        choices.sort((a, b) => (a.specialty + "/" + a.surgeon).localeCompare(b.specialty + "/" + b.surgeon, void 0, { numeric: true }));
+        if (!choices.length) {
+          el.createEl("p", { text: "No surgeons available." });
+          button(el, "Close", () => this.close());
+          return;
+        }
+        const select = el.createEl("select", { attr: { "aria-label": "Surgeon to delete" } });
+        choices.forEach((c, i) => select.createEl("option", { value: String(i), text: c.specialty + " — " + c.surgeon }));
+        select.value = "0";
+        button(el, "Preview deletion", async () => {
+          const c = choices[Number(select.value)];
+          const plan = await previewSurgeonDeletion(c.specialty, c.surgeon);
+          if (!await confirmPreview("Delete " + c.surgeon + "?", [
+            c.specialty + " / " + c.surgeon,
+            `${plan.caseCount} cases and ${plan.content.length - 1} files/folders will be archived with the surgeon profile.`,
+            ...plan.content.filter((e) => isFile(e.object)).map((e) => e.path),
+            "Shared templates, other surgeons and images outside this folder stay in place. Restore from Admin → Recovery.",
+            "Archive: " + plan.archivePath
+          ], "Delete surgeon and archive cases")) return;
+          const result = await deleteSurgeon(plan);
+          this.close();
+          if (deps.Notice) new deps.Notice(`Surgeon archived with ${result.caseCount} cases. Restore from Admin → Recovery.`);
+        });
+        button(el, "Cancel", () => this.close());
+      }
+    }
+    new DeleteSurgeon(plugin.app).open();
   }
   async function listRecovery() {
     const r = roots(), backup = `${r.backend}/Admin/Backups`;
@@ -2774,6 +3052,23 @@ function installAdminWorkspace(plugin, deps) {
         problems.push({ path: file.path, message: error.message });
       }
     }
+    for (const file of files().filter((f) => within(f.path, r.archive) && f.name === "Surgeon Manifest.json")) {
+      try {
+        const manifest = Object.freeze(await capture(file)), data = JSON.parse(manifest.content);
+        const pending2 = data.state === "prepared";
+        const mapping = surgeonArchiveMapping(data, { content: r.content, backend: r.backend, manifestPath: file.path, validatePath: path, allowPrepared: true });
+        if (pending2) {
+          problems.push({ path: file.path, message: "Interrupted surgeon deletion. Original files and backups were retained. A complete archived folder can be previewed below only when the original folder is absent; otherwise inspect both locations before resuming automation." });
+          if (get(mapping.target) || !isFolder(get(mapping.source))) continue;
+        }
+        const actual = await inventory(mapping.source);
+        if (actual.length !== mapping.entries.length || mapping.entries.some((item) => !actual.some((e) => e.path === item.source && isFolder(e.object) === (item.kind === "folder")))) throw new Error("Surgeon archive inventory changed.");
+        entries.push({ kind: "surgeon-folder", source: mapping.source, target: mapping.target, manifest, pending: pending2, label: (pending2 ? "Interrupted deletion: " : "") + mapping.specialty + " — " + mapping.surgeon, category: "Surgeon" });
+        if (!pending2) for (const item of mapping.entries.filter((item2) => item2.kind === "file" && caseParts(item2.original))) entries.push({ kind: "surgeon-file", source: item.source, target: item.original, manifest, label: basename(item.original), category: "Case" });
+      } catch (error) {
+        problems.push({ path: file.path, message: error.message });
+      }
+    }
     return { entries, problems };
   }
   async function previewRecovery(entry) {
@@ -2781,7 +3076,7 @@ function installAdminWorkspace(plugin, deps) {
     const trusted = available.entries.find((e) => e.source === entry.source && e.target === entry.target && e.kind === entry.kind);
     if (!trusted) throw new Error("Recovery manifest is no longer available or valid.");
     if (!["Case", "Specialty", "Surgeon"].includes(trusted.category) && !isDeveloper()) throw new Error("Backend recovery requires Developer mode.");
-    const folder = trusted.kind === "reset-folder";
+    const folder = trusted.kind === "reset-folder" || trusted.kind === "surgeon-folder";
     const normal = ["Case", "Specialty", "Surgeon"].includes(trusted.category);
     const target = normal ? unique(trusted.target) : trusted.target;
     if (occupied(target)) throw new Error("Backend target exists. Use purpose-specific repair; both versions were preserved.");
@@ -2818,6 +3113,7 @@ function installAdminWorkspace(plugin, deps) {
     const batchIds = /* @__PURE__ */ new Set();
     async function savedRecord(oldParts) {
       if (entry.kind === "deleted-case") return JSON.parse(entry.manifest.content).surgeon_record;
+      if (entry.kind.startsWith("surgeon-")) return JSON.parse(entry.manifest.content).surgeon_record;
       if (!entry.kind.startsWith("reset-")) return null;
       if (!savedRegistry) {
         if (!registryPath) throw new Error("Surgeon registry path is unavailable.");
@@ -2861,7 +3157,7 @@ function installAdminWorkspace(plugin, deps) {
         }));
       }
     }
-    if (entry.kind === "reset-folder") for (const item of entries.filter((e) => isFolder(e.object))) {
+    if (entry.kind === "reset-folder" || entry.kind === "surgeon-folder") for (const item of entries.filter((e) => isFolder(e.object))) {
       const original = entry.target + item.path.slice(entry.source.length);
       const oldParts = caseParts(original + "/_probe.md");
       if (!oldParts) continue;
@@ -2898,6 +3194,25 @@ function installAdminWorkspace(plugin, deps) {
       for (const change of plan.changes) registry.surgeons[plugin.surgeonKey(change.specialty, change.surgeon)] = { ...change.data };
     }, { create: false });
   }
+  async function finishSurgeonRecovery(plan) {
+    if (!plan.entry.kind.startsWith("surgeon-")) return;
+    const session = get(parent(plan.entry.manifest.path) + "/Migration Session.md");
+    if (isFile(session)) {
+      const state = plugin.parseMigrationSessionText(await vault.read(session));
+      for (const entry of plan.inventory || [plan.source]) {
+        const original = plan.entry.target + entry.path.slice(plan.entry.source.length);
+        if (!caseParts(original)) continue;
+        const target = plan.target + entry.path.slice(plan.entry.source.length);
+        if (target !== original) continue;
+        await plugin.restoreCaseSession({ original_path: target, migration_state: {
+          queued: state.order?.includes(original),
+          status: state.status?.[original],
+          working: state.working?.[original]
+        } });
+      }
+    }
+    await plugin.finishAdminMutation("Restore surgeon archive", plan.target);
+  }
   async function restore(plan) {
     return exclusive(async () => {
       if (plan.kind === "recovery-folder") return restoreFolder(plan);
@@ -2924,6 +3239,7 @@ function installAdminWorkspace(plugin, deps) {
       await check({ ...plan.source, content: restoredContent, object: restored }, plan.target);
       await imagePlan?.assertUnchanged();
       await commitRecoveredProfiles(plan);
+      await finishSurgeonRecovery(plan);
       plugin.scheduleGraphRebuild?.(250);
       return restored;
     });
@@ -2963,6 +3279,7 @@ function installAdminWorkspace(plugin, deps) {
       }
       await checkInventory(plan.inventory, plan.entry.source);
       await commitRecoveredProfiles(plan);
+      await finishSurgeonRecovery(plan);
       plugin.scheduleGraphRebuild?.(250);
       return { path: plan.target, created };
     } catch (error) {
@@ -3459,10 +3776,11 @@ function installAdminWorkspace(plugin, deps) {
           this.contentEl.createEl("h2", { text: title });
           for (const line of lines) this.contentEl.createEl("p", { text: line });
           const cancel = button(this.contentEl, "Cancel", () => this.close());
-          button(this.contentEl, label, () => {
+          const confirm = button(this.contentEl, label, () => {
             resolve(true);
             this.close();
           });
+          if (label.startsWith("Delete ")) confirm.classList?.add("mod-warning");
           cancel.focus();
         }
         onClose() {
@@ -3538,6 +3856,7 @@ function installAdminWorkspace(plugin, deps) {
         if (await confirmPreview("Restore " + entry.label, [
           "Archive: " + (plan.source?.path || plan.entry.source),
           "Destination: " + plan.target,
+          ...plan.entry.pending ? ["This deletion was interrupted. Recovery copies the currently available archived content, including any later edits. It does not certify the deletion as completed. Original backups remain; validate recovery before resuming automation."] : [],
           plan.changes?.length ? plan.changes.length + " missing surgeon profiles will also be restored from the archive after backing up the current registry." : plan.kind === "recovery-folder" ? plan.inventory.length + " files/folders will be copied. Archive originals and partial restores are retained on conflicts." : "New files will be created. Original archives stay available; restored folder names update only routing metadata."
         ])) {
           await restore(plan);
@@ -3546,7 +3865,14 @@ function installAdminWorkspace(plugin, deps) {
       });
     }
     if (!visible.length) el.createEl("p", { text: "No supported archived cases are available." });
-    if (catalog.problems.length) el.createEl("p", { text: `${catalog.problems.length} archive manifest(s) need review; their content was retained.` });
+    if (catalog.problems.length) {
+      el.createEl("p", { text: `${catalog.problems.length} archive manifest(s) need review; their content was retained.` });
+      for (const issue of catalog.problems.filter((issue2) => issue2.path.endsWith("/Surgeon Manifest.json"))) {
+        el.createEl("p", { text: issue.message + " Archive: " + parent(issue.path), attr: { role: "alert" } });
+        const manifest = get(issue.path);
+        if (isFile(manifest)) button(el, "Inspect interrupted surgeon archive", () => plugin.openFile(manifest));
+      }
+    }
     if (isDeveloper()) {
       for (const issue of catalog.problems) el.createEl("p", { text: `${issue.path}: ${issue.message}` });
       el.createEl("h3", { text: "All archived files and folders" });
@@ -3691,6 +4017,8 @@ function installAdminWorkspace(plugin, deps) {
     };
     const nav = el.createDiv({ cls: "cst-admin-action-grid" }), body = el.createDiv();
     const pages = {
+      specialtyCreate: ["New Specialty", () => plugin.openNewSpecialty()],
+      surgeonDelete: ["Delete Surgeon", openDeleteSurgeon],
       settings: ["Settings", (target) => plugin.renderConfig(target)],
       tabs: ["Clear CST Notes tabs", () => plugin.clearCSTTabs()],
       navigation: ["Navigation", (target) => plugin.renderInterfaceStatus(target)],
@@ -3762,8 +4090,11 @@ function installAdminWorkspace(plugin, deps) {
     previewRepair,
     repair,
     renderRepair,
-    metrics
+    metrics,
+    previewSurgeonDeletion,
+    deleteSurgeon
   };
+  plugin.openDeleteSurgeon = openDeleteSurgeon;
   plugin.adminWorkspace = api;
   plugin.renderAdminWorkspace = renderAdmin;
   plugin.renderRecoveryWorkspace = renderRecovery;
@@ -4173,6 +4504,13 @@ function installAttachmentRecovery(plugin, {
             roots: [],
             entries: data.entries.map(({ original_path, ...rest }) => rest)
           }));
+        } else if (leaf(path) === "Surgeon Manifest.json") {
+          const data = JSON.parse(text);
+          if (data.state === "prepared") continue;
+          const mapping = surgeonArchiveMapping(data, { content: plugin.contentRoot, backend: plugin.p(), manifestPath: path, validatePath: validateAttachmentPath });
+          for (const item of mapping.entries) if (item.kind === "file" && /\.md$/i.test(item.original)) mapped(item.source, item.original);
+          const { original_path, archive_path, ...rest } = data;
+          metadata.set(path, JSON.stringify({ ...rest, entries: data.entries.map(({ original_path: original_path2, ...entry }) => entry) }));
         } else if (/\/Deleted Cases\/[^/]+\.json$/.test(path)) {
           const data = JSON.parse(text);
           const relocation = relocations.find((root) => within2(path, root.archive_path) && typeof data.archive_path === "string" && within2(data.archive_path, root.original_path));
@@ -5131,15 +5469,15 @@ async function createOnboardingExample(plugin, deps) {
     if (plugin.settings.resetNeedsReview || plugin.unloading) throw new Error("Onboarding is paused until CST Notes is ready.");
     await plugin.findExampleCase();
     if (plugin.exampleCase()) return plugin.exampleCase();
-    const specialty = "General", surgeon2 = "Dr. Example";
-    const folderPath = `${plugin.contentRoot}/${specialty}/${surgeon2}`;
+    const specialty = "General", surgeon = "Dr. Example";
+    const folderPath = `${plugin.contentRoot}/${specialty}/${surgeon}`;
     const casePath = `${folderPath}/${EXAMPLE_TITLE}.md`;
     const templatePath = plugin.p(EXAMPLE_TEMPLATE_REL);
-    for (const path of [folderPath, casePath, templatePath, plugin.surgeonGraphPath(specialty, surgeon2)]) validatePortableVaultPath2(path, "Onboarding example");
+    for (const path of [folderPath, casePath, templatePath, plugin.surgeonGraphPath(specialty, surgeon)]) validatePortableVaultPath2(path, "Onboarding example");
     const vault = plugin.app.vault;
     let owned = plugin.settings.onboardingExample;
     const reusable = owned?.version === 1 && owned.casePath === casePath && owned.templatePath === templatePath && owned.folderPath === folderPath && owned.state === "creating";
-    let registry = await plugin.getRegistrySurgeon(specialty, surgeon2, { create: false });
+    let registry = await plugin.getRegistrySurgeon(specialty, surgeon, { create: false });
     if (!reusable) {
       const history = vault.getAbstractFileByPath(plugin.templateVersionRoot(templatePath));
       if (registry.data || history && (!(history instanceof TFolder2) || history.children.length) || [folderPath, casePath, templatePath].some((path) => vault.getAbstractFileByPath(path))) {
@@ -5151,7 +5489,7 @@ async function createOnboardingExample(plugin, deps) {
         caseId: EXAMPLE_CASE_ID,
         surgeonId: id2("surgeon"),
         specialty,
-        surgeon: surgeon2,
+        surgeon,
         folderPath,
         casePath,
         templatePath,
@@ -5179,16 +5517,16 @@ async function createOnboardingExample(plugin, deps) {
         aliases: [],
         created: now,
         last_verified: now
-      }, specialty, surgeon2);
-      await plugin.applyAdminRegistryChanges([{ specialty, surgeon: surgeon2, expected: null, data }]);
-      registry = await plugin.getRegistrySurgeon(specialty, surgeon2, { create: false });
+      }, specialty, surgeon);
+      await plugin.applyAdminRegistryChanges([{ specialty, surgeon, expected: null, data }]);
+      registry = await plugin.getRegistrySurgeon(specialty, surgeon, { create: false });
     }
     const assertFolder = () => {
       if (vault.getAbstractFileByPath(folderPath) !== folder || folder.path !== folderPath) throw new Error("The example folder moved or was replaced. Retry after Sync finishes.");
     };
     assertFolder();
     await plugin.ensureSpecialtyNode(specialty);
-    await plugin.ensureSurgeonGraphNode(specialty, surgeon2, owned.surgeonId, registry.data);
+    await plugin.ensureSurgeonGraphNode(specialty, surgeon, owned.surgeonId, registry.data);
     await plugin.ensureFolder(templatePath.slice(0, templatePath.lastIndexOf("/")));
     let template = vault.getAbstractFileByPath(templatePath);
     if (!template) {
@@ -5204,7 +5542,7 @@ ${EXAMPLE_TEMPLATE_BODY}`);
     assertFolder();
     let file = vault.getAbstractFileByPath(casePath);
     if (!file) {
-      const graph = `[[${plugin.surgeonGraphPath(specialty, surgeon2).replace(/\.md$/, "")}|${surgeon2}]]`;
+      const graph = `[[${plugin.surgeonGraphPath(specialty, surgeon).replace(/\.md$/, "")}|${surgeon}]]`;
       const created = (/* @__PURE__ */ new Date()).toISOString();
       const content = `---
 cst_type: case
@@ -6350,7 +6688,7 @@ var {
   setIcon,
   addIcon
 } = require("obsidian");
-var PLUGIN_VERSION = "0.1.11";
+var PLUGIN_VERSION = "0.1.12";
 var Modal = class extends ObsidianModal {
   constructor(...args) {
     super(...args);
@@ -6674,7 +7012,7 @@ function wireTextareaSearch(input, editor, button, status) {
     locate(false);
   };
   input.onkeydown = (event) => {
-    if (event.key !== "Enter") return;
+    if (event.key !== "Enter" || event.isComposing || event.keyCode === 229) return;
     event.preventDefault();
     jump();
   };
@@ -7144,12 +7482,12 @@ var CSTNotesPlugin = class extends Plugin {
   onboardingTasks() {
     const exampleFile = this.exampleCase();
     const example = exampleFile instanceof TFile ? this.caseContext(exampleFile) : null;
-    const specialty = example?.specialty || "General", surgeon2 = example?.surgeon || "Dr. Example";
+    const specialty = example?.specialty || "General", surgeon = example?.surgeon || "Dr. Example";
     const exampleTemplate = this.app?.vault?.getAbstractFileByPath?.(this.p("_Templates/Cases/Example.md"));
     return [
       ["home", "Open CST Notes", "Tap a Home button or search for CST Notes: Open CST app."],
-      ["hierarchy", `Explore a specialty (e.g., ${specialty})`, `From Home, tap ${specialty}, then ${surgeon2}.`],
-      ["profile", "View a surgeon profile", `Open ${surgeon2} to see the live surgeon profile.`],
+      ["hierarchy", `Explore a specialty (e.g., ${specialty})`, `From Home, tap ${specialty}, then ${surgeon}.`],
+      ["profile", "View a surgeon profile", `Open ${surgeon} to see the live surgeon profile.`],
       ["templateEdit", "View and edit a template", exampleTemplate instanceof TFile ? "Tap Templates, open Example template, and make an edit." : "Tap Templates, open a template, and make an edit."],
       ["caseEdit", "Create and edit a case", "Open a specialty and surgeon, tap New case, then edit your case."],
       ["admin", "Open Admin", "Tap Admin at the bottom of the CST Notes app screen."]
@@ -7807,9 +8145,9 @@ var CSTNotesPlugin = class extends Plugin {
       throw error;
     }
   }
-  async importSurgeonRecordIfNewer(specialty, surgeon2, data) {
-    const sourceRecord = this.adminRegistryRecord(data, specialty, surgeon2);
-    const key4 = this.surgeonKey(specialty, surgeon2);
+  async importSurgeonRecordIfNewer(specialty, surgeon, data) {
+    const sourceRecord = this.adminRegistryRecord(data, specialty, surgeon);
+    const key4 = this.surgeonKey(specialty, surgeon);
     const result = await this.mutateSurgeonRegistry((registry) => {
       const current = registry.surgeons[key4] || null;
       const before = current ? JSON.parse(JSON.stringify(current)) : null;
@@ -7824,14 +8162,14 @@ var CSTNotesPlugin = class extends Plugin {
     });
     return { imported: !!result.value?.changed, ...result.value };
   }
-  async seedSurgeonGlovesIfUnknown(specialty, surgeon2, gloves, verified = "") {
+  async seedSurgeonGlovesIfUnknown(specialty, surgeon, gloves, verified = "") {
     const canonical = normalizeGloves2(gloves, this.settings);
-    const key4 = this.surgeonKey(specialty, surgeon2);
+    const key4 = this.surgeonKey(specialty, surgeon);
     const result = await this.mutateSurgeonRegistry((registry) => {
       const current = registry.surgeons[key4] || null;
       const before = current ? JSON.parse(JSON.stringify(current)) : null;
       const timestamp = verified || nowISO();
-      const base = current ? this.adminRegistryRecord(current, specialty, surgeon2) : this.adminRegistryRecord({
+      const base = current ? this.adminRegistryRecord(current, specialty, surgeon) : this.adminRegistryRecord({
         cst_id: id("surgeon"),
         aliases: [],
         gloves: "Unknown",
@@ -7839,7 +8177,7 @@ var CSTNotesPlugin = class extends Plugin {
         schema_version: SCHEMA_VERSION,
         created: timestamp,
         last_verified: timestamp
-      }, specialty, surgeon2);
+      }, specialty, surgeon);
       if (base.gloves && base.gloves !== "Unknown") {
         return { changed: false, before, record: JSON.parse(JSON.stringify(base)) };
       }
@@ -7852,12 +8190,12 @@ var CSTNotesPlugin = class extends Plugin {
     });
     return result.value;
   }
-  async ensureMigrationSurgeonRecord(specialty, surgeon2) {
-    const key4 = this.surgeonKey(specialty, surgeon2);
+  async ensureMigrationSurgeonRecord(specialty, surgeon) {
+    const key4 = this.surgeonKey(specialty, surgeon);
     const result = await this.mutateSurgeonRegistry((registry) => {
       const current = registry.surgeons[key4] || null;
       if (current) {
-        const record2 = this.adminRegistryRecord(current, specialty, surgeon2);
+        const record2 = this.adminRegistryRecord(current, specialty, surgeon);
         return { changed: false, before: JSON.parse(JSON.stringify(current)), record: record2 };
       }
       const timestamp = nowISO();
@@ -7869,15 +8207,15 @@ var CSTNotesPlugin = class extends Plugin {
         schema_version: SCHEMA_VERSION,
         created: timestamp,
         last_verified: timestamp
-      }, specialty, surgeon2);
+      }, specialty, surgeon);
       registry.surgeons[key4] = JSON.parse(JSON.stringify(record));
       return { changed: true, before: null, record: JSON.parse(JSON.stringify(record)) };
     });
     return result.value;
   }
-  rememberRegistryMutation(mutations, specialty, surgeon2, result) {
+  rememberRegistryMutation(mutations, specialty, surgeon, result) {
     if (!result?.changed) return;
-    const key4 = this.surgeonKey(specialty, surgeon2);
+    const key4 = this.surgeonKey(specialty, surgeon);
     const existing = mutations.get(key4);
     if (existing) {
       existing.expected = JSON.parse(JSON.stringify(result.record));
@@ -7885,7 +8223,7 @@ var CSTNotesPlugin = class extends Plugin {
     }
     mutations.set(key4, {
       specialty,
-      surgeon: surgeon2,
+      surgeon,
       expected: JSON.parse(JSON.stringify(result.record)),
       data: result.before == null ? null : JSON.parse(JSON.stringify(result.before))
     });
@@ -8114,8 +8452,8 @@ var CSTNotesPlugin = class extends Plugin {
     }
     for (const specialty of /* @__PURE__ */ new Set([...DEFAULT_SPECIALTIES, ...this.getSpecialties()])) {
       initializationTargets.add(this.specialtyGraphPath(specialty));
-      for (const surgeon2 of this.getSurgeons(specialty)) {
-        initializationTargets.add(this.surgeonGraphPath(specialty, surgeon2));
+      for (const surgeon of this.getSurgeons(specialty)) {
+        initializationTargets.add(this.surgeonGraphPath(specialty, surgeon));
       }
     }
     initializationTargets.add(this.p("Admin/Logs/v0.1.2 Migration 20000101-000000.md"));
@@ -8499,24 +8837,24 @@ ${marker}
   specialtyGraphPath(specialty) {
     return this.p(`_Graph/Specialties/${safeFileName(specialty)}.md`);
   }
-  surgeonGraphPath(specialty, surgeon2) {
-    return this.p(`_Graph/Surgeons/${safeFileName(specialty)}/${safeFileName(canonicalPersonName(surgeon2))}.md`);
+  surgeonGraphPath(specialty, surgeon) {
+    return this.p(`_Graph/Surgeons/${safeFileName(specialty)}/${safeFileName(canonicalPersonName(surgeon))}.md`);
   }
   isCasePath(path) {
     const c = contextFromPath(path, this.contentRoot);
     return !!c && c.depth === 3 && !!c.specialty && !!c.surgeon && /\.md$/i.test(String(path || ""));
   }
-  surgeonDataPath(specialty, surgeon2) {
-    return this.p(`_Data/Surgeons/${safeFileName(specialty)}/${safeFileName(surgeon2)}.json`);
+  surgeonDataPath(specialty, surgeon) {
+    return this.p(`_Data/Surgeons/${safeFileName(specialty)}/${safeFileName(surgeon)}.json`);
   }
-  legacySurgeonDataPath(specialty, surgeon2) {
-    return this.p(`_Data/Surgeons/${safeFileName(specialty)}/${safeFileName(surgeon2)}.md`);
+  legacySurgeonDataPath(specialty, surgeon) {
+    return this.p(`_Data/Surgeons/${safeFileName(specialty)}/${safeFileName(surgeon)}.md`);
   }
   surgeonRegistryPath() {
     return this.p("_Data/Surgeon Registry.md");
   }
-  surgeonKey(specialty, surgeon2) {
-    return `${String(specialty || "").trim()}\0${canonicalPersonName(surgeon2)}`;
+  surgeonKey(specialty, surgeon) {
+    return `${String(specialty || "").trim()}\0${canonicalPersonName(surgeon)}`;
   }
   surgeonRecordFingerprint(data) {
     if (!data) return shortHash("null");
@@ -8533,13 +8871,13 @@ ${marker}
       data.last_verified || ""
     ]));
   }
-  portableSurgeonRecord(data, specialty = "", surgeon2 = "") {
+  portableSurgeonRecord(data, specialty = "", surgeon = "") {
     if (!data) return null;
     return {
       cst_type: "surgeon-data",
       cst_id: data.cst_id || data.id || "",
       specialty: data.specialty || specialty,
-      surgeon: data.surgeon || surgeon2,
+      surgeon: data.surgeon || surgeon,
       aliases: Array.isArray(data.aliases) ? [...data.aliases] : [],
       gloves: data.gloves || "Unknown",
       gown: data.gown || "Unknown",
@@ -8671,23 +9009,23 @@ ${body}
     });
     return await run;
   }
-  async getRegistrySurgeon(specialty, surgeon2, options = {}) {
+  async getRegistrySurgeon(specialty, surgeon, options = {}) {
     const state = await this.readSurgeonRegistry(options);
     const { file, registry } = state;
-    const key4 = this.surgeonKey(specialty, surgeon2);
+    const key4 = this.surgeonKey(specialty, surgeon);
     return { ...state, file, registry, key: key4, data: registry.surgeons[key4] || null };
   }
-  async writeSurgeonRecord(specialty, surgeon2, data) {
+  async writeSurgeonRecord(specialty, surgeon, data) {
     specialty = safeFileName(specialty);
-    surgeon2 = canonicalPersonName(surgeon2);
-    const key4 = this.surgeonKey(specialty, surgeon2);
+    surgeon = canonicalPersonName(surgeon);
+    const key4 = this.surgeonKey(specialty, surgeon);
     const result = await this.mutateSurgeonRegistry((registry) => {
       const previous = registry.surgeons[key4] || {};
       const normalized = {
         cst_type: "surgeon-data",
         cst_id: data.cst_id || data.id || previous.cst_id || id("surgeon"),
         specialty,
-        surgeon: surgeon2,
+        surgeon,
         aliases: Array.isArray(data.aliases) ? data.aliases : Array.isArray(previous.aliases) ? previous.aliases : [],
         gloves: data.gloves || previous.gloves || "Unknown",
         gown: GOWNS2.includes(data.gown) ? data.gown : GOWNS2.includes(previous.gown) ? previous.gown : this.settings.defaultGown,
@@ -8701,8 +9039,8 @@ ${body}
     });
     return { file: result.file, surgeonId: result.value.cst_id, data: result.value };
   }
-  async removeSurgeonRecord(specialty, surgeon2) {
-    const key4 = this.surgeonKey(specialty, surgeon2);
+  async removeSurgeonRecord(specialty, surgeon) {
+    const key4 = this.surgeonKey(specialty, surgeon);
     await this.mutateSurgeonRegistry((registry) => {
       const existed = !!registry.surgeons[key4];
       if (existed) delete registry.surgeons[key4];
@@ -8715,19 +9053,19 @@ ${body}
     if (state.invalid) throw new Error(`Registry reconciliation stopped: ${state.error}.`);
     const physical = /* @__PURE__ */ new Map();
     for (const specialty of this.getSpecialties()) {
-      for (const surgeon2 of this.getSurgeons(specialty)) {
-        physical.set(this.surgeonKey(specialty, surgeon2), { specialty, surgeon: surgeon2 });
+      for (const surgeon of this.getSurgeons(specialty)) {
+        physical.set(this.surgeonKey(specialty, surgeon), { specialty, surgeon });
       }
     }
     const foldersToCreate = [];
     for (const [key4, record] of Object.entries(state.registry.surgeons || {})) {
       const specialty = validatedPathSegment(record?.specialty, "Registry specialty");
-      const surgeon2 = validatedPathSegment(record?.surgeon, "Registry surgeon", { person: true });
-      if (this.surgeonKey(specialty, surgeon2) !== key4) {
-        throw new Error(`Registry reconciliation stopped because ${specialty} / ${surgeon2} has a mismatched key. No folders or records were changed.`);
+      const surgeon = validatedPathSegment(record?.surgeon, "Registry surgeon", { person: true });
+      if (this.surgeonKey(specialty, surgeon) !== key4) {
+        throw new Error(`Registry reconciliation stopped because ${specialty} / ${surgeon} has a mismatched key. No folders or records were changed.`);
       }
-      const path = validatePortableVaultPath(cleanPath(this.contentRoot, specialty, surgeon2), "Recovered surgeon folder path");
-      if (!physical.has(key4)) foldersToCreate.push({ path, specialty, surgeon: surgeon2 });
+      const path = validatePortableVaultPath(cleanPath(this.contentRoot, specialty, surgeon), "Recovered surgeon folder path");
+      if (!physical.has(key4)) foldersToCreate.push({ path, specialty, surgeon });
     }
     const recordsToCreate = [...physical.entries()].filter(([key4]) => !Object.prototype.hasOwnProperty.call(state.registry.surgeons || {}, key4)).map(([, value]) => value);
     for (const item of foldersToCreate) await this.ensureFolder(item.path);
@@ -8744,17 +9082,17 @@ ${body}
       return null;
     }
   }
-  async ensureSurgeonData(specialty, surgeon2, initial = {}, options = {}) {
+  async ensureSurgeonData(specialty, surgeon, initial = {}, options = {}) {
     specialty = safeFileName(specialty);
-    surgeon2 = canonicalPersonName(surgeon2);
-    const state = await this.getRegistrySurgeon(specialty, surgeon2);
+    surgeon = canonicalPersonName(surgeon);
+    const state = await this.getRegistrySurgeon(specialty, surgeon);
     let data = state.data ? Object.assign({}, state.data) : null;
     if (!data) {
-      const json = this.app.vault.getAbstractFileByPath(this.surgeonDataPath(specialty, surgeon2));
+      const json = this.app.vault.getAbstractFileByPath(this.surgeonDataPath(specialty, surgeon));
       if (json instanceof TFile) data = await this.readJson(json);
     }
     if (!data) {
-      const legacy = this.app.vault.getAbstractFileByPath(this.legacySurgeonDataPath(specialty, surgeon2));
+      const legacy = this.app.vault.getAbstractFileByPath(this.legacySurgeonDataPath(specialty, surgeon));
       const fm = legacy instanceof TFile ? Object.assign(
         {},
         this.app.metadataCache.getFileCache(legacy)?.frontmatter || {},
@@ -8771,7 +9109,7 @@ ${body}
       };
     }
     if (!data) {
-      const graph = this.app.vault.getAbstractFileByPath(this.surgeonGraphPath(specialty, surgeon2));
+      const graph = this.app.vault.getAbstractFileByPath(this.surgeonGraphPath(specialty, surgeon));
       const fm = graph instanceof TFile ? Object.assign(
         {},
         this.app.metadataCache.getFileCache(graph)?.frontmatter || {},
@@ -8799,7 +9137,7 @@ ${body}
       cst_type: "surgeon-data",
       cst_id: data?.cst_id || id("surgeon"),
       specialty,
-      surgeon: surgeon2,
+      surgeon,
       aliases: Array.isArray(data?.aliases) ? data.aliases : [],
       gloves,
       gown,
@@ -8821,18 +9159,18 @@ ${body}
       created: state.data.created,
       last_verified: state.data.last_verified
     } : null;
-    const written = existingComparable && JSON.stringify(existingComparable) === JSON.stringify(record) ? { file: state.file, surgeonId: record.cst_id, data: record } : await this.writeSurgeonRecord(specialty, surgeon2, record);
-    if (options.updateGraph !== false) await this.ensureSurgeonGraphNode(specialty, surgeon2, written.surgeonId, written.data);
+    const written = existingComparable && JSON.stringify(existingComparable) === JSON.stringify(record) ? { file: state.file, surgeonId: record.cst_id, data: record } : await this.writeSurgeonRecord(specialty, surgeon, record);
+    if (options.updateGraph !== false) await this.ensureSurgeonGraphNode(specialty, surgeon, written.surgeonId, written.data);
     return written;
   }
-  surgeonDataFromRegistry(registry, specialty, surgeon2, file = null) {
-    const d = registry?.surgeons?.[this.surgeonKey(specialty, surgeon2)];
+  surgeonDataFromRegistry(registry, specialty, surgeon, file = null) {
+    const d = registry?.surgeons?.[this.surgeonKey(specialty, surgeon)];
     if (!d) return null;
     return {
       file,
       id: d.cst_id || "",
       cst_id: d.cst_id || "",
-      surgeon: d.surgeon || surgeon2,
+      surgeon: d.surgeon || surgeon,
       specialty: d.specialty || specialty,
       gloves: d.gloves || "Unknown",
       gown: d.gown || "Unknown",
@@ -8843,15 +9181,15 @@ ${body}
       schema_version: d.schema_version || SCHEMA_VERSION
     };
   }
-  async getSurgeonData(specialty, surgeon2, { createIfMissing = true } = {}) {
-    const state = await this.getRegistrySurgeon(specialty, surgeon2, { create: createIfMissing });
-    if (!state.data && createIfMissing) return (await this.ensureSurgeonData(specialty, surgeon2)).data;
+  async getSurgeonData(specialty, surgeon, { createIfMissing = true } = {}) {
+    const state = await this.getRegistrySurgeon(specialty, surgeon, { create: createIfMissing });
+    if (!state.data && createIfMissing) return (await this.ensureSurgeonData(specialty, surgeon)).data;
     if (!state.data) {
       return {
         file: state.file || null,
         id: "",
         cst_id: "",
-        surgeon: surgeon2,
+        surgeon,
         specialty,
         gloves: "Unknown",
         gown: "Unknown",
@@ -8864,10 +9202,10 @@ ${body}
         missingRecord: !state.invalid
       };
     }
-    return this.surgeonDataFromRegistry(state.registry, specialty, surgeon2, state.file);
+    return this.surgeonDataFromRegistry(state.registry, specialty, surgeon, state.file);
   }
-  async saveSurgeonData(specialty, surgeon2, gloves, gown) {
-    const ensured = await this.ensureSurgeonData(specialty, surgeon2);
+  async saveSurgeonData(specialty, surgeon, gloves, gown) {
+    const ensured = await this.ensureSurgeonData(specialty, surgeon);
     const canonical = normalizeGloves2(gloves, this.settings);
     if (!GOWNS2.includes(gown)) throw new Error("Invalid gown.");
     const data = Object.assign({}, ensured.data, {
@@ -8876,19 +9214,19 @@ ${body}
       last_verified: nowISO(),
       schema_version: SCHEMA_VERSION
     });
-    const written = await this.writeSurgeonRecord(specialty, surgeon2, data);
-    await this.ensureSurgeonGraphNode(specialty, surgeon2, written.surgeonId, written.data);
-    this.refreshSurgeonHeaderDisplays(specialty, surgeon2, written.data);
+    const written = await this.writeSurgeonRecord(specialty, surgeon, data);
+    await this.ensureSurgeonGraphNode(specialty, surgeon, written.surgeonId, written.data);
+    this.refreshSurgeonHeaderDisplays(specialty, surgeon, written.data);
     return canonical;
   }
-  async updateSurgeonProfileExpected(specialty, surgeon2, updates, expectedFingerprint) {
+  async updateSurgeonProfileExpected(specialty, surgeon, updates, expectedFingerprint) {
     const dirtyGloves = !!updates?.dirtyGloves;
     const dirtyGown = !!updates?.dirtyGown;
     const dirtyMusic = !!updates?.dirtyMusic;
     const canonicalGloves = dirtyGloves ? normalizeGloves2(updates.gloves, this.settings) : "";
     const music = dirtyMusic ? String(updates.music || "").trim() : "";
     if (dirtyGown && !GOWNS2.includes(updates.gown)) throw new Error("Invalid gown.");
-    const key4 = this.surgeonKey(specialty, surgeon2);
+    const key4 = this.surgeonKey(specialty, surgeon);
     const result = await this.mutateSurgeonRegistry((registry) => {
       const current = registry.surgeons[key4];
       if (!current) throw new Error("Surgeon registry record not found.");
@@ -8905,28 +9243,28 @@ ${body}
       return next;
     });
     try {
-      await this.ensureSurgeonGraphNode(specialty, surgeon2, result.value.cst_id || "", result.value);
+      await this.ensureSurgeonGraphNode(specialty, surgeon, result.value.cst_id || "", result.value);
     } catch (error) {
       console.error("CST profile graph refresh", error);
       this.scheduleGraphRebuild(500);
       new Notice("Surgeon profile saved; generated graph refresh is pending.");
     }
     try {
-      this.refreshSurgeonHeaderDisplays(specialty, surgeon2, result.value);
+      this.refreshSurgeonHeaderDisplays(specialty, surgeon, result.value);
     } catch (error) {
       console.error("CST profile display refresh", error);
     }
     return result.value;
   }
-  async ensureSurgeonGraphNode(specialty, surgeon2, surgeonId, surgeonData = null) {
+  async ensureSurgeonGraphNode(specialty, surgeon, surgeonId, surgeonData = null) {
     await this.ensureFolder(this.p(`_Graph/Surgeons/${specialty}`));
-    const path = this.surgeonGraphPath(specialty, surgeon2);
-    const sd = surgeonData || (await this.getRegistrySurgeon(specialty, surgeon2)).data || {};
+    const path = this.surgeonGraphPath(specialty, surgeon);
+    const sd = surgeonData || (await this.getRegistrySurgeon(specialty, surgeon)).data || {};
     const content = `---
 cst_type: "surgeon-node"
 generated: true
 specialty: ${yamlString(specialty)}
-surgeon: ${yamlString(surgeon2)}
+surgeon: ${yamlString(surgeon)}
 surgeon_id: ${yamlString(surgeonId)}
 gloves: ${yamlString(sd.gloves || "Unknown")}
 gown: ${yamlString(sd.gown || this.settings.defaultGown)}
@@ -8936,7 +9274,7 @@ graph_parent: ${yamlString(`[[${this.specialtyGraphPath(specialty).replace(/\.md
 schema_version: ${SCHEMA_VERSION}
 ---
 
-# ${surgeon2}
+# ${surgeon}
 
 \`\`\`cst-surgeon-profile
 \`\`\`
@@ -8998,12 +9336,12 @@ schema_version: ${SCHEMA_VERSION}
     for (const specialty of specialties) {
       const surgeons = this.getSurgeons(specialty);
       surgeonsBySpecialty.set(specialty, surgeons);
-      for (const surgeon2 of surgeons) {
-        const key4 = this.surgeonKey(specialty, surgeon2);
+      for (const surgeon of surgeons) {
+        const key4 = this.surgeonKey(specialty, surgeon);
         if (physical.has(key4)) {
-          throw new Error(`Graph rebuild paused: duplicate physical surgeon identity ${specialty} / ${surgeon2}.`);
+          throw new Error(`Graph rebuild paused: duplicate physical surgeon identity ${specialty} / ${surgeon}.`);
         }
-        physical.set(key4, { specialty, surgeon: surgeon2 });
+        physical.set(key4, { specialty, surgeon });
       }
     }
     const records = parsed.registry.surgeons || {};
@@ -9096,10 +9434,10 @@ schema_version: ${SCHEMA_VERSION}
     for (const specialty of specialties) {
       expectedFiles.add(this.specialtyGraphPath(specialty));
       await this.ensureSpecialtyNode(specialty);
-      for (const surgeon2 of graphState.surgeonsBySpecialty.get(specialty) || []) {
-        const surgeonData = graphState.registry.surgeons[this.surgeonKey(specialty, surgeon2)];
-        expectedFiles.add(this.surgeonGraphPath(specialty, surgeon2));
-        await this.ensureSurgeonGraphNode(specialty, surgeon2, surgeonData.cst_id || surgeonData.id || "", surgeonData);
+      for (const surgeon of graphState.surgeonsBySpecialty.get(specialty) || []) {
+        const surgeonData = graphState.registry.surgeons[this.surgeonKey(specialty, surgeon)];
+        expectedFiles.add(this.surgeonGraphPath(specialty, surgeon));
+        await this.ensureSurgeonGraphNode(specialty, surgeon, surgeonData.cst_id || surgeonData.id || "", surgeonData);
       }
     }
     const revalidated = await this.readGraphRegistrySnapshot();
@@ -9202,31 +9540,31 @@ schema_version: ${SCHEMA_VERSION}
     }
     return { key: key4, path, body, version: `v${latest.n}`, legacyHash: shortHash(body) };
   }
-  async createCase({ specialty, surgeon: surgeon2, title, variant = "" }) {
+  async createCase({ specialty, surgeon, title, variant = "" }) {
     if (this.settings.initialized && !await this.quickStructureCheck()) {
       throw new Error("Case creation is paused until this device has a complete CST vault.");
     }
     specialty = validatedPathSegment(specialty, "Specialty");
-    surgeon2 = validatedPathSegment(surgeon2, "Surgeon", { person: true });
+    surgeon = validatedPathSegment(surgeon, "Surgeon", { person: true });
     title = validatedPathSegment(title, "Case name");
     const canonicalSpecialty = this.getSpecialties().find((existing2) => existing2.normalize("NFC").toLocaleLowerCase() === specialty.normalize("NFC").toLocaleLowerCase());
     if (!canonicalSpecialty) throw new Error(`Specialty not found: ${specialty}`);
     specialty = canonicalSpecialty;
-    validatePortableVaultPath(cleanPath(this.contentRoot, specialty, surgeon2), "Surgeon folder path");
-    validatePortableVaultPath(cleanPath(this.contentRoot, specialty, surgeon2, `${title}.md`), "Case path");
-    const canonicalSurgeon = this.getSurgeons(specialty).find((existing2) => existing2.normalize("NFC").toLocaleLowerCase() === surgeon2.normalize("NFC").toLocaleLowerCase());
-    if (!canonicalSurgeon) throw new Error(`Surgeon not found in ${specialty}: ${surgeon2}. Wait for Sync or create the surgeon first.`);
-    surgeon2 = canonicalSurgeon;
-    const surgeonFolder = cleanPath(this.contentRoot, specialty, surgeon2);
+    validatePortableVaultPath(cleanPath(this.contentRoot, specialty, surgeon), "Surgeon folder path");
+    validatePortableVaultPath(cleanPath(this.contentRoot, specialty, surgeon, `${title}.md`), "Case path");
+    const canonicalSurgeon = this.getSurgeons(specialty).find((existing2) => existing2.normalize("NFC").toLocaleLowerCase() === surgeon.normalize("NFC").toLocaleLowerCase());
+    if (!canonicalSurgeon) throw new Error(`Surgeon not found in ${specialty}: ${surgeon}. Wait for Sync or create the surgeon first.`);
+    surgeon = canonicalSurgeon;
+    const surgeonFolder = cleanPath(this.contentRoot, specialty, surgeon);
     validatePortableVaultPath(surgeonFolder, "Surgeon folder path");
     const filePath = validatePortableVaultPath(cleanPath(surgeonFolder, `${title}.md`), "Case path");
     const folder = this.app.vault.getAbstractFileByPath(surgeonFolder);
     if (!(folder instanceof TFolder)) {
       throw new Error(`Surgeon folder is unavailable: ${surgeonFolder}. Wait for Sync before creating the case.`);
     }
-    const surgeonData = await this.getSurgeonData(specialty, surgeon2, { createIfMissing: false });
+    const surgeonData = await this.getSurgeonData(specialty, surgeon, { createIfMissing: false });
     if (!surgeonData?.cst_id || surgeonData.unavailable) {
-      throw new Error(`${surgeon2}'s registry profile is unavailable. Wait for Sync before creating the case.`);
+      throw new Error(`${surgeon}'s registry profile is unavailable. Wait for Sync before creating the case.`);
     }
     const surgeonId = surgeonData.cst_id;
     const targetName = `${title}.md`;
@@ -9234,19 +9572,19 @@ schema_version: ${SCHEMA_VERSION}
     const existing = folder instanceof TFolder ? folder.children.find((item) => item.name.normalize("NFC").toLocaleLowerCase() === foldedTarget) : this.app.vault.getAbstractFileByPath(filePath);
     if (existing instanceof TFile) {
       await this.openFile(existing);
-      throw new Error(`"${title}" already exists for ${surgeon2}. Opened the existing case.`);
+      throw new Error(`"${title}" already exists for ${surgeon}. Opened the existing case.`);
     }
     const t = await this.getTemplate(specialty, variant);
     const caseId = id("case");
     const created = nowISO();
-    const graphNode = this.surgeonGraphPath(specialty, surgeon2).replace(/\.md$/i, "");
+    const graphNode = this.surgeonGraphPath(specialty, surgeon).replace(/\.md$/i, "");
     const content = `---
 cst_type: "case"
 cst_id: ${yamlString(caseId)}
 specialty: ${yamlString(specialty)}
-surgeon: ${yamlString(surgeon2)}
+surgeon: ${yamlString(surgeon)}
 surgeon_id: ${yamlString(surgeonId)}
-graph_parent: ${yamlString(`[[${graphNode}|${surgeon2}]]`)}
+graph_parent: ${yamlString(`[[${graphNode}|${surgeon}]]`)}
 template: ${yamlString(t.key)}
 template_version: ${yamlString(t.version)}
 cst_created_template: ${yamlString(t.key)}
@@ -9285,13 +9623,13 @@ ${t.body.trim()}
     const warnings = [];
     try {
       await this.ensureSpecialtyNode(specialty);
-      await this.ensureSurgeonGraphNode(specialty, surgeon2, surgeonId, surgeonData);
+      await this.ensureSurgeonGraphNode(specialty, surgeon, surgeonId, surgeonData);
     } catch (error) {
       warnings.push(`graph refresh: ${error.message || error}`);
       this.scheduleGraphRebuild(500);
     }
     try {
-      await this.appendLog("Create case", `${specialty} / ${surgeon2} / ${title} (${t.key} ${t.version})`);
+      await this.appendLog("Create case", `${specialty} / ${surgeon} / ${title} (${t.key} ${t.version})`);
     } catch (error) {
       warnings.push(`activity log: ${error.message || error}`);
     }
@@ -9330,22 +9668,22 @@ ${t.body.trim()}
       await this.ensureSpecialtyNode(ctx.specialty);
       return;
     }
-    const surgeon2 = ctx.surgeon;
-    const plannedSurgeon = options.surgeonData ? this.adminRegistryRecord(options.surgeonData, ctx.specialty, surgeon2) : null;
-    const ensured = plannedSurgeon ? { surgeonId: plannedSurgeon.cst_id || "", data: plannedSurgeon } : await this.ensureSurgeonData(ctx.specialty, surgeon2, {}, { updateGraph: false });
-    if (!ensured.surgeonId) throw new Error(`Surgeon registry ID is missing for ${ctx.specialty} / ${surgeon2}.`);
+    const surgeon = ctx.surgeon;
+    const plannedSurgeon = options.surgeonData ? this.adminRegistryRecord(options.surgeonData, ctx.specialty, surgeon) : null;
+    const ensured = plannedSurgeon ? { surgeonId: plannedSurgeon.cst_id || "", data: plannedSurgeon } : await this.ensureSurgeonData(ctx.specialty, surgeon, {}, { updateGraph: false });
+    if (!ensured.surgeonId) throw new Error(`Surgeon registry ID is missing for ${ctx.specialty} / ${surgeon}.`);
     const surgeonId = ensured.surgeonId;
-    const graphNode = this.surgeonGraphPath(ctx.specialty, surgeon2).replace(/\.md$/, "");
-    const expectedGraph = `[[${graphNode}|${surgeon2}]]`;
+    const graphNode = this.surgeonGraphPath(ctx.specialty, surgeon).replace(/\.md$/, "");
+    const expectedGraph = `[[${graphNode}|${surgeon}]]`;
     const current = await this.fileFrontmatter(file, expectedPath);
     const hasLegacy = Object.prototype.hasOwnProperty.call(current, "surgeon_profile") || Object.prototype.hasOwnProperty.call(current, "gloves") || Object.prototype.hasOwnProperty.call(current, "gown");
-    const needsPatch = current.cst_type !== "case" || !current.cst_id || current.specialty !== ctx.specialty || current.surgeon !== surgeon2 || current.surgeon_id !== surgeonId || current.graph_parent !== expectedGraph || Number(current.schema_version) !== SCHEMA_VERSION || !current.created || !current.last_verified || hasLegacy || isNew && !current.template;
+    const needsPatch = current.cst_type !== "case" || !current.cst_id || current.specialty !== ctx.specialty || current.surgeon !== surgeon || current.surgeon_id !== surgeonId || current.graph_parent !== expectedGraph || Number(current.schema_version) !== SCHEMA_VERSION || !current.created || !current.last_verified || hasLegacy || isNew && !current.template;
     if (needsPatch) {
       await this.patchFrontmatter(file, (fm) => {
         fm.cst_type = "case";
         if (!fm.cst_id) fm.cst_id = id("case");
         fm.specialty = ctx.specialty;
-        fm.surgeon = surgeon2;
+        fm.surgeon = surgeon;
         fm.surgeon_id = surgeonId;
         delete fm.surgeon_profile;
         delete fm.gloves;
@@ -9358,7 +9696,7 @@ ${t.body.trim()}
       }, expectedPath);
     }
     await this.ensureSpecialtyNode(ctx.specialty);
-    await this.ensureSurgeonGraphNode(ctx.specialty, surgeon2, surgeonId, ensured.data);
+    await this.ensureSurgeonGraphNode(ctx.specialty, surgeon, surgeonId, ensured.data);
     if (isNew) await this.ensureCaseHeaderAnchor(file);
   }
   findCaseTitle(text) {
@@ -9738,7 +10076,7 @@ Diagnostic persistence also failed: ${diagnosticError?.stack || diagnosticError}
         const parts = rel.split("/");
         if (parts.length < 2) throw new Error("legacy surgeon path is incomplete");
         const specialty = validatedPathSegment(fm.specialty || parts[0], "Legacy specialty");
-        const surgeon2 = validatedPathSegment(fm.surgeon || parts.slice(1).join("/"), "Legacy surgeon", { person: true });
+        const surgeon = validatedPathSegment(fm.surgeon || parts.slice(1).join("/"), "Legacy surgeon", { person: true });
         const gloves = normalizeGloves2(fm.gloves || "Unknown", this.settings);
         const gown = fm.gown == null || fm.gown === "" ? this.settings.defaultGown : String(fm.gown);
         if (!GOWNS2.includes(gown)) throw new Error("invalid gown");
@@ -9751,8 +10089,8 @@ Diagnostic persistence also failed: ${diagnosticError?.stack || diagnosticError}
           schema_version: SCHEMA_VERSION,
           created: fm.created || sourceTime,
           last_verified: fm.last_verified || fm.created || sourceTime
-        }, specialty, surgeon2);
-        legacyPlans.push({ file: legacy, path: legacy.path, raw, specialty, surgeon: surgeon2, record });
+        }, specialty, surgeon);
+        legacyPlans.push({ file: legacy, path: legacy.path, raw, specialty, surgeon, record });
       } catch (_) {
         invalidGlovePaths.push(legacy.path);
       }
@@ -9817,13 +10155,13 @@ ${next.slice(at).replace(/^\s+/, "")}`;
         if (result.imported) importedLegacy++;
       }
       for (const [key4, candidates] of gloveCandidates.entries()) {
-        const [specialty, surgeon2] = key4.split("\0");
+        const [specialty, surgeon] = key4.split("\0");
         const unique = [...new Set(candidates.map((x) => x.value))];
         candidates.sort((a, b) => b.mtime - a.mtime);
         const selected = candidates[0];
-        if (unique.length > 1) conflicts.push(`${specialty} / ${surgeon2}: ${unique.join(" | ")} → selected latest ${selected.value}`);
-        const result = await this.seedSurgeonGlovesIfUnknown(specialty, surgeon2, selected.value, selected.verified);
-        this.rememberRegistryMutation(registryMutations, specialty, surgeon2, result);
+        if (unique.length > 1) conflicts.push(`${specialty} / ${surgeon}: ${unique.join(" | ")} → selected latest ${selected.value}`);
+        const result = await this.seedSurgeonGlovesIfUnknown(specialty, surgeon, selected.value, selected.verified);
+        this.rememberRegistryMutation(registryMutations, specialty, surgeon, result);
       }
       await this.applyExpectedTextPlans(caseWrites, "v0.1.1 migration");
     } catch (error) {
@@ -9898,7 +10236,7 @@ ${conflicts.length ? conflicts.map((x) => `- ${x}`).join("\n") : "None"}
       let record;
       try {
         const specialty = validatedPathSegment(data.specialty, "JSON specialty");
-        const surgeon2 = validatedPathSegment(data.surgeon, "JSON surgeon", { person: true });
+        const surgeon = validatedPathSegment(data.surgeon, "JSON surgeon", { person: true });
         const sourceTime = new Date(file.stat?.mtime || Date.now()).toISOString();
         record = this.adminRegistryRecord({
           cst_id: data.cst_id || data.id || id("surgeon"),
@@ -9908,7 +10246,7 @@ ${conflicts.length ? conflicts.map((x) => `- ${x}`).join("\n") : "None"}
           schema_version: SCHEMA_VERSION,
           created: data.created || sourceTime,
           last_verified: data.last_verified || data.created || sourceTime
-        }, specialty, surgeon2);
+        }, specialty, surgeon);
       } catch (_) {
         invalidJson.push(file.path);
         continue;
@@ -9974,9 +10312,9 @@ ${conflicts.length ? conflicts.map((x) => `- ${x}`).join("\n") : "None"}
         if (result.imported) imported++;
       }
       for (const specialty of this.getSpecialties()) {
-        for (const surgeon2 of this.getSurgeons(specialty)) {
-          const result = await this.ensureMigrationSurgeonRecord(specialty, surgeon2);
-          this.rememberRegistryMutation(registryMutations, specialty, surgeon2, result);
+        for (const surgeon of this.getSurgeons(specialty)) {
+          const result = await this.ensureMigrationSurgeonRecord(specialty, surgeon);
+          this.rememberRegistryMutation(registryMutations, specialty, surgeon, result);
         }
       }
       const verifiedRegistry = await this.readSurgeonRegistry();
@@ -10495,7 +10833,7 @@ ${next.slice(at).replace(/^\s+/, "")}`;
     if (withSnapshot && files.length) backupPath = await this.snapshotFiles("backend-repair", [...files, ...this.getSurgeonProfiles()]);
     const specialties = this.getSpecialties();
     for (const specialty of specialties) {
-      for (const surgeon2 of this.getSurgeons(specialty)) await this.ensureSurgeonData(specialty, surgeon2, {}, { updateGraph: false });
+      for (const surgeon of this.getSurgeons(specialty)) await this.ensureSurgeonData(specialty, surgeon, {}, { updateGraph: false });
     }
     for (const file of files) await this.routeManagedFile(file, false);
     await this.rebuildGraph();
@@ -10546,7 +10884,7 @@ ${next.slice(at).replace(/^\s+/, "")}`;
       }
       const physicalKeys = /* @__PURE__ */ new Set();
       for (const specialty of specialties) {
-        for (const surgeon2 of this.getSurgeons(specialty)) physicalKeys.add(this.surgeonKey(specialty, surgeon2));
+        for (const surgeon of this.getSurgeons(specialty)) physicalKeys.add(this.surgeonKey(specialty, surgeon));
       }
       const registeredKeys = new Set(Object.keys(registryState.registry.surgeons || {}));
       const missingFolders = [...registeredKeys].filter((key4) => !physicalKeys.has(key4));
@@ -10616,9 +10954,9 @@ ${next.slice(at).replace(/^\s+/, "")}`;
     }
     let missingGloves = 0, unknownGowns = 0, invalidGloves = 0, surgeonCount = 0;
     for (const specialty of this.getSpecialties()) {
-      for (const surgeon2 of this.getSurgeons(specialty)) {
+      for (const surgeon of this.getSurgeons(specialty)) {
         surgeonCount++;
-        const data = await this.getSurgeonData(specialty, surgeon2, { createIfMissing: false });
+        const data = await this.getSurgeonData(specialty, surgeon, { createIfMissing: false });
         const gloves = formatGloves(data?.gloves || "Unknown");
         const gown = data?.gown || "Unknown";
         if (gloves === "Unknown") missingGloves++;
@@ -10627,7 +10965,7 @@ ${next.slice(at).replace(/^\s+/, "")}`;
             normalizeGloves2(gloves, this.settings);
           } catch (_) {
             invalidGloves++;
-            issues.push(["Invalid gloves", `${specialty} / ${surgeon2}`]);
+            issues.push(["Invalid gloves", `${specialty} / ${surgeon}`]);
           }
         }
         if (gown === "Unknown" || !GOWNS2.includes(gown)) unknownGowns++;
@@ -10657,10 +10995,10 @@ ${next.slice(at).replace(/^\s+/, "")}`;
   duplicateSurgeonCandidates() {
     const map = /* @__PURE__ */ new Map();
     for (const specialty of this.getSpecialties()) {
-      for (const surgeon2 of this.getSurgeons(specialty)) {
-        const n = String(surgeon2).toLowerCase().replace(/[^a-z0-9]/g, "");
+      for (const surgeon of this.getSurgeons(specialty)) {
+        const n = String(surgeon).toLowerCase().replace(/[^a-z0-9]/g, "");
         if (!map.has(n)) map.set(n, []);
-        map.get(n).push(`${specialty}: ${surgeon2}`);
+        map.get(n).push(`${specialty}: ${surgeon}`);
       }
     }
     return [...map.values()].filter((v) => v.length > 1);
@@ -10673,11 +11011,11 @@ ${next.slice(at).replace(/^\s+/, "")}`;
       items.push({ kind: "Case", specialty: c.specialty, surgeon: c.surgeon, name: file.basename, file, verified: fm.last_verified || "" });
     }
     for (const specialty of this.getSpecialties()) {
-      for (const surgeon2 of this.getSurgeons(specialty)) {
-        const data = await this.getSurgeonData(specialty, surgeon2, { createIfMissing: false });
-        const graphFile = this.app.vault.getAbstractFileByPath(this.surgeonGraphPath(specialty, surgeon2));
+      for (const surgeon of this.getSurgeons(specialty)) {
+        const data = await this.getSurgeonData(specialty, surgeon, { createIfMissing: false });
+        const graphFile = this.app.vault.getAbstractFileByPath(this.surgeonGraphPath(specialty, surgeon));
         if (!(graphFile instanceof TFile)) continue;
-        items.push({ kind: "Surgeon", specialty, surgeon: surgeon2, name: surgeon2, file: graphFile, verified: data?.last_verified || "" });
+        items.push({ kind: "Surgeon", specialty, surgeon, name: surgeon, file: graphFile, verified: data?.last_verified || "" });
       }
     }
     return items.sort((a, b) => {
@@ -11223,14 +11561,14 @@ Diagnostic persistence also failed: ${diagnosticError?.stack || diagnosticError}
       if (this.app.vault.getAbstractFileByPath(target)) throw new Error("The original case path is occupied. Both notes were preserved; rename the active case before restoring.");
       const fm = parseFrontmatterObject(original);
       const relative = target.slice(this.contentRoot.length + 1).split("/");
-      const [specialty, surgeon2] = relative;
-      if (fm.specialty !== specialty || fm.surgeon !== surgeon2 || !fm.cst_id || !fm.surgeon_id) throw new Error("Archive identity does not match its original folder. Review it before restoring.");
-      const data = await this.getSurgeonData(specialty, surgeon2, { createIfMissing: false });
+      const [specialty, surgeon] = relative;
+      if (fm.specialty !== specialty || fm.surgeon !== surgeon || !fm.cst_id || !fm.surgeon_id) throw new Error("Archive identity does not match its original folder. Review it before restoring.");
+      const data = await this.getSurgeonData(specialty, surgeon, { createIfMissing: false });
       if (data?.cst_id && data.cst_id !== fm.surgeon_id) throw new Error("The recipient surgeon identity differs. No case was restored.");
       if (!data?.cst_id && manifest.surgeon_record?.cst_id !== fm.surgeon_id) throw new Error("The original surgeon profile is unavailable. Restore the profile or wait for Sync first.");
-      await this.ensureFolder(cleanPath(this.contentRoot, specialty, surgeon2));
-      if (!data?.cst_id) await this.ensureSurgeonData(specialty, surgeon2, manifest.surgeon_record, { restoreIdentity: true });
-      const restoredProfile = await this.getSurgeonData(specialty, surgeon2, { createIfMissing: false });
+      await this.ensureFolder(cleanPath(this.contentRoot, specialty, surgeon));
+      if (!data?.cst_id) await this.ensureSurgeonData(specialty, surgeon, manifest.surgeon_record, { restoreIdentity: true });
+      const restoredProfile = await this.getSurgeonData(specialty, surgeon, { createIfMissing: false });
       if (restoredProfile?.cst_id !== fm.surgeon_id) throw new Error("Surgeon identity changed during restoration. The archive was retained.");
       if (await this.app.vault.read(manifestFile) !== manifestText) throw new Error("Recovery manifest changed. Retry after Sync.");
       this.assertVaultFilePath(file, archivePath, "Archive moved before restoration.");
@@ -11495,14 +11833,17 @@ Diagnostic persistence also failed: ${diagnosticError?.stack || diagnosticError}
       }
     }
   }
-  async activateSidebarAt(specialty = "", surgeon2 = "") {
-    return await this.activateSidebar({ specialty, surgeon: surgeon2, query: "" });
+  async activateSidebarAt(specialty = "", surgeon = "") {
+    return await this.activateSidebar({ specialty, surgeon, query: "" });
   }
   openNewCase(presetSpecialty = "", presetSurgeon = "") {
     new NewCaseModal(this, { presetSpecialty, presetSurgeon }).open();
   }
   openNewSurgeon(presetSpecialty = "") {
     new NewSurgeonModal(this, presetSpecialty).open();
+  }
+  openNewSpecialty() {
+    new NewSpecialtyModal(this).open();
   }
   async renderRootDashboard(el) {
     const specialties = this.getSpecialties();
@@ -11563,14 +11904,14 @@ Diagnostic persistence also failed: ${diagnosticError?.stack || diagnosticError}
     this.addStat(stats, "Surgeons", surgeons.length);
     this.addStat(stats, "Cases", cases.length);
     const ul = el.createEl("ul");
-    for (const surgeon2 of surgeons) {
+    for (const surgeon of surgeons) {
       const li = ul.createEl("li");
-      const a = li.createEl("a", { text: surgeon2, href: "#" });
+      const a = li.createEl("a", { text: surgeon, href: "#" });
       a.onclick = (e) => {
         e.preventDefault();
-        this.navigateFromUI(`Open ${surgeon2}`, () => this.openPath(this.surgeonGraphPath(specialty, surgeon2)));
+        this.navigateFromUI(`Open ${surgeon}`, () => this.openPath(this.surgeonGraphPath(specialty, surgeon)));
       };
-      const count = cases.filter((f) => this.caseContext(f)?.surgeon === surgeon2).length;
+      const count = cases.filter((f) => this.caseContext(f)?.surgeon === surgeon).length;
       li.createSpan({ text: ` · ${count} case${count === 1 ? "" : "s"}`, cls: "cst-muted" });
     }
     el.createEl("h3", { text: "Recent cases" });
@@ -11629,16 +11970,16 @@ Diagnostic persistence also failed: ${diagnosticError?.stack || diagnosticError}
       }
     }
   }
-  refreshSurgeonHeaderDisplays(specialty, surgeon2, data = null) {
+  refreshSurgeonHeaderDisplays(specialty, surgeon, data = null) {
     const gloves = formatGloves(data?.gloves || "Unknown");
     const gown = data?.gown || "Unknown";
     const legend = gloveLegend2(data?.gloves, this.settings);
     const music = String(data?.music || "").trim();
     for (const doc of this.workspaceDocuments()) {
       doc.querySelectorAll(".cst-live-header").forEach((el) => {
-        if (el.dataset.cstSpecialty === specialty && el.dataset.cstSurgeon === surgeon2) {
+        if (el.dataset.cstSpecialty === specialty && el.dataset.cstSurgeon === surgeon) {
           const row = el.querySelector(".cst-live-header-row");
-          if (row) row.textContent = `${surgeon2} · ${gloves} · ${gown}`;
+          if (row) row.textContent = `${surgeon} · ${gloves} · ${gown}`;
           const syncLine = (selector, text, className) => {
             let line = el.querySelector(selector);
             if (!text) {
@@ -11710,18 +12051,18 @@ Diagnostic persistence also failed: ${diagnosticError?.stack || diagnosticError}
     const rel = node.path.startsWith(graphRoot) ? node.path.slice(graphRoot.length).replace(/\.md$/i, "") : "";
     const pathParts = rel.split("/").filter(Boolean);
     const specialty = String(fm.specialty || pathParts[0] || "").trim();
-    const surgeon2 = String(fm.surgeon || pathParts[1] || node.basename).trim();
-    if (!specialty || !surgeon2) {
+    const surgeon = String(fm.surgeon || pathParts[1] || node.basename).trim();
+    if (!specialty || !surgeon) {
       el.createEl("p", { text: "Surgeon identity is unavailable. Wait for Sync to finish or repair this generated node.", cls: "cst-warning" });
       return;
     }
-    const data = await this.getSurgeonData(specialty, surgeon2, { createIfMissing: false });
+    const data = await this.getSurgeonData(specialty, surgeon, { createIfMissing: false });
     if (!data || data.unavailable) {
       el.createEl("p", { text: "Surgeon registry unavailable. Wait for Sync to finish before editing this profile.", cls: "cst-warning" });
       return;
     }
     el.addClass("cst-profile-card");
-    const title = el.createDiv({ cls: "cst-profile-title", text: `${surgeon2} · ${formatGloves(data.gloves)} · ${data.gown}` });
+    const title = el.createDiv({ cls: "cst-profile-title", text: `${surgeon} · ${formatGloves(data.gloves)} · ${data.gown}` });
     const grid = el.createDiv({ cls: "cst-modal-grid" });
     grid.createEl("label", { text: "Gloves" });
     const glove = makeInput(grid, { value: data.gloves });
@@ -11758,7 +12099,7 @@ Diagnostic persistence also failed: ${diagnosticError?.stack || diagnosticError}
           new Notice("No profile changes to save.");
           return;
         }
-        const updated = await this.updateSurgeonProfileExpected(specialty, surgeon2, {
+        const updated = await this.updateSurgeonProfileExpected(specialty, surgeon, {
           gloves: glove.value,
           gown: gown.value,
           music: music.value,
@@ -11770,19 +12111,19 @@ Diagnostic persistence also failed: ${diagnosticError?.stack || diagnosticError}
         dirtyGloves = false;
         dirtyGown = false;
         dirtyMusic = false;
-        title.setText(`${surgeon2} · ${formatGloves(updated.gloves)} · ${updated.gown}`);
+        title.setText(`${surgeon} · ${formatGloves(updated.gloves)} · ${updated.gown}`);
         glove.value = updated.gloves;
         gown.value = updated.gown;
         music.value = updated.music || "";
-        new Notice(`${surgeon2} profile saved.`);
+        new Notice(`${surgeon} profile saved.`);
       } catch (e) {
         new Notice(e.message || String(e));
       } finally {
         if (save.isConnected) save.disabled = false;
       }
     };
-    const add = actions.createEl("button", { text: `+ New ${surgeon2} Case` });
-    add.onclick = () => this.openNewCase(specialty, surgeon2);
+    const add = actions.createEl("button", { text: `+ New ${surgeon} Case` });
+    add.onclick = () => this.openNewCase(specialty, surgeon);
   }
   async renderCaseList(el, ctx) {
     const node = this.app.vault.getAbstractFileByPath(ctx.sourcePath);
@@ -11797,12 +12138,12 @@ Diagnostic persistence also failed: ${diagnosticError?.stack || diagnosticError}
     const rel = node.path.startsWith(graphRoot) ? node.path.slice(graphRoot.length).replace(/\.md$/i, "") : "";
     const pathParts = rel.split("/").filter(Boolean);
     const specialty = String(fm.specialty || pathParts[0] || "").trim();
-    const surgeon2 = String(fm.surgeon || pathParts[1] || "").trim();
-    if (!specialty || !surgeon2) {
+    const surgeon = String(fm.surgeon || pathParts[1] || "").trim();
+    if (!specialty || !surgeon) {
       el.createEl("em", { text: "Surgeon identity unavailable while Sync is loading." });
       return;
     }
-    const cases = (await this.caseEntries()).filter((entry) => entry.usable && entry.context.specialty === specialty && entry.context.surgeon === surgeon2).map((entry) => entry.file).sort((a, b) => compareCSTNames(a.basename, b.basename));
+    const cases = (await this.caseEntries()).filter((entry) => entry.usable && entry.context.specialty === specialty && entry.context.surgeon === surgeon).map((entry) => entry.file).sort((a, b) => compareCSTNames(a.basename, b.basename));
     if (!cases.length) {
       el.createEl("em", { text: "No cases yet." });
       return;
@@ -11911,7 +12252,7 @@ Diagnostic persistence also failed: ${diagnosticError?.stack || diagnosticError}
     const merge = actions.createEl("button", { text: "Merge Surgeons" });
     merge.onclick = () => new SurgeonActionModal(this, "merge").open();
     const rows = [];
-    for (const specialty of this.getSpecialties()) for (const surgeon2 of this.getSurgeons(specialty)) rows.push({ specialty, surgeon: surgeon2 });
+    for (const specialty of this.getSpecialties()) for (const surgeon of this.getSurgeons(specialty)) rows.push({ specialty, surgeon });
     rows.sort((a, b) => a.surgeon.localeCompare(b.surgeon) || a.specialty.localeCompare(b.specialty));
     const ul = el.createEl("ul");
     for (const row of rows) {
@@ -11921,7 +12262,7 @@ Diagnostic persistence also failed: ${diagnosticError?.stack || diagnosticError}
       const a = li.createEl("a", { text: `${row.specialty} — ${row.surgeon}`, href: "#" });
       a.onclick = (e) => {
         e.preventDefault();
-        this.navigateFromUI(`Open ${surgeon} graph`, () => this.openPath(graph));
+        this.navigateFromUI(`Open ${row.surgeon} profile`, () => this.openPath(graph));
       };
       li.createSpan({ text: ` · ${formatGloves(data?.gloves || "Unknown")} · ${data?.gown || "Unknown"}`, cls: "cst-muted" });
     }
@@ -12148,12 +12489,12 @@ Diagnostic persistence also failed: ${diagnosticError?.stack || diagnosticError}
       });
       const visible = /* @__PURE__ */ new Map();
       doc.querySelectorAll(".cst-live-header").forEach((header) => {
-        const specialty = header.dataset.cstSpecialty, surgeon2 = header.dataset.cstSurgeon;
-        if (specialty && surgeon2) visible.set(`${specialty}\0${surgeon2}`, { specialty, surgeon: surgeon2 });
+        const specialty = header.dataset.cstSpecialty, surgeon = header.dataset.cstSurgeon;
+        if (specialty && surgeon) visible.set(`${specialty}\0${surgeon}`, { specialty, surgeon });
       });
-      for (const { specialty, surgeon: surgeon2 } of visible.values()) {
-        const data = await this.getSurgeonData(specialty, surgeon2, { createIfMissing: false });
-        if (data && !data.unavailable) this.refreshSurgeonHeaderDisplays(specialty, surgeon2, data);
+      for (const { specialty, surgeon } of visible.values()) {
+        const data = await this.getSurgeonData(specialty, surgeon, { createIfMissing: false });
+        if (data && !data.unavailable) this.refreshSurgeonHeaderDisplays(specialty, surgeon, data);
       }
     }
     this.scheduleGraphRebuild?.(500);
@@ -12165,24 +12506,24 @@ Diagnostic persistence also failed: ${diagnosticError?.stack || diagnosticError}
     ];
     return glove_settings_exports.renderGloveSettingsEditor(el, this, { rows });
   }
-  async createSurgeon({ specialty, surgeon: surgeon2, gloves = "Unknown", gown = "", music = "" }) {
+  async createSurgeon({ specialty, surgeon, gloves = "Unknown", gown = "", music = "" }) {
     return await this.serializedAdminMutation(async () => {
       if (this.settings.initialized && !await this.quickStructureCheck()) {
         throw new Error("Surgeon creation is paused until this device has a complete CST vault.");
       }
       specialty = validatedPathSegment(specialty, "Specialty");
-      surgeon2 = validatedPathSegment(surgeon2, "Surgeon", { person: true });
+      surgeon = validatedPathSegment(surgeon, "Surgeon", { person: true });
       if (!this.getSpecialties().includes(specialty)) throw new Error(`Specialty not found: ${specialty}`);
-      const collision = this.getSurgeons(specialty).find((existing) => existing.normalize("NFC").toLocaleLowerCase() === surgeon2.normalize("NFC").toLocaleLowerCase());
+      const collision = this.getSurgeons(specialty).find((existing) => existing.normalize("NFC").toLocaleLowerCase() === surgeon.normalize("NFC").toLocaleLowerCase());
       if (collision) throw new Error(`${collision} already exists in ${specialty}.`);
       gloves = normalizeGloves2(gloves || "Unknown", this.settings);
       gown = GOWNS2.includes(gown) ? gown : this.settings.defaultGown;
-      const folderPath = validatePortableVaultPath(cleanPath(this.contentRoot, specialty, surgeon2), "New surgeon path");
+      const folderPath = validatePortableVaultPath(cleanPath(this.contentRoot, specialty, surgeon), "New surgeon path");
       validatePortableVaultPath(this.specialtyGraphPath(specialty), "Surgeon specialty graph path");
-      validatePortableVaultPath(this.surgeonGraphPath(specialty, surgeon2), "Surgeon graph path");
+      validatePortableVaultPath(this.surgeonGraphPath(specialty, surgeon), "Surgeon graph path");
       validatePortableVaultPath(this.surgeonRegistryPath(), "Surgeon registry path");
       if (this.app.vault.getAbstractFileByPath(folderPath)) throw new Error(`Target already exists: ${folderPath}`);
-      const existingRecord = await this.getRegistrySurgeon(specialty, surgeon2, { create: false });
+      const existingRecord = await this.getRegistrySurgeon(specialty, surgeon, { create: false });
       if (existingRecord.data) throw new Error("A surgeon registry record with this name already exists.");
       const record = this.adminRegistryRecord({
         cst_id: id("surgeon"),
@@ -12193,7 +12534,7 @@ Diagnostic persistence also failed: ${diagnosticError?.stack || diagnosticError}
         schema_version: SCHEMA_VERSION,
         created: nowISO(),
         last_verified: nowISO()
-      }, specialty, surgeon2);
+      }, specialty, surgeon);
       let folderCreated = false;
       let recordCreated = false;
       try {
@@ -12205,12 +12546,12 @@ Diagnostic persistence also failed: ${diagnosticError?.stack || diagnosticError}
           this.ignoreCreateUntil.delete(normalizePath(folderPath));
           const raced = this.app.vault.getAbstractFileByPath(folderPath);
           if (raced instanceof TFolder) {
-            throw new Error(`${surgeon2}'s folder appeared from another window or device. It was preserved; wait for Sync, then retry.`);
+            throw new Error(`${surgeon}'s folder appeared from another window or device. It was preserved; wait for Sync, then retry.`);
           }
           throw error;
         }
         await this.applyAdminRegistryChanges([
-          { specialty, surgeon: surgeon2, expected: null, data: record }
+          { specialty, surgeon, expected: null, data: record }
         ]);
         recordCreated = true;
       } catch (error) {
@@ -12218,7 +12559,7 @@ Diagnostic persistence also failed: ${diagnosticError?.stack || diagnosticError}
         if (recordCreated) {
           try {
             await this.applyAdminRegistryChanges([
-              { specialty, surgeon: surgeon2, expected: record, data: null }
+              { specialty, surgeon, expected: record, data: null }
             ]);
           } catch (rollback) {
             rollbackErrors.push(rollback.message || String(rollback));
@@ -12226,7 +12567,7 @@ Diagnostic persistence also failed: ${diagnosticError?.stack || diagnosticError}
         }
         if (folderCreated) {
           try {
-            const currentRecord = await this.getRegistrySurgeon(specialty, surgeon2, { create: false });
+            const currentRecord = await this.getRegistrySurgeon(specialty, surgeon, { create: false });
             const folder = this.app.vault.getAbstractFileByPath(folderPath);
             if (!currentRecord.data && folder instanceof TFolder) {
               await this.quarantineEmptySurgeonFolder(folder, folderPath, "New surgeon folder rollback");
@@ -12238,8 +12579,8 @@ Diagnostic persistence also failed: ${diagnosticError?.stack || diagnosticError}
         if (rollbackErrors.length) throw new Error(`${error.message || error} Rollback needs review: ${rollbackErrors.join(" | ")}`);
         throw error;
       }
-      await this.finishAdminMutation("Create surgeon", `${specialty} / ${surgeon2}`);
-      return { specialty, surgeon: surgeon2, data: record };
+      await this.finishAdminMutation("Create surgeon", `${specialty} / ${surgeon}`);
+      return { specialty, surgeon, data: record };
     });
   }
   async createSpecialty(name) {
@@ -12283,24 +12624,24 @@ Diagnostic persistence also failed: ${diagnosticError?.stack || diagnosticError}
     });
     return await run;
   }
-  adminRegistryRecord(data, specialty, surgeon2) {
-    const record = this.portableSurgeonRecord(data, specialty, surgeon2);
+  adminRegistryRecord(data, specialty, surgeon) {
+    const record = this.portableSurgeonRecord(data, specialty, surgeon);
     if (!record) return null;
     record.specialty = specialty;
-    record.surgeon = canonicalPersonName(surgeon2);
+    record.surgeon = canonicalPersonName(surgeon);
     if (!String(record.cst_id || "").trim()) {
-      throw new Error(`Surgeon registry ID is missing for ${specialty} / ${surgeon2}. Repair the registry before retrying Admin.`);
+      throw new Error(`Surgeon registry ID is missing for ${specialty} / ${surgeon}. Repair the registry before retrying Admin.`);
     }
     if (!String(record.created || "").trim()) {
-      throw new Error(`Surgeon creation timestamp is missing for ${specialty} / ${surgeon2}. Repair the registry before retrying Admin.`);
+      throw new Error(`Surgeon creation timestamp is missing for ${specialty} / ${surgeon}. Repair the registry before retrying Admin.`);
     }
     try {
       record.gloves = normalizeGloves2(record.gloves || "Unknown", this.settings);
     } catch (error) {
-      throw new Error(`Invalid glove profile for ${specialty} / ${surgeon2}: ${error.message || error}`);
+      throw new Error(`Invalid glove profile for ${specialty} / ${surgeon}: ${error.message || error}`);
     }
     if (!GOWNS2.includes(record.gown)) {
-      throw new Error(`Invalid gown profile for ${specialty} / ${surgeon2}.`);
+      throw new Error(`Invalid gown profile for ${specialty} / ${surgeon}.`);
     }
     return record;
   }
@@ -12549,8 +12890,8 @@ Diagnostic persistence also failed: ${diagnosticError?.stack || diagnosticError}
   async renameSurgeon(specialty, oldName, newName) {
     return await this.serializedAdminMutation(() => this.relocateSurgeonTransaction(specialty, oldName, specialty, newName, "Rename surgeon"));
   }
-  async moveSurgeon(specialty, surgeon2, destination) {
-    return await this.serializedAdminMutation(() => this.relocateSurgeonTransaction(specialty, surgeon2, destination, surgeon2, "Move surgeon"));
+  async moveSurgeon(specialty, surgeon, destination) {
+    return await this.serializedAdminMutation(() => this.relocateSurgeonTransaction(specialty, surgeon, destination, surgeon, "Move surgeon"));
   }
   async mergeSurgeonsTransaction(sourceSpecialty, sourceSurgeon, targetSpecialty, targetSurgeon) {
     if (this.settings.initialized && !await this.quickStructureCheck()) {
@@ -14427,8 +14768,8 @@ var CSTSidebarView = class extends ItemView {
   navigateSpecialty(specialty) {
     this.plugin.navigateFromUI(`Open ${specialty}`, () => this.requestRoute({ specialty, surgeon: "", query: "" }));
   }
-  navigateSurgeon(specialty, surgeon2) {
-    this.plugin.navigateFromUI(`Open ${surgeon2}`, () => this.requestRoute({ specialty, surgeon: surgeon2, query: "" }));
+  navigateSurgeon(specialty, surgeon) {
+    this.plugin.navigateFromUI(`Open ${surgeon}`, () => this.requestRoute({ specialty, surgeon, query: "" }));
   }
   async prepareForReveal(route = null) {
     if (route) {
@@ -14526,23 +14867,23 @@ var CSTSidebarView = class extends ItemView {
     left.createEl("p", { text: `${surgeons.length} surgeons - ${cases.length} cases`, cls: "cst-muted" });
     const registryState = await this.plugin.readSurgeonRegistry({ create: false });
     const list = el.createDiv({ cls: "cst-app-list" });
-    for (const surgeon2 of surgeons) {
-      const d = this.plugin.surgeonDataFromRegistry(registryState.registry, specialty, surgeon2, registryState.file) || await this.plugin.getSurgeonData(specialty, surgeon2, { createIfMissing: false });
+    for (const surgeon of surgeons) {
+      const d = this.plugin.surgeonDataFromRegistry(registryState.registry, specialty, surgeon, registryState.file) || await this.plugin.getSurgeonData(specialty, surgeon, { createIfMissing: false });
       const available = !!d?.cst_id && !d?.unavailable;
-      const count = cases.filter((f) => this.plugin.caseContext(f)?.surgeon === surgeon2).length;
+      const count = cases.filter((f) => this.plugin.caseContext(f)?.surgeon === surgeon).length;
       const wrap = list.createDiv({ cls: "cst-app-surgeon-wrap" });
       const row = wrap.createEl("button", { cls: "cst-app-row" });
-      row.createSpan({ text: surgeon2, cls: "cst-app-row-title" });
+      row.createSpan({ text: surgeon, cls: "cst-app-row-title" });
       row.createSpan({
         text: available ? `${formatGloves(d.gloves || "Unknown")} · ${d.gown || "Unknown"} · ${count} case${count === 1 ? "" : "s"}` : `Profile unavailable · Sync pending · ${count} case${count === 1 ? "" : "s"}`,
         cls: available ? "cst-muted" : "cst-warning"
       });
-      row.onclick = () => this.navigateSurgeon(specialty, surgeon2);
+      row.onclick = () => this.navigateSurgeon(specialty, surgeon);
       const plus = wrap.createEl("button", { text: "+", cls: "cst-mini-add" });
-      plus.setAttribute("aria-label", `New ${surgeon2} case`);
+      plus.setAttribute("aria-label", `New ${surgeon} case`);
       plus.onclick = (e) => {
         e.stopPropagation();
-        this.plugin.openNewCase(specialty, surgeon2);
+        this.plugin.openNewCase(specialty, surgeon);
       };
       plus.disabled = !available;
       if (!available) plus.setAttribute("title", "Wait for the surgeon registry record to sync.");
@@ -14558,20 +14899,20 @@ var CSTSidebarView = class extends ItemView {
       row.onclick = () => this.plugin.navigateFromUI(`Open ${file.basename}`, () => this.plugin.openFile(file));
     }
   }
-  async renderSurgeon(el, specialty, surgeon2) {
-    const d = await this.plugin.getSurgeonData(specialty, surgeon2, { createIfMissing: false });
+  async renderSurgeon(el, specialty, surgeon) {
+    const d = await this.plugin.getSurgeonData(specialty, surgeon, { createIfMissing: false });
     const available = !!d?.cst_id && !d?.unavailable;
     el.dataset.profileAvailable = String(available);
-    const cases = (await this.plugin.caseEntries()).filter((entry) => entry.usable && entry.context.specialty === specialty && entry.context.surgeon === surgeon2).map((entry) => entry.file).sort((a, b) => compareCSTNames(a.basename, b.basename));
+    const cases = (await this.plugin.caseEntries()).filter((entry) => entry.usable && entry.context.specialty === specialty && entry.context.surgeon === surgeon).map((entry) => entry.file).sort((a, b) => compareCSTNames(a.basename, b.basename));
     const nav = el.createDiv({ cls: "cst-surgeon-nav" });
     const back = nav.createEl("button", { text: `← ${specialty}` });
     back.onclick = () => this.navigateSpecialty(specialty);
     const graph = nav.createEl("button", { text: "Open surgeon profile" });
-    graph.onclick = () => this.plugin.navigateFromUI(`Open ${surgeon2} profile`, () => this.plugin.openPath(this.plugin.surgeonGraphPath(specialty, surgeon2)));
+    graph.onclick = () => this.plugin.navigateFromUI(`Open ${surgeon} profile`, () => this.plugin.openPath(this.plugin.surgeonGraphPath(specialty, surgeon)));
     graph.disabled = !available;
     if (!available) graph.setAttribute("title", "Wait for the surgeon registry record to sync.");
     const card = el.createDiv({ cls: "cst-profile-card" });
-    card.createEl("div", { text: surgeon2, cls: "cst-app-title" });
+    card.createEl("div", { text: surgeon, cls: "cst-app-title" });
     card.createEl("div", {
       text: available ? `${formatGloves(d.gloves || "Unknown")} · ${d.gown || "Unknown"}` : "Profile unavailable · Sync pending",
       cls: available ? "cst-profile-title" : "cst-warning"
@@ -14583,8 +14924,8 @@ var CSTSidebarView = class extends ItemView {
       });
     }
     const actions = card.createDiv({ cls: "cst-actions" });
-    const add = actions.createEl("button", { text: `+ New ${surgeon2} Case`, cls: "mod-cta" });
-    add.onclick = () => this.plugin.openNewCase(specialty, surgeon2);
+    const add = actions.createEl("button", { text: `+ New ${surgeon} Case`, cls: "mod-cta" });
+    add.onclick = () => this.plugin.openNewCase(specialty, surgeon);
     add.disabled = !available;
     if (!available) add.setAttribute("title", "Wait for the surgeon registry record to sync.");
     el.createEl("h3", { text: `Cases · ${cases.length}` });
@@ -14603,7 +14944,7 @@ var CSTSidebarView = class extends ItemView {
         remove.disabled = true;
         try {
           const deleted = await this.plugin.deleteCase(file);
-          if (deleted) await this.requestRoute({ specialty, surgeon: surgeon2, query: "" });
+          if (deleted) await this.requestRoute({ specialty, surgeon, query: "" });
         } catch (error) {
           new Notice(error.message || String(error));
         } finally {
@@ -14619,17 +14960,17 @@ var CSTSidebarView = class extends ItemView {
     const caseEntries = await this.plugin.caseEntries();
     let shown = 0;
     for (const specialty of this.plugin.getSpecialties()) {
-      for (const surgeon2 of this.plugin.getSurgeons(specialty)) {
-        if (!surgeon2.toLowerCase().includes(q)) continue;
-        const d = this.plugin.surgeonDataFromRegistry(registryState.registry, specialty, surgeon2, registryState.file) || await this.plugin.getSurgeonData(specialty, surgeon2, { createIfMissing: false });
+      for (const surgeon of this.plugin.getSurgeons(specialty)) {
+        if (!surgeon.toLowerCase().includes(q)) continue;
+        const d = this.plugin.surgeonDataFromRegistry(registryState.registry, specialty, surgeon, registryState.file) || await this.plugin.getSurgeonData(specialty, surgeon, { createIfMissing: false });
         const available = !!d?.cst_id && !d?.unavailable;
         const row = list.createEl("button", { cls: "cst-app-row" });
-        row.createSpan({ text: surgeon2, cls: "cst-app-row-title" });
+        row.createSpan({ text: surgeon, cls: "cst-app-row-title" });
         row.createSpan({
           text: available ? `${specialty} · ${formatGloves(d.gloves || "Unknown")} · ${d.gown || "Unknown"}` : `${specialty} · profile unavailable · Sync pending`,
           cls: available ? "cst-muted" : "cst-warning"
         });
-        row.onclick = () => this.navigateSurgeon(specialty, surgeon2);
+        row.onclick = () => this.navigateSurgeon(specialty, surgeon);
         if (++shown >= 40) break;
       }
       if (shown >= 40) break;
@@ -14921,12 +15262,12 @@ var NewCaseModal = class extends Modal {
       };
     }
     grid.createEl("label", { text: "Surgeon" });
-    const surgeon2 = makeSelect(grid, "Surgeon");
-    addOption(surgeon2, "", surgeons.length ? "Select surgeon" : "No surgeons yet");
-    for (const s of surgeons) addOption(surgeon2, s);
-    surgeon2.value = this.surgeon;
-    surgeon2.onchange = () => {
-      this.surgeon = surgeon2.value;
+    const surgeon = makeSelect(grid, "Surgeon");
+    addOption(surgeon, "", surgeons.length ? "Select surgeon" : "No surgeons yet");
+    for (const s of surgeons) addOption(surgeon, s);
+    surgeon.value = this.surgeon;
+    surgeon.onchange = () => {
+      this.surgeon = surgeon.value;
       queuePreview();
     };
     grid.createEl("label", { text: "Case" });
@@ -15016,8 +15357,8 @@ var QuickCaseModal = class extends Modal {
     el.createEl("h2", { text: "Quick Case" });
     const choices = [];
     for (const specialty of this.plugin.getSpecialties()) {
-      for (const surgeon2 of this.plugin.getSurgeons(specialty)) {
-        choices.push({ specialty, surgeon: surgeon2, label: `${specialty} — ${surgeon2}` });
+      for (const surgeon of this.plugin.getSurgeons(specialty)) {
+        choices.push({ specialty, surgeon, label: `${specialty} — ${surgeon}` });
       }
     }
     if (!choices.length) {
@@ -15135,7 +15476,7 @@ var SurgeonActionModal = class extends Modal {
   }
   choices() {
     const out = [];
-    for (const specialty of this.plugin.getSpecialties()) for (const surgeon2 of this.plugin.getSurgeons(specialty)) out.push({ specialty, surgeon: surgeon2, label: `${specialty} — ${surgeon2}` });
+    for (const specialty of this.plugin.getSpecialties()) for (const surgeon of this.plugin.getSurgeons(specialty)) out.push({ specialty, surgeon, label: `${specialty} — ${surgeon}` });
     return out;
   }
   onOpen() {

@@ -32,9 +32,9 @@ GitHub releases attach these files:
 
 `versions.json` is tracked in the repository for version compatibility metadata. This repository intentionally does not contain user vault data, local settings, source code, or build tooling.
 
-## New in 0.1.11
+## New in 0.1.12
 
-Reusable General example template and safer onboarding cleanup; a mirrored open-Kelly icon and supported mobile shortcuts; scrollable dialogs; Save-based glove settings; clipboard-button importing; protected tab clearing; cleaner resource tracking and recovery-aware image organization. See [release notes](RELEASE-NOTES.md) for details and cleanup safeguards.
+Fixed glove, music and settings input; direct New Specialty and recoverable Delete Surgeon actions in Admin; corrected surgeon navigation and search keyboard handling; clearer Copy package/Save package sharing; and swipe-down onboarding guidance. See [release notes](RELEASE-NOTES.md) for details. Surgeon deletion previews its affected cases and preserves recovery copies; shared templates and other surgeons remain unchanged.
 
 ## Support
 

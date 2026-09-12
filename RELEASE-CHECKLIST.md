@@ -5,6 +5,7 @@
 - [ ] Confirm the version is strict `x.y.z` and matches `manifest.json`, `versions.json`, source metadata, and the Git tag.
 - [ ] Build the private source repository from a clean checkout.
 - [ ] Run typecheck, lint, tests, and the project build.
+- [ ] Pass the integrated source release gate with zero skipped required tests, actual keyboard/click/save/reopen checks, isolated Obsidian lifecycle tests, and separately labeled mobile-browser coverage. Agent reports alone do not authorize a release.
 - [ ] Verify the generated `main.js` exactly matches the release asset.
 - [ ] Validate `manifest.json` and confirm the description is under 250 characters and ends with a period.
 - [ ] Test desktop and mobile behavior, including an empty Specialty → Surgeon → Case state.

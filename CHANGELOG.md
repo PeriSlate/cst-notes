@@ -1,9 +1,15 @@
 # CST Notes changelog
 
+## 0.1.12
+
+- Fixed blocked glove, music, and settings inputs; restored familiar glove examples.
+- Added accessible specialty creation and recoverable surgeon deletion in Admin.
+- Fixed surgeon navigation and search keyboard handling.
+- Simplified packaged case sharing and improved clipboard fallback.
+- Clarified swipe-down onboarding guidance.
+
 ## 0.1.11
 
-- Silent input correction: fixed glove, music, and settings fields that blocked typing. Enter still exits single-line fields. Restored familiar glove shorthand examples.
-- Silent wording correction: onboarding teaches swipe-down navigation on mobile instead of Home buttons, with Command Palette and desktop Kelly-icon guidance.
 - Refined the General example template and onboarding completion; safely finish opted-in example cleanup while preserving Kept Examples and explicit recovery.
 - Added the mirrored, transparent open-Kelly icon, supported mobile shortcut/toolbar setup, community-plugin update checks, and verified Home-button fallback.
 - Made dialogs scrollable and single-line inputs escapable with Enter; clarified surgeon-profile navigation.

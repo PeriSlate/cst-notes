@@ -17,15 +17,15 @@ PeriSlate authorizes the Obsidian Community directory to access the private sour
 
 ## Release asset verification
 
-The private source repository includes a pinned deterministic JavaScript bundler and release verification checks. Rebuilding the private source must produce the exact public `main.js` for v0.1.11. Source files themselves are not individual release assets.
+The private source repository includes a pinned deterministic JavaScript bundler and release verification checks. Rebuilding the private source must produce the exact public `main.js` for v0.1.12. Source files themselves are not individual release assets.
 
-For the approved silent onboarding correction, the original 0.1.11 tags remain historical snapshots. The updated release notes identify the replacement runtime's public commit and workflow; its fresh attestation is bound to that commit rather than the original tag. Reproduce the replacement from the corresponding recorded private-source revision. The manifest, stylesheet, and version number are unchanged.
+Version 0.1.12 uses the normal version-tagged release workflow. Earlier 0.1.11 silent assets have commit-bound attestations rather than matching the original unchanged tag. The retained onboarding correction is reproducible from its recorded source revision and attested public commit `479acf3b781e3168ae7a312f9e79ea3f89f8f3f6`; the glove/input correction is included in 0.1.12. Historical tags are not rewritten.
 
 ## Maintainer action before submission
 
 1. Push the public distribution repository to GitHub.
 2. Push the private source repository to a separate private GitHub repository.
-3. Create the v0.1.11 public GitHub Release and attach `main.js`, `manifest.json`, and `styles.css`.
+3. Create the v0.1.12 public GitHub Release and attach `main.js`, `manifest.json`, and `styles.css`.
 4. Submit the public repository to the Obsidian Community directory.
 5. Install the official Community Directory GitHub App on the private source repository when prompted.
 6. Run the Community Directory review preview and address any review feedback.
@@ -36,7 +36,7 @@ Routine file discovery is scoped to the relevant CST folders. Initialization sti
 
 Local resource collection reads eligible CST case notes and stores provenance and collection state in Backend, not inline case comments. AI remains disconnected. Explicit image-organization previews inspect referring Markdown and supported link containers across the vault to preserve shared image links; uncertain links prevent moves. Supported recovery references use recorded relocation history while original archive backups stay unchanged. Portable exports are created locally after review, and users choose how to share them. External import guidance opens Obsidian Importer installation controls only at the user’s request; CST Notes does not install other plugins automatically.
 
-Copy diagnostic and Copy JSON buttons write reviewed text to the system clipboard only after a user clicks them. Import from clipboard reads text only after its button is clicked, validates the portable package, and requires destination/profile review before import. File import and manual paste are available if clipboard access is unavailable. Review diagnostic output before sharing it.
+Copy diagnostic and Copy package buttons write reviewed text to the system clipboard only after a user clicks them. Import from clipboard reads text only after its button is clicked, validates the portable package, and requires destination/profile review before import. Save package creates a self-contained .cst.json file; clipboard transport carries the same package as text, not a native file attachment. File import and manual paste are available if clipboard access is unavailable. Review diagnostic output before sharing it.
 
 Supported Obsidian-owned settings configure CST Notes mobile shortcuts, the editing toolbar, and community-plugin update checks once per device/policy revision. Capability checks and readback retain fallback Home navigation when shortcuts cannot be verified. Later user setting changes are respected; no automatic plugin installation or update is performed.
 
