@@ -32,9 +32,9 @@ GitHub releases attach these files:
 
 `versions.json` is tracked in the repository for version compatibility metadata. This repository intentionally does not contain user vault data, local settings, source code, or build tooling.
 
-## New in 0.1.12
+## New in 0.1.13
 
-Fixed glove, music and settings input; direct New Specialty and recoverable Delete Surgeon actions in Admin; corrected surgeon navigation and search keyboard handling; clearer Copy package/Save package sharing; and swipe-down onboarding guidance. See [release notes](RELEASE-NOTES.md) for details. Surgeon deletion previews its affected cases and preserves recovery copies; shared templates and other surgeons remain unchanged.
+The highlighted **Share case** action now sends a readable CST share card directly to the device share sheet without CST export pop-ups. Import starts with choosing a shared case, while legacy JSON, clipboard and manual-text routes remain under Other options. Pressing Enter in the manual transfer-text field leaves the field and focuses Continue without importing. See [release notes](RELEASE-NOTES.md) for details and device-support limits.
 
 ## Support
 

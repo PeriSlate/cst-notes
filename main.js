@@ -388,7 +388,11 @@ function createTransferService(plugin, deps) {
     const bundle = { format: FORMAT, version: EXPORT_VERSION, id: unique("transfer"), case: { id: identifier(fm.cst_id || unique("case")), title: transferSegment(file.basename, "Case title"), markdown: await portable(source.text, source.path), example: fm.cst_example === true || fm.cst_id === "cst-example-lumbar-v1", createdTemplate: createdTemplateMetadata(fm) }, sender: { specialty: context.specialty, surgeon: context.surgeon, profile: profileOf(data) }, attachments };
     const json = JSON.stringify(bundle, null, 2);
     parseTransfer(json);
-    const exportPath = path(plugin.p("Admin/Exports"), `${bundle.id}.cst.json`);
+    const shareId = bundle.id.replace(/^transfer-/, "").slice(-8);
+    let shareTitle = bundle.case.title;
+    while (bytes(shareTitle) > 72) shareTitle = Array.from(shareTitle).slice(0, -1).join("");
+    shareTitle = shareTitle.replace(/[. ]+$/, "") || "CST Case";
+    const exportPath = path(plugin.p("Admin/Exports"), `${shareTitle} - ${shareId}.cstcase`);
     await check(source);
     await check(registry);
     return { bundle, json, exportPath, warnings, states: [source, registry], imageStates };
@@ -795,8 +799,8 @@ function installTransferFeatures(plugin, deps) {
     view.open();
     return view;
   }
-  function button(el, text, action) {
-    const control = el.createEl("button", { text, attr: { type: "button" } });
+  function button(el, text, action, cls = "") {
+    const control = el.createEl("button", { text, cls, attr: { type: "button" } });
     control.onclick = async () => {
       if (control.disabled || !control.isConnected) return;
       control.disabled = true;
@@ -836,6 +840,34 @@ function installTransferFeatures(plugin, deps) {
     detail.createEl("summary", { text: label });
     const area = detail.createEl("textarea", { attr: { "aria-label": label, rows: "12", readonly: "" } });
     area.value = text;
+  }
+  async function shareFile(plan, text) {
+    const name = plan.exportPath.split("/").pop();
+    const description = "Shared from CST Notes. Import this card from Admin → Import → Import from CST Notes.";
+    try {
+      if (typeof deps.shareFile === "function") return await deps.shareFile({ name, type: "application/json", text, title: plan.bundle.case.title, description });
+      const navigator = globalThis.navigator, File = globalThis.File;
+      if (typeof navigator?.share !== "function" || typeof File !== "function") return null;
+      const file = new File([text], name, { type: "application/json" });
+      if (typeof navigator.canShare === "function" && !navigator.canShare({ files: [file] })) return null;
+      await navigator.share({ files: [file], title: plan.bundle.case.title, text: description });
+      return true;
+    } catch (error) {
+      if (error?.name === "AbortError") return false;
+      return null;
+    }
+  }
+  async function copyTransferText(text) {
+    if (typeof deps.copyText === "function") return await deps.copyText(text);
+    try {
+      const clipboard = globalThis.navigator?.clipboard;
+      const writeText = clipboard?.writeText;
+      if (typeof writeText !== "function") return false;
+      await writeText.call(clipboard, text);
+      return true;
+    } catch {
+      return false;
+    }
   }
   function bundlePreview(el, bundle) {
     el.createEl("p", { text: `${bundle.case.title} · ${bundle.sender.specialty} / ${bundle.sender.surgeon}` });
@@ -1011,82 +1043,38 @@ function installTransferFeatures(plugin, deps) {
       });
     }
   }
-  plugin.openCSTExport = (file) => modal("Export CST Notes case", (el, view) => {
+  async function exportPlan(file) {
     if (!plugin.caseContext(file)) throw new Error("Select a CST case first.");
-    el.createEl("p", { text: "Share one case, its sender surgeon profile and referenced local images. Creation template metadata is informational only; no template files are needed or included. Review for patient identifiers, private notes and photo metadata. No backend scripts or unrelated cases are included. Your original is preserved." });
-    el.createEl("p", { text: "If you customized glove codes, tell the recipient what they mean. Code definitions are not included in the shared package." });
-    button(el, "Build privacy preview", async () => {
-      const plan = await service.prepareExport(file);
-      if (!view.alive) return;
-      modal("Privacy preview", (preview, confirm) => {
-        bundlePreview(preview, plan.bundle);
-        for (const warning of plan.warnings) preview.createEl("p", { text: warning });
-        preview.createEl("p", { text: `Save package creates a self-contained .cst.json file in your vault: ${plan.exportPath}. Share that file using an available Obsidian share/open action or your device’s Files app.` });
-        preview.createEl("p", { text: "Copy package copies the same package as text. Send the complete text unchanged; no JSON editing is needed. To receive it: Admin → Import → Import from CST Notes → Import from clipboard → review and import. You can also choose the saved package file. Older versions may need an update to read the new portable format." });
-        const consent = check(preview, "I reviewed all text and images and approve sharing this export.");
-        const manual = preview.createDiv({ cls: "cst-transfer-manual-copy" });
-        const actions = preview.createDiv({ cls: "cst-transfer-actions" });
-        function approved() {
-          if (!confirm.alive || !view.alive) return false;
-          if (!consent.checked) throw new Error("Review the privacy preview and confirm before exporting.");
-          return true;
-        }
-        async function reviewedJSON() {
-          if (!approved()) return null;
-          const json = await service.exportJSON(plan);
-          return approved() ? json : null;
-        }
-        consent.onchange = () => {
-          if (!consent.checked) manual.empty();
-        };
-        button(actions, "Copy package", async () => {
-          manual.empty();
-          const json = await reviewedJSON();
-          if (json === null) return;
-          try {
-            const copy = deps.copyText;
-            let copied;
-            if (typeof copy === "function") copied = await copy(json);
-            else {
-              const clipboard = globalThis.navigator?.clipboard;
-              const writeText = clipboard?.writeText;
-              if (typeof writeText !== "function") throw new Error("Clipboard unavailable");
-              copied = await writeText.call(clipboard, json);
-            }
-            if (copied === false) throw new Error("Clipboard copy failed");
-          } catch {
-            const fallback = await reviewedJSON();
-            if (fallback === null) return;
-            manual.createEl("p", { text: "Automatic copying is unavailable on this device. Select the complete package text below and use Copy, or choose Save package. Send it unchanged; no JSON editing is needed." });
-            const area = manual.createEl("textarea", { cls: "cst-transfer-json", attr: { "aria-label": "Package text to copy manually", rows: "6", readonly: "", spellcheck: "false" } });
-            area.value = fallback;
-            button(manual, "Select package text", async () => {
-              area.value = "";
-              const current = await reviewedJSON();
-              if (current === null) return;
-              area.value = current;
-              area.focus?.();
-              area.select?.();
-              area.setSelectionRange?.(0, area.value.length);
-            });
-            return;
-          }
-          if (confirm.alive && view.alive) notice("Package text copied. Send it unchanged for the recipient to use Import from clipboard in Import from CST Notes.");
-        });
-        button(actions, "Save package", async () => {
-          if (!approved()) return;
-          const exported = await service.saveExport(plan);
-          confirm.close();
-          view.close();
-          notice(`Package saved: ${exported.path}`);
-          await plugin.openFile(exported);
-        });
-      });
-    });
-  });
+    const plan = await service.prepareExport(file);
+    return { plan, text: await service.exportJSON(plan) };
+  }
+  plugin.openCSTExport = async (file) => {
+    const { plan, text } = await exportPlan(file);
+    const shared = await shareFile(plan, text);
+    if (shared === true) {
+      notice("CST share card sent to your device’s share sheet.");
+      return { mode: "shared", plan };
+    }
+    if (shared === false) return { mode: "cancelled", plan };
+    const saved = await service.saveExport(plan);
+    notice(`Direct sharing is unavailable here. Share card saved: ${saved.path}`);
+    return { mode: "saved", plan, file: saved };
+  };
+  plugin.saveCSTExport = async (file) => {
+    const { plan } = await exportPlan(file);
+    const saved = await service.saveExport(plan);
+    notice(`Share card saved: ${saved.path}`);
+    return saved;
+  };
+  plugin.copyCSTExport = async (file) => {
+    const { plan, text } = await exportPlan(file);
+    if (!await copyTransferText(text)) throw new Error("Clipboard copying is unavailable. Use Share case or Save share card.");
+    notice("Legacy transfer text copied. Send it unchanged.");
+    return plan;
+  };
   plugin.openCSTImport = () => modal("Import from CST Notes", (el, view) => {
     el.classList?.add("cst-transfer-import");
-    el.createEl("p", { text: "Copy the complete package text shared by another CST Notes user, then choose Import from clipboard, or choose their saved .cst.json package file. No JSON editing is needed. Clipboard access happens only when you choose that button. Review the case, destination and surgeon profile before confirming the import." });
+    el.createEl("p", { text: "Choose the CST share card your coworker sent. You will review the case, destination and surgeon profile before anything is imported." });
     let readClipboard = null;
     try {
       if (typeof deps.readClipboardText === "function") readClipboard = () => deps.readClipboardText();
@@ -1109,13 +1097,13 @@ function installTransferFeatures(plugin, deps) {
       try {
         const { raw, state = null } = await read();
         if (!view.alive) return;
-        if (typeof raw !== "string") throw new Error("The export must contain JSON text.");
+        if (typeof raw !== "string") throw new Error("The shared case could not be read.");
         if (raw.length > TRANSFER_LIMITS.bytes) throw new Error("Portable file exceeds 24 MiB.");
-        if (!raw.trim()) throw new Error("No JSON text was found. Copy the exported CST Notes JSON, paste it manually, or choose a JSON file.");
+        if (!raw.trim()) throw new Error("The shared case is empty. Choose a CST share card or paste complete transfer text.");
         await loadImport(raw, state);
         view.close();
       } catch (error) {
-        if (view.alive) status.textContent = error instanceof SyntaxError ? "This is not valid JSON. Copy a CST Notes portable export and try again." : error.message || "Unable to read this export. Try manual paste or choose a JSON file.";
+        if (view.alive) status.textContent = error instanceof SyntaxError ? "This is not a valid CST Notes share card. Ask the sender to share it again." : error.message || "Unable to read this shared case. Try another share card or use Other import options.";
       } finally {
         busy = false;
         if (view.alive) {
@@ -1129,28 +1117,32 @@ function installTransferFeatures(plugin, deps) {
         }
       }
     }
-    const clipboardButton = button(actions, "Import from clipboard", () => review(async () => {
+    const picker = el.createEl("input", { type: "file", attr: { accept: ".cstcase,.cst.json,.json,application/json", "aria-label": "Choose CST share card from device" } });
+    picker.hidden = true;
+    const chooseFile = button(actions, "Choose shared case", () => {
+      if (!busy && view.alive) picker.click();
+    }, "mod-cta");
+    button(actions, "Cancel", () => view.close());
+    const alternatives = el.createEl("details");
+    alternatives.createEl("summary", { text: "Other import options" });
+    alternatives.createEl("p", { text: "Use these options for copied transfer text, legacy .cst.json exports, or a share card already saved inside this vault. Clipboard access happens only when you choose the button." });
+    const alternativeActions = alternatives.createDiv({ cls: "cst-transfer-actions" });
+    const clipboardButton = button(alternativeActions, "Import copied text", () => review(async () => {
       try {
         return { raw: await readClipboard() };
       } catch {
         if (view.alive) showManual(true);
-        throw new Error("Clipboard access is unavailable or was denied. Paste the JSON below and choose Continue, or choose a JSON file.");
+        throw new Error("Clipboard access is unavailable or was denied. Paste the complete transfer text below or choose a shared case file.");
       }
     }));
     clipboardButton.disabled = !readClipboard;
-    const picker = el.createEl("input", { type: "file", attr: { accept: ".json,application/json", "aria-label": "Choose portable file from device" } });
-    picker.hidden = true;
-    const chooseFile = button(actions, "Choose JSON file", () => {
-      if (!busy && view.alive) picker.click();
-    });
-    const pasteButton = button(actions, "Paste manually", () => {
+    const pasteButton = button(alternativeActions, "Paste transfer text", () => {
       if (!busy) showManual(true);
     });
-    button(actions, "Cancel", () => view.close());
-    const manual = el.createDiv({ cls: "cst-transfer-manual-paste" });
+    const manual = alternatives.createDiv({ cls: "cst-transfer-manual-paste" });
     manual.hidden = true;
-    manual.createEl("p", { text: "Paste the complete package text unchanged below. No JSON editing is needed. Choose Continue or press Enter to validate it and review the recipient details. Shift+Enter adds a line break." });
-    const pasted = manual.createEl("textarea", { cls: "cst-transfer-json", attr: { "aria-label": "Paste CST Notes JSON", placeholder: "Paste exported CST Notes JSON here", rows: "6", spellcheck: "false", autocapitalize: "off", autocomplete: "off", maxlength: String(TRANSFER_LIMITS.bytes + 1) } });
+    manual.createEl("p", { text: "Paste the complete transfer text unchanged below. Press Enter to leave the field, then choose Continue. Shift+Enter adds a line break." });
+    const pasted = manual.createEl("textarea", { cls: "cst-transfer-json", attr: { "aria-label": "Paste CST Notes transfer text", placeholder: "Paste complete CST Notes transfer text", rows: "6", spellcheck: "false", autocapitalize: "off", autocomplete: "off", maxlength: String(TRANSFER_LIMITS.bytes + 1) } });
     const continueActions = manual.createDiv({ cls: "cst-transfer-actions" });
     const continueButton = button(continueActions, "Continue", () => review(() => ({ raw: pasted.value })));
     function showManual(focus = false) {
@@ -1170,7 +1162,10 @@ function installTransferFeatures(plugin, deps) {
       if (event.key !== "Enter" || event.shiftKey || event.isComposing || composing || event.keyCode === 229) return;
       event.preventDefault();
       event.stopPropagation();
-      if (!event.repeat && !busy) return continueButton.onclick();
+      if (!event.repeat && !busy) {
+        pasted.blur?.();
+        continueButton.focus?.();
+      }
     };
     picker.onchange = () => {
       const file = picker.files?.[0];
@@ -1184,12 +1179,10 @@ function installTransferFeatures(plugin, deps) {
         }
       });
     };
-    const alternatives = el.createEl("details");
-    alternatives.createEl("summary", { text: "Or choose an exported vault file" });
     alternatives.createEl("p", { text: "Files are limited to 24 MiB, with up to 32 images (5 MiB each). Import always previews the destination and profile changes." });
-    const files = vault.getFiles().filter((file) => file.path.endsWith(".cst.json"));
-    const fromVault = select(alternatives, "Or choose an exported vault file", [["", "Select file…"], ...files.map((f) => [f.path, f.path])]);
-    const vaultButton = button(alternatives, "Read selected vault export", () => review(async () => {
+    const files = vault.getFiles().filter((file) => file.path.endsWith(".cstcase") || file.path.endsWith(".cst.json"));
+    const fromVault = select(alternatives, "Saved share card in this vault", [["", "Select share card…"], ...files.map((f) => [f.path, f.path])]);
+    const vaultButton = button(alternatives, "Read saved share card", () => review(async () => {
       const file = vault.getAbstractFileByPath(fromVault.value);
       if (!(file instanceof deps.TFile)) throw new Error("Select an available vault export.");
       if (file.stat?.size > TRANSFER_LIMITS.bytes) throw new Error("Portable file exceeds 24 MiB.");
@@ -1198,17 +1191,37 @@ function installTransferFeatures(plugin, deps) {
     }));
     controls.push(clipboardButton, chooseFile, pasteButton, pasted, continueButton, picker, fromVault, vaultButton);
     if (!readClipboard) {
-      status.textContent = "Clipboard access is unavailable on this device. Paste the JSON below and choose Continue, or choose a JSON file.";
-      showManual();
+      status.textContent = "Choose a shared case above. Manual paste remains available under Other import options.";
     }
-    (readClipboard ? clipboardButton : chooseFile).focus?.();
+    chooseFile.focus?.();
   });
   plugin.renderTransferAdmin = (el) => {
-    el.createEl("h3", { text: "CST Notes portable transfer" });
-    el.createEl("p", { text: "Export a selected case for another CST Notes user, or import a shared case with a reviewed surgeon profile." });
+    el.createEl("h3", { text: "Share a CST Notes case" });
+    el.createEl("p", { text: "Share one case, its surgeon profile and referenced local images. Review the case and photos for identifying information before sharing. Templates, other cases and backend files are not included." });
     const cases = plugin.allCaseFiles();
     const selection = select(el, "Case to export", [["", "Select case…"], ...cases.map((f) => [f.path, f.path])]);
-    button(el, "Export selected CST case", () => plugin.openCSTExport(vault.getAbstractFileByPath(selection.value)));
+    const status = el.createEl("p", { cls: "cst-transfer-status", attr: { role: "status", "aria-live": "polite" } });
+    const selected = () => {
+      const file = vault.getAbstractFileByPath(selection.value);
+      if (!(file instanceof deps.TFile)) throw new Error("Choose a case to share.");
+      return file;
+    };
+    button(el, "Share selected case", async () => {
+      status.textContent = "Preparing share card…";
+      const result = await plugin.openCSTExport(selected());
+      status.textContent = result.mode === "shared" ? "Share card handed to your device." : result.mode === "saved" ? `Share card saved: ${result.file.path}` : "Sharing cancelled.";
+    }, "mod-cta");
+    button(el, "Save share card", async () => {
+      const saved = await plugin.saveCSTExport(selected());
+      status.textContent = `Share card saved: ${saved.path}`;
+    });
+    const other = el.createEl("details");
+    other.createEl("summary", { text: "Other export options" });
+    other.createEl("p", { text: "Legacy transfer text is long and intended only for recipients who cannot receive a share-card attachment." });
+    button(other, "Copy legacy transfer text", async () => {
+      await plugin.copyCSTExport(selected());
+      status.textContent = "Legacy transfer text copied.";
+    });
     button(el, "Import from CST Notes", () => plugin.openCSTImport());
   };
   function migration() {
@@ -5216,13 +5229,13 @@ function installFeatures(plugin, deps) {
   plugin.renderImportWorkspace = (el) => {
     el.empty();
     el.createEl("h2", { text: "Import" });
-    el.createEl("p", { text: "Choose where your notes came from. Shared CST Notes exports and external notes use separate import flows." });
+    el.createEl("p", { text: "Choose where your notes came from. CST share cards and external notes use separate import flows." });
     const actions = el.createDiv({ cls: "cst-admin-action-grid" });
     const fromCST = actions.createEl("button", { text: "Import from CST Notes", attr: { type: "button" } });
     fromCST.onclick = () => plugin.navigateFromUI("Import from CST Notes", () => plugin.openCSTImport());
     const external = actions.createEl("button", { text: "Import external notes", attr: { type: "button" } });
     external.onclick = () => plugin.navigateFromUI("Import external notes", () => plugin.openPath(plugin.p("Admin/External Import.md")));
-    el.createEl("p", { text: "From CST Notes: use Import from clipboard or choose the sender's export file, then review the destination and surgeon profile before importing." });
+    el.createEl("p", { text: "From CST Notes: choose the sender's share card, then review the destination and surgeon profile before importing. Legacy copied transfer text remains available under Other import options." });
     el.createEl("p", { text: "From another app: use Obsidian Importer to convert your notes, then sort them into CST Notes. The external-import guide walks you through each step." });
   };
   installAdminWorkspace(plugin, { ...supplied, adminPages: {
@@ -5265,7 +5278,7 @@ function installFeatures(plugin, deps) {
     });
   }
   plugin.addCommand({ id: "import-cst-notes", name: "Import CST Notes", callback: () => plugin.openCSTImport() });
-  plugin.addCommand({ id: "export-cst-notes", name: "Export current case to CST Notes", checkCallback: (checking) => {
+  plugin.addCommand({ id: "export-cst-notes", name: "Share current CST case", checkCallback: (checking) => {
     const file = plugin.app.workspace.getActiveFile();
     if (!plugin.caseContext(file)) return false;
     if (!checking) plugin.openCSTExport(file);
@@ -6688,7 +6701,7 @@ var {
   setIcon,
   addIcon
 } = require("obsidian");
-var PLUGIN_VERSION = "0.1.12";
+var PLUGIN_VERSION = "0.1.13";
 var Modal = class extends ObsidianModal {
   constructor(...args) {
     super(...args);
@@ -7269,6 +7282,7 @@ var CSTNotesPlugin = class extends Plugin {
       LegacyTemplateMigrationModal,
       shortHash,
       setIcon,
+      copyText,
       defaultSpecialties: DEFAULT_SPECIALTIES
     });
     this.registerView(VIEW_TYPE_CST_SIDEBAR, (leaf2) => new CSTSidebarView(leaf2, this));
@@ -11651,8 +11665,17 @@ Diagnostic persistence also failed: ${diagnosticError?.stack || diagnosticError}
     this.addHomeButton(actions);
     const row = actions.createDiv({ cls: "cst-case-action-row" });
     if (this.openCSTExport) {
-      const share = row.createEl("button", { text: "Export" });
-      share.onclick = () => this.openCSTExport(file);
+      const share = row.createEl("button", { text: "Share case", cls: "mod-cta cst-case-share", attr: {
+        title: "Share this case, its surgeon profile, and referenced local images."
+      } });
+      share.onclick = () => this.navigateFromUI("Share case", async () => {
+        share.disabled = true;
+        try {
+          await this.openCSTExport(file);
+        } finally {
+          share.disabled = false;
+        }
+      });
     }
     const remove = row.createEl("button", { text: "Delete", cls: "cst-case-delete-confirm" });
     let confirmation = null;

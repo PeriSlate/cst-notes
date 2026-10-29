@@ -1,5 +1,12 @@
 # CST Notes changelog
 
+## 0.1.13
+
+- Share cases directly from the highlighted **Share case** action with a readable CST share card and no CST export pop-ups.
+- Choose a share card as the primary import path while legacy JSON and copied transfer text remain available under Other options.
+- Press Enter to leave the manual transfer-text field and focus Continue without importing automatically.
+- When native file sharing is unavailable, save the share card inside the vault. Physical iPhone and iPad sharing was not verified for this release.
+
 ## 0.1.12
 
 - Fixed blocked glove, music, and settings inputs; restored familiar glove examples.
