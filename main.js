@@ -14,6 +14,11 @@ var __export = (target, all) => {
 };
 
 // src/transfer-core.mjs
+function shareFilePart(value, maxBytes, fallback) {
+  let part = String(value || "").normalize("NFC");
+  while (bytes(part) > maxBytes) part = Array.from(part).slice(0, -1).join("");
+  return part.replace(/[. ]+$/, "") || fallback;
+}
 function fail(message) {
   throw new Error(message);
 }
@@ -312,11 +317,21 @@ function createTransferService(plugin, deps) {
   async function ready() {
     if (!await plugin.quickStructureCheck()) fail("Wait for Sync and Initialize / Repair before transferring cases.");
   }
-  async function duplicate(bundle) {
+  async function findDuplicate(bundle) {
+    bundle = parseTransfer(JSON.stringify(bundle));
     for (const file of plugin.allCaseFiles()) {
-      const fm = deps.parseFrontmatterObject((await read(file)).text);
-      if (fm.cst_transfer_id === bundle.id) fail(`This bundle was already imported: ${file.path}`);
+      await read(file);
+      const context = plugin.caseContext(file);
+      if (context?.surgeon === bundle.sender.surgeon && file.basename === bundle.case.title) return { file, path: file.path, kind: "identity" };
     }
+    return null;
+  }
+  async function duplicate(bundle, replacementState = null) {
+    const match = await findDuplicate(bundle);
+    if (replacementState && match?.file === replacementState.file && match.path === replacementState.path) return match;
+    if (match) fail(`This case is already in this vault: ${match.path}`);
+    if (replacementState) fail("The case selected for replacement is no longer the exact duplicate. Reopen import.");
+    return null;
   }
   function collector() {
     const attachments = [], imageStates = [], warnings = [], known = /* @__PURE__ */ new Map();
@@ -389,10 +404,16 @@ function createTransferService(plugin, deps) {
     const json = JSON.stringify(bundle, null, 2);
     parseTransfer(json);
     const shareId = bundle.id.replace(/^transfer-/, "").slice(-8);
-    let shareTitle = bundle.case.title;
-    while (bytes(shareTitle) > 72) shareTitle = Array.from(shareTitle).slice(0, -1).join("");
-    shareTitle = shareTitle.replace(/[. ]+$/, "") || "CST Case";
-    const exportPath = path(plugin.p("Admin/Exports"), `${shareTitle} - ${shareId}.cstcase`);
+    let shareTitle = shareFilePart(bundle.case.title, 64, "CST Case");
+    let shareSurgeon = shareFilePart(bundle.sender.surgeon, 48, "Surgeon");
+    const trimLast = (value) => Array.from(value).slice(0, -1).join("").replace(/[. ]+$/, "");
+    while (bytes(`${shareTitle} - ${shareSurgeon}`) > 98 && bytes(shareTitle) > 32) shareTitle = trimLast(shareTitle);
+    while (bytes(`${shareTitle} - ${shareSurgeon}`) > 98 && bytes(shareSurgeon) > 8) shareSurgeon = trimLast(shareSurgeon);
+    const exportRoot = plugin.p("Admin/Exports");
+    const proposed = () => `${exportRoot}/${shareTitle} - ${shareSurgeon} - ${shareId}.cstcase`;
+    while (bytes(proposed()) > 180 && bytes(shareTitle) > 8) shareTitle = trimLast(shareTitle);
+    while (bytes(proposed()) > 180 && bytes(shareSurgeon) > 8) shareSurgeon = trimLast(shareSurgeon);
+    const exportPath = path(exportRoot, `${shareTitle} - ${shareSurgeon} - ${shareId}.cstcase`);
     await check(source);
     await check(registry);
     return { bundle, json, exportPath, warnings, states: [source, registry], imageStates };
@@ -429,13 +450,18 @@ function createTransferService(plugin, deps) {
     await check(source);
     return plan;
   }
-  async function prepareImport(bundle, choice) {
+  async function prepareImport(bundle, choice, replacementFile = null) {
     bundle = parseTransfer(JSON.stringify(bundle));
     await ready();
-    await duplicate(bundle);
+    const replacementState = replacementFile ? await read(replacementFile) : null;
+    await duplicate(bundle, replacementState);
     const specialty = transferSegment(deps.validatedPathSegment(choice.specialty, "Specialty"), "Specialty");
     const surgeon = transferSegment(deps.validatedPathSegment(choice.surgeon, "Surgeon", { person: true }), "Surgeon");
     const title = transferSegment(deps.validatedPathSegment(choice.title, "Case title"), "Case title");
+    if (replacementState) {
+      const context = plugin.caseContext(replacementState.file);
+      if (!context || context.specialty !== specialty || context.surgeon !== surgeon || replacementState.file.basename !== title) fail("Replacement destination changed. Reopen import.");
+    }
     const specialtyPath = path(plugin.contentRoot, specialty), surgeonPath = path(specialtyPath, surgeon);
     for (const p of [specialtyPath, surgeonPath]) {
       const existing = lookup(p);
@@ -443,7 +469,8 @@ function createTransferService(plugin, deps) {
       if (!existing) vacant(p);
     }
     const casePath = path(surgeonPath, `${title}.md`);
-    vacant(casePath);
+    if (replacementState) same(replacementState.file, casePath);
+    else vacant(casePath);
     const registryFile = lookup(plugin.surgeonRegistryPath());
     if (!isFile(registryFile)) fail("Surgeon registry unavailable.");
     const registry = await read(registryFile);
@@ -464,15 +491,16 @@ function createTransferService(plugin, deps) {
     path(transferRoot, "source.cst.json");
     if (bundle.version === 1) path(transferRoot, "Sender template.md");
     for (const item of bundle.attachments) path(attachmentRoot, item.name);
-    return { parentGuards: parents([casePath, path(transferRoot, "source.cst.json"), path(attachmentRoot, "image-1.png")]), bundle, specialty, surgeon, title, casePath, specialtyPath, surgeonPath, specialtyObject: lookup(specialtyPath), surgeonObject: lookup(surgeonPath), registry, recipient, fingerprint: recipient ? plugin.surgeonRecordFingerprint(recipient) : "", resolved, transferRoot, attachmentRoot, caseId: unique("case") };
+    return { parentGuards: parents([casePath, path(transferRoot, "source.cst.json"), path(attachmentRoot, "image-1.png")]), bundle, specialty, surgeon, title, casePath, specialtyPath, surgeonPath, specialtyObject: lookup(specialtyPath), surgeonObject: lookup(surgeonPath), registry, recipient, fingerprint: recipient ? plugin.surgeonRecordFingerprint(recipient) : "", resolved, transferRoot, attachmentRoot, caseId: unique("case"), replacementState };
   }
   async function commitImport(plan) {
     parseTransfer(JSON.stringify(plan.bundle));
     if (plan.casePath !== path(plan.surgeonPath, `${plan.title}.md`) || plan.surgeonPath !== path(plugin.contentRoot, plan.specialty, plan.surgeon)) fail("Import destination or configuration changed. Reopen preview.");
     guardParents(plan.parentGuards);
     await ready();
-    await duplicate(plan.bundle);
+    await duplicate(plan.bundle, plan.replacementState);
     await check(plan.registry);
+    if (plan.replacementState) await check(plan.replacementState);
     if (plan.sourceState) await check(plan.sourceState);
     await checkImages(plan.imageStates);
     if (plan.externalSource) {
@@ -484,13 +512,15 @@ function createTransferService(plugin, deps) {
     for (const [p, expected] of [[plan.specialtyPath, plan.specialtyObject], [plan.surgeonPath, plan.surgeonObject]]) {
       if (lookup(p) !== expected || expected && expected.path !== p) fail("Destination changed during preview. Reopen import.");
     }
-    vacant(plan.casePath);
+    if (plan.replacementState) same(plan.replacementState.file, plan.casePath);
+    else vacant(plan.casePath);
     vacant(plan.transferRoot);
     vacant(plan.attachmentRoot);
     const writes = [];
     try {
-      await plugin.snapshotFiles("portable-import", [plan.registry.file, ...plan.externalSource ? [plan.externalSource.file] : []]);
+      await plugin.snapshotFiles("portable-import", [plan.registry.file, ...plan.replacementState ? [plan.replacementState.file] : [], ...plan.externalSource ? [plan.externalSource.file] : []]);
       await check(plan.registry);
+      if (plan.replacementState) await check(plan.replacementState);
       if (plan.sourceState) await check(plan.sourceState);
       if (plan.externalSource) await check(plan.externalSource);
       for (const [p, expected] of [[plan.specialtyPath, plan.specialtyObject], [plan.surgeonPath, plan.surgeonObject]]) {
@@ -551,13 +581,15 @@ function createTransferService(plugin, deps) {
       const record = (await plugin.getRegistrySurgeon(plan.specialty, plan.surgeon, { create: false })).data;
       if (!record || plugin.surgeonRecordFingerprint(record) !== plugin.surgeonRecordFingerprint(expectedProfile)) fail("Recipient surgeon profile changed during import.");
       same(destination, plan.surgeonPath);
-      vacant(plan.casePath);
+      if (plan.replacementState) await check(plan.replacementState);
+      else vacant(plan.casePath);
       if (plan.sourceState) await check(plan.sourceState);
       if (plan.externalSource) await check(plan.externalSource);
       await checkImages(plan.imageStates);
       guardParents(plan.parentGuards);
       same(destination, plan.surgeonPath);
-      vacant(plan.casePath);
+      if (plan.replacementState) await check(plan.replacementState);
+      else vacant(plan.casePath);
       const createdTemplate = transferCreatedTemplate(plan.bundle);
       const fm = { schema_version: 3, ...plan.externalSource ? {} : { template_initialized: true }, ...createdTemplate ? { template: createdTemplate.name, template_version: createdTemplate.version, cst_created_template: createdTemplate.name, cst_created_template_version: createdTemplate.version } : {}, ...plan.bundle.version === 1 ? { cst_transfer_template: path(plan.transferRoot, "Sender template.md") } : {}, cst_type: "case", cst_id: plan.caseId, specialty: plan.specialty, surgeon: plan.surgeon, surgeon_id: record.cst_id, cst_transfer_id: plan.bundle.id, cst_transfer_source_id: plan.bundle.case.id, ...plan.externalSource ? { cst_external_source: plan.externalSource.path } : {}, ...plan.bundle.case.example ? { cst_example: true } : {} };
       const content = rewrite(plan.bundle.case.markdown);
@@ -575,6 +607,12 @@ ${Object.entries(fm).map(([k, v]) => `${k}: ${typeof v === "boolean" || typeof v
 ---
 
 ${body}`;
+      let replacedArchive = null;
+      if (plan.replacementState) {
+        if (typeof plugin.archiveCaseDeletion !== "function") fail("Safe case replacement is unavailable. Update or repair CST Notes.");
+        replacedArchive = await plugin.archiveCaseDeletion(plan.replacementState.file, plan.replacementState.path, plan.replacementState.text);
+        vacant(plan.casePath);
+      }
       plugin.markInternalCreate(plan.casePath);
       const file = await vault.create(plan.casePath, markdown);
       writes.push(plan.casePath);
@@ -582,7 +620,7 @@ ${body}`;
         plugin.scheduleGraphRebuild(500);
       } catch {
       }
-      return { file, recoveryPath: plan.transferRoot };
+      return { file, recoveryPath: plan.transferRoot, replacedArchivePath: replacedArchive?.path || "" };
     } catch (error) {
       throw new Error(`${error.message || error} Import stopped. Any completed files/profile changes are preserved for review. Recovery: ${writes.length ? plan.transferRoot : "registry snapshot, if created"}. Reopen the preview before retrying.`);
     }
@@ -608,7 +646,7 @@ ${body}`;
   function dispose() {
     stopped = true;
   }
-  return { prepareExport, exportJSON, saveExport: (plan) => mutate(() => saveExport(plan)), prepareImport, prepareExternal, applyImport, mutate, dispose, incomingFolder, read, check, folder, vacant, path, unique };
+  return { prepareExport, exportJSON, saveExport: (plan) => mutate(() => saveExport(plan)), prepareImport, prepareExternal, findDuplicate, applyImport, mutate, dispose, incomingFolder, read, check, folder, vacant, path, unique };
 }
 var TRANSFER_LIMITS, PROFILE_FIELDS, FORMAT, EXPORT_VERSION, own, bytes, fold;
 var init_transfer_core = __esm({
@@ -843,14 +881,13 @@ function installTransferFeatures(plugin, deps) {
   }
   async function shareFile(plan, text) {
     const name = plan.exportPath.split("/").pop();
-    const title = `CST Notes case — ${plan.bundle.case.title}`;
     try {
-      if (typeof deps.shareFile === "function") return await deps.shareFile({ name, type: "application/json", text, title });
+      if (typeof deps.shareFile === "function") return await deps.shareFile({ name, type: "text/plain", text });
       const navigator = globalThis.navigator, File = globalThis.File;
       if (typeof navigator?.share !== "function" || typeof File !== "function") return null;
-      const file = new File([text], name, { type: "application/json" });
+      const file = new File([text], name, { type: "text/plain" });
       if (typeof navigator.canShare === "function" && !navigator.canShare({ files: [file] })) return null;
-      await navigator.share({ files: [file], title });
+      await navigator.share({ files: [file] });
       return true;
     } catch (error) {
       if (error?.name === "AbortError") return false;
@@ -948,8 +985,10 @@ function installTransferFeatures(plugin, deps) {
   }
   function confirmImport(plan, sourceState, sourceView, afterImport) {
     if (sourceState) plan.sourceState = sourceState;
-    modal("Confirm CST Notes import", (el, view) => {
-      el.createEl("p", { text: `Create: ${plan.casePath}` });
+    const replacing = !!plan.replacementState;
+    modal(replacing ? "Confirm CST Notes replacement" : "Confirm CST Notes import", (el, view) => {
+      el.createEl("p", { text: `${replacing ? "Replace" : "Create"}: ${plan.casePath}` });
+      if (replacing) el.createEl("p", { text: "The existing case will be archived safely before the shared case is created at this path." });
       el.createEl("p", { text: `${plan.specialtyObject ? "Use existing" : "Create"} specialty. ${plan.surgeonObject ? "Use existing" : "Create"} surgeon.` });
       el.createEl("p", { text: "Resolved surgeon profile (changed fields update all live headers for this recipient surgeon):" });
       el.createEl("p", { text: "Glove codes use this vault’s labels. Shared packages do not include code definitions, so confirm their meaning with the sender before importing—even when a code already exists here. Review or adjust the profile and Admin → Settings labels if needed." });
@@ -959,25 +998,28 @@ function installTransferFeatures(plugin, deps) {
       previewText(el, "Case content", plan.bundle.case.markdown);
       el.createEl("p", { text: `The original bundle${plan.bundle.version === 1 ? " and its legacy sender template" : ""} is saved for recovery at ${plan.transferRoot}. Existing templates are not replaced. Images go to ${plan.attachmentRoot}. A registry backup is created before changes. If Sync interrupts, completed work stays available for review.` });
       const consent = check(el, "I reviewed the destination, case contents and profile changes.");
-      button(el, "Confirm and import", async () => {
+      button(el, replacing ? "Confirm and replace" : "Confirm and import", async () => {
         if (!consent.checked) throw new Error("Review the preview and check the confirmation box.");
         if (sourceState) await service.check(sourceState);
         const result = await service.applyImport(plan);
         view.close();
         sourceView?.close();
-        notice(`Imported ${result.file.path}. Recovery copy: ${result.recoveryPath}`);
+        notice(replacing ? `Replaced ${result.file.path}. Previous case archived: ${result.replacedArchivePath}. Recovery copy: ${result.recoveryPath}` : `Imported ${result.file.path}. Recovery copy: ${result.recoveryPath}`);
         await plugin.openFile(result.file);
         if (afterImport) await afterImport(result);
       });
       button(el, "Cancel", () => view.close());
     });
   }
-  function importBundle(bundle, sourceState = null, afterImport = null) {
-    return modal("Import portable CST Notes case", (el, view) => {
+  function importBundle(bundle, sourceState = null, afterImport = null, replacement = null) {
+    return modal(replacement ? "Review CST Notes replacement" : "Import portable CST Notes case", (el, view) => {
       bundlePreview(el, bundle);
       const profileArea = el.createDiv();
       let resolved = null, readChoice = null, nonce = 0;
-      const readDestination = destinations(el, { ...bundle.sender, title: bundle.case.title }, () => {
+      const replacementContext = replacement ? plugin.caseContext(replacement.file) : null;
+      const fixedChoice = replacement ? { specialty: replacementContext.specialty, surgeon: replacementContext.surgeon, title: replacement.file.basename } : null;
+      if (replacement) el.createEl("p", { text: `Replacement destination: ${replacement.path}` });
+      const readDestination = replacement ? () => ({ ...fixedChoice }) : destinations(el, { ...bundle.sender, title: bundle.case.title }, () => {
         resolved = null;
         profileArea.empty();
         nonce++;
@@ -986,7 +1028,7 @@ function installTransferFeatures(plugin, deps) {
       async function prepareRecipient(choice) {
         profileStatus.textContent = "";
         try {
-          return await service.prepareImport(bundle, choice);
+          return await service.prepareImport(bundle, choice, replacement?.file || null);
         } catch (error) {
           if (error?.name !== "GloveValidationError" || error.field !== "gloves") throw error;
           const message = "This glove size or type code is not configured here. Add the sender’s matching size/code in Admin → Settings after confirming its meaning, or choose an existing recipient surgeon and keep/edit their profile. Then retry; the shared file stays unchanged.";
@@ -994,7 +1036,7 @@ function installTransferFeatures(plugin, deps) {
           throw new Error(message);
         }
       }
-      button(el, "Compare recipient profile", async () => {
+      button(el, replacement ? "Review replacement profile" : "Compare recipient profile", async () => {
         const token = ++nonce;
         const choice = readDestination();
         const initial = await prepareRecipient(choice);
@@ -1035,6 +1077,22 @@ function installTransferFeatures(plugin, deps) {
       });
     });
   }
+  function duplicateImport(bundle, match, sourceState = null) {
+    return modal("Duplicate CST Notes case found", (el, view) => {
+      el.createEl("p", { text: `${bundle.case.title} for ${bundle.sender.surgeon} is already in this vault.` });
+      el.createEl("p", { text: match.path });
+      el.createEl("p", { text: "Nothing was imported or changed." });
+      button(el, "Replace existing case", () => {
+        view.close();
+        importBundle(bundle, sourceState, null, match);
+      }, "mod-cta");
+      button(el, "Open existing case", async () => {
+        view.close();
+        await plugin.openFile(match.file);
+      });
+      button(el, "Cancel", () => view.close());
+    });
+  }
   async function plainFallback(raw, sourceState) {
     const markdown = fallbackMarkdown(raw);
     modal("Save plain Markdown for manual sorting", (el, view) => {
@@ -1061,7 +1119,10 @@ function installTransferFeatures(plugin, deps) {
   }
   async function loadImport(raw, state = null) {
     try {
-      importBundle(parseTransfer(raw), state);
+      const bundle = parseTransfer(raw);
+      const duplicate = await service.findDuplicate(bundle);
+      if (duplicate) duplicateImport(bundle, duplicate, state);
+      else importBundle(bundle, state);
     } catch (error) {
       if (error.code !== "UNSUPPORTED_TRANSFER_VERSION") throw error;
       modal("Unsupported CST Notes portable version", (el, view) => {
@@ -1138,7 +1199,7 @@ function installTransferFeatures(plugin, deps) {
     const actions = el.createDiv({ cls: "cst-transfer-actions" });
     const controls = [];
     let busy = false, composing = false, focusManual = false;
-    async function review(read) {
+    async function review(read, source = "other") {
       if (busy || !view.alive) return;
       busy = true;
       el.setAttribute?.("aria-busy", "true");
@@ -1153,7 +1214,7 @@ function installTransferFeatures(plugin, deps) {
         await loadImport(raw, state);
         view.close();
       } catch (error) {
-        if (view.alive) status.textContent = error instanceof SyntaxError ? "This is not a valid CST Notes share card. Ask the sender to share it again." : error.message || "Unable to read this shared case. Try another share card or use Other import options.";
+        if (view.alive) status.textContent = error instanceof SyntaxError ? source === "clipboard" ? "The device copied a file reference instead of the case contents. Choose case file and select the .cstcase attachment." : "This is not a valid CST Notes share card. Ask the sender to share it again." : error.message || "Unable to read this shared case. Try another share card or use Other import options.";
       } finally {
         busy = false;
         if (view.alive) {
@@ -1167,7 +1228,7 @@ function installTransferFeatures(plugin, deps) {
         }
       }
     }
-    const picker = el.createEl("input", { type: "file", attr: { accept: ".cstcase,.cst.json,.json,application/json,application/octet-stream", "aria-label": "Choose CST case file from device" } });
+    const picker = el.createEl("input", { type: "file", attr: { accept: ".cstcase,.cst.json,.json,application/json,application/octet-stream,text/plain", "aria-label": "Choose CST case file from device" } });
     picker.hidden = true;
     const clipboardButton = button(actions, "Paste case", () => review(async () => {
       try {
@@ -1176,7 +1237,7 @@ function installTransferFeatures(plugin, deps) {
         if (view.alive) showManual(true);
         throw new Error("Clipboard access is unavailable, was denied, or does not contain a readable CST case. Choose the .cstcase file or paste its complete text below.");
       }
-    }), "mod-cta");
+    }, "clipboard"), "mod-cta");
     clipboardButton.disabled = !readClipboard;
     const chooseFile = button(actions, "Choose case file", () => {
       if (!busy && view.alive) picker.click();
@@ -6751,7 +6812,7 @@ var {
   setIcon,
   addIcon
 } = require("obsidian");
-var PLUGIN_VERSION = "0.1.14";
+var PLUGIN_VERSION = "0.1.15";
 var Modal = class extends ObsidianModal {
   constructor(...args) {
     super(...args);

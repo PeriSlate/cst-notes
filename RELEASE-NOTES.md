@@ -1,7 +1,10 @@
-# CST Notes 0.1.14
+# CST Notes 0.1.15
 
-- Make the device share sheet receive only the case-named `.cstcase` file so its Copy action copies the case instead of generic share text.
-- Add a primary **Paste case** importer that accepts a copied `.cstcase` file, raw JSON, or the complete text from a `.cstcase` file.
-- Highlight **Open surgeon** in the case header and keep **Share case** as a secondary action.
+- Include the surgeon name in every shared filename: `Case name - Surgeon name - short ID.cstcase`.
+- Send one `.cstcase` attachment through the device share sheet instead of creating a second title-only text file on iPhone.
+- Make the single share attachment text-readable so iPhone Copy can provide the complete case data to **Paste case**.
+- When a clipboard contains only a file reference, direct the recipient to **Choose case file** and select the `.cstcase` attachment.
+- Treat a case as a duplicate only when both surgeon name and case title exactly match; offer safe replacement, opening the existing case, or cancellation.
+- Archive the previous case before a confirmed replacement so it remains recoverable.
 
-Native share and clipboard-file exposure depend on the host device. Choose case file and manual text paste remain available. Physical iPhone and iPad behavior has not been verified for this change.
+Native Copy behavior still depends on what iOS and the Obsidian host expose. **Choose case file** remains the reliable fallback for a saved `.cstcase` attachment.
