@@ -1,13 +1,10 @@
-# CST Notes 0.1.16
+# CST Notes 0.1.17
 
-- Restore the iOS **Copy** activity by presenting the single `.cstcase` attachment as JSON.
-- Keep the one-file share payload with no title or text companion, preventing the extra title-only `.txt` file in Save to Files.
-- If Messages exposes only an attachment reference, open a focused paste field that can receive the copied `.cstcase` file through iOS Paste.
-- Skip recipient-profile comparison when importing into a new surgeon; review the sender profile directly before confirmation.
-- Highlight **Preview import** after comparing an existing surgeon’s profile.
-- Simplify final import confirmation while retaining the destination, profile values, case preview, consent, and actions.
-- Highlight the confirm action and separate it clearly from cancel.
-- Keep transferred Markdown comments hidden instead of displaying escaped comment markers in imported cases.
-- Preserve surgeon-named files and the exact-title/exact-surgeon duplicate replacement workflow from 0.1.15.
+- Make **Share case** offer **Share case file** for the preferred Messages attachment flow and **Copy text only** for a complete clipboard fallback.
+- Include the same case, surgeon profile and images in both transfer choices.
+- Make importing from Messages clearer with highlighted **Choose case file** and a separate **Paste case text** action.
+- Detect private Messages file references without displaying them as case data, then direct the recipient to save and choose the attachment.
+- Restore a single side-by-side profile review when importing into an existing surgeon, with **Keep mine** selected initially and independent **Use sender** choices.
+- Import or replace directly from the reviewed profile screen after confirmation; new surgeons continue without an unnecessary comparison.
 
-iOS controls which activities appear for each shared data type. Physical-iPhone confirmation remains required; **Choose case file** remains the reliable fallback when the clipboard exposes only a file reference.
+Messages file attachments remain the preferred transfer for large cases. **Copy text only** produces the same result, including images, but may create a very large message.
