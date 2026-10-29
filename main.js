@@ -843,14 +843,14 @@ function installTransferFeatures(plugin, deps) {
   }
   async function shareFile(plan, text) {
     const name = plan.exportPath.split("/").pop();
-    const description = "Shared from CST Notes. Import this card from Admin → Import → Import from CST Notes.";
+    const title = `CST Notes case — ${plan.bundle.case.title}`;
     try {
-      if (typeof deps.shareFile === "function") return await deps.shareFile({ name, type: "application/json", text, title: plan.bundle.case.title, description });
+      if (typeof deps.shareFile === "function") return await deps.shareFile({ name, type: "application/json", text, title });
       const navigator = globalThis.navigator, File = globalThis.File;
       if (typeof navigator?.share !== "function" || typeof File !== "function") return null;
       const file = new File([text], name, { type: "application/json" });
       if (typeof navigator.canShare === "function" && !navigator.canShare({ files: [file] })) return null;
-      await navigator.share({ files: [file], title: plan.bundle.case.title, text: description });
+      await navigator.share({ files: [file], title });
       return true;
     } catch (error) {
       if (error?.name === "AbortError") return false;
@@ -868,6 +868,36 @@ function installTransferFeatures(plugin, deps) {
     } catch {
       return false;
     }
+  }
+  async function clipboardValueText(value) {
+    if (typeof value === "string") return value;
+    if (!value || typeof value.text !== "function") throw new Error("The copied case is not readable text or a CST case file.");
+    if (Number.isFinite(value.size) && value.size > TRANSFER_LIMITS.bytes) throw new Error("Portable file exceeds 24 MiB.");
+    return await value.text();
+  }
+  async function clipboardItemText(items) {
+    if (!items || typeof items[Symbol.iterator] !== "function") return null;
+    const candidates = [];
+    for (const item of items) {
+      if (!item || typeof item.getType !== "function") continue;
+      for (const type of item.types || []) {
+        const value = String(type || "").toLowerCase();
+        if (value.startsWith("image/") || value === "text/html") continue;
+        const score = value.includes("cst") ? 0 : value === "application/json" ? 1 : value === "application/octet-stream" ? 2 : value === "text/plain" ? 3 : 4;
+        candidates.push({ item, type, score });
+      }
+    }
+    candidates.sort((a, b) => a.score - b.score);
+    for (const candidate of candidates) {
+      try {
+        const blob = await candidate.item.getType(candidate.type);
+        const raw = await clipboardValueText(blob);
+        if (typeof raw === "string") return raw;
+      } catch (error) {
+        if (/24 MiB/.test(error?.message || "")) throw error;
+      }
+    }
+    return null;
   }
   function bundlePreview(el, bundle) {
     el.createEl("p", { text: `${bundle.case.title} · ${bundle.sender.specialty} / ${bundle.sender.surgeon}` });
@@ -1074,13 +1104,33 @@ function installTransferFeatures(plugin, deps) {
   };
   plugin.openCSTImport = () => modal("Import from CST Notes", (el, view) => {
     el.classList?.add("cst-transfer-import");
-    el.createEl("p", { text: "Choose the CST share card your coworker sent. You will review the case, destination and surgeon profile before anything is imported." });
+    el.createEl("p", { text: "Paste the CST case your coworker copied, or choose the shared case file. You will review the case, destination and surgeon profile before anything is imported." });
     let readClipboard = null;
     try {
-      if (typeof deps.readClipboardText === "function") readClipboard = () => deps.readClipboardText();
+      if (typeof deps.readClipboardCase === "function") readClipboard = async () => clipboardValueText(await deps.readClipboardCase());
+      else if (typeof deps.readClipboardText === "function") readClipboard = () => deps.readClipboardText();
       else {
         const clipboard = globalThis.navigator?.clipboard;
-        if (typeof clipboard?.readText === "function") readClipboard = () => clipboard.readText();
+        const read = clipboard?.read, readText = clipboard?.readText;
+        if (typeof read === "function" || typeof readText === "function") readClipboard = async () => {
+          let fileError = null;
+          if (typeof read === "function") {
+            try {
+              const raw = await clipboardItemText(await read.call(clipboard));
+              if (raw !== null) return raw;
+            } catch (error) {
+              fileError = error;
+            }
+          }
+          if (typeof readText === "function") {
+            try {
+              return await readText.call(clipboard);
+            } catch (error) {
+              if (!fileError) fileError = error;
+            }
+          }
+          throw fileError || new Error("No readable CST case is on the clipboard.");
+        };
       }
     } catch {
     }
@@ -1117,32 +1167,32 @@ function installTransferFeatures(plugin, deps) {
         }
       }
     }
-    const picker = el.createEl("input", { type: "file", attr: { accept: ".cstcase,.cst.json,.json,application/json", "aria-label": "Choose CST share card from device" } });
+    const picker = el.createEl("input", { type: "file", attr: { accept: ".cstcase,.cst.json,.json,application/json,application/octet-stream", "aria-label": "Choose CST case file from device" } });
     picker.hidden = true;
-    const chooseFile = button(actions, "Choose shared case", () => {
-      if (!busy && view.alive) picker.click();
-    }, "mod-cta");
-    button(actions, "Cancel", () => view.close());
-    const alternatives = el.createEl("details");
-    alternatives.createEl("summary", { text: "Other import options" });
-    alternatives.createEl("p", { text: "Use these options for copied transfer text, legacy .cst.json exports, or a share card already saved inside this vault. Clipboard access happens only when you choose the button." });
-    const alternativeActions = alternatives.createDiv({ cls: "cst-transfer-actions" });
-    const clipboardButton = button(alternativeActions, "Import copied text", () => review(async () => {
+    const clipboardButton = button(actions, "Paste case", () => review(async () => {
       try {
         return { raw: await readClipboard() };
       } catch {
         if (view.alive) showManual(true);
-        throw new Error("Clipboard access is unavailable or was denied. Paste the complete transfer text below or choose a shared case file.");
+        throw new Error("Clipboard access is unavailable, was denied, or does not contain a readable CST case. Choose the .cstcase file or paste its complete text below.");
       }
-    }));
+    }), "mod-cta");
     clipboardButton.disabled = !readClipboard;
-    const pasteButton = button(alternativeActions, "Paste transfer text", () => {
+    const chooseFile = button(actions, "Choose case file", () => {
+      if (!busy && view.alive) picker.click();
+    });
+    button(actions, "Cancel", () => view.close());
+    const alternatives = el.createEl("details");
+    alternatives.createEl("summary", { text: "Other import options" });
+    alternatives.createEl("p", { text: "Use these options to paste the complete case text manually, read a legacy .cst.json export, or open a share card already saved inside this vault. Clipboard access happens only when you choose Paste case above." });
+    const alternativeActions = alternatives.createDiv({ cls: "cst-transfer-actions" });
+    const pasteButton = button(alternativeActions, "Paste case text manually", () => {
       if (!busy) showManual(true);
     });
     const manual = alternatives.createDiv({ cls: "cst-transfer-manual-paste" });
     manual.hidden = true;
-    manual.createEl("p", { text: "Paste the complete transfer text unchanged below. Press Enter to leave the field, then choose Continue. Shift+Enter adds a line break." });
-    const pasted = manual.createEl("textarea", { cls: "cst-transfer-json", attr: { "aria-label": "Paste CST Notes transfer text", placeholder: "Paste complete CST Notes transfer text", rows: "6", spellcheck: "false", autocapitalize: "off", autocomplete: "off", maxlength: String(TRANSFER_LIMITS.bytes + 1) } });
+    manual.createEl("p", { text: "Paste the complete JSON or .cstcase text unchanged below. Press Enter to leave the field, then choose Continue. Shift+Enter adds a line break." });
+    const pasted = manual.createEl("textarea", { cls: "cst-transfer-json", attr: { "aria-label": "Paste CST Notes case text", placeholder: "Paste complete CST Notes case text", rows: "6", spellcheck: "false", autocapitalize: "off", autocomplete: "off", maxlength: String(TRANSFER_LIMITS.bytes + 1) } });
     const continueActions = manual.createDiv({ cls: "cst-transfer-actions" });
     const continueButton = button(continueActions, "Continue", () => review(() => ({ raw: pasted.value })));
     function showManual(focus = false) {
@@ -1191,9 +1241,9 @@ function installTransferFeatures(plugin, deps) {
     }));
     controls.push(clipboardButton, chooseFile, pasteButton, pasted, continueButton, picker, fromVault, vaultButton);
     if (!readClipboard) {
-      status.textContent = "Choose a shared case above. Manual paste remains available under Other import options.";
+      status.textContent = "This device does not expose clipboard case data here. Choose the .cstcase file, or paste its text under Other import options.";
     }
-    chooseFile.focus?.();
+    (readClipboard ? clipboardButton : chooseFile).focus?.();
   });
   plugin.renderTransferAdmin = (el) => {
     el.createEl("h3", { text: "Share a CST Notes case" });
@@ -6701,7 +6751,7 @@ var {
   setIcon,
   addIcon
 } = require("obsidian");
-var PLUGIN_VERSION = "0.1.13";
+var PLUGIN_VERSION = "0.1.14";
 var Modal = class extends ObsidianModal {
   constructor(...args) {
     super(...args);
@@ -11665,7 +11715,7 @@ Diagnostic persistence also failed: ${diagnosticError?.stack || diagnosticError}
     this.addHomeButton(actions);
     const row = actions.createDiv({ cls: "cst-case-action-row" });
     if (this.openCSTExport) {
-      const share = row.createEl("button", { text: "Share case", cls: "mod-cta cst-case-share", attr: {
+      const share = row.createEl("button", { text: "Share case", cls: "cst-case-share", attr: {
         title: "Share this case, its surgeon profile, and referenced local images."
       } });
       share.onclick = () => this.navigateFromUI("Share case", async () => {
@@ -12044,7 +12094,7 @@ Diagnostic persistence also failed: ${diagnosticError?.stack || diagnosticError}
       });
     }
     const actions = el.createDiv({ cls: "cst-actions" });
-    const open = actions.createEl("button", { text: `Open ${ctx.surgeon}` });
+    const open = actions.createEl("button", { text: `Open ${ctx.surgeon}`, cls: "mod-cta cst-surgeon-open-primary" });
     open.onclick = async () => {
       try {
         await this.activateSidebarAt(ctx.specialty, ctx.surgeon);

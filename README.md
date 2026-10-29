@@ -32,9 +32,9 @@ GitHub releases attach these files:
 
 `versions.json` is tracked in the repository for version compatibility metadata. This repository intentionally does not contain user vault data, local settings, source code, or build tooling.
 
-## New in 0.1.13
+## New in 0.1.14
 
-The highlighted **Share case** action now sends a readable CST share card directly to the device share sheet without CST export pop-ups. Import starts with choosing a shared case, while legacy JSON, clipboard and manual-text routes remain under Other options. Pressing Enter in the manual transfer-text field leaves the field and focuses Continue without importing. See [release notes](RELEASE-NOTES.md) for details and device-support limits.
+The device share sheet now receives only the case-named `.cstcase` file, allowing its Copy action to copy the case instead of generic share text. **Paste case** accepts a copied `.cstcase` file, raw JSON or complete `.cstcase` text. **Open surgeon** is highlighted in the case header while **Share case** is secondary. See [release notes](RELEASE-NOTES.md) for host-device limits and fallback options.
 
 ## Support
 

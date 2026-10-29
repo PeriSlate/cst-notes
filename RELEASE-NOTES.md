@@ -1,7 +1,7 @@
-# CST Notes 0.1.13
+# CST Notes 0.1.14
 
-- Share cases directly from the highlighted **Share case** action with a readable CST share card and no CST export pop-ups.
-- Choose a share card as the primary import path while legacy JSON and copied transfer text remain available under Other options.
-- Press Enter to leave the manual transfer-text field and focus Continue without importing automatically.
+- Make the device share sheet receive only the case-named `.cstcase` file so its Copy action copies the case instead of generic share text.
+- Add a primary **Paste case** importer that accepts a copied `.cstcase` file, raw JSON, or the complete text from a `.cstcase` file.
+- Highlight **Open surgeon** in the case header and keep **Share case** as a secondary action.
 
-Native share-sheet availability depends on the host device. When unavailable, CST Notes saves the share card inside the vault. Physical iPhone and iPad sharing were not verified for this release.
+Native share and clipboard-file exposure depend on the host device. Choose case file and manual text paste remain available. Physical iPhone and iPad behavior has not been verified for this change.

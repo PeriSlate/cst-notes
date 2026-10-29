@@ -1052,17 +1052,6 @@ body .cst-case-action-row > button {
   min-height: 44px;
   white-space: normal;
 }
-body .cst-live-header .cst-case-share.mod-cta {
-  background: var(--interactive-accent);
-  color: var(--text-on-accent);
-  border-color: var(--interactive-accent);
-  font-weight: 600;
-}
-body .cst-live-header .cst-case-share.mod-cta:hover,
-body .cst-live-header .cst-case-share.mod-cta:focus-visible {
-  background: var(--interactive-accent-hover);
-  border-color: var(--interactive-accent-hover);
-}
 body .cst-live-header .cst-case-delete-confirm {
   background: var(--interactive-normal);
   color: var(--text-normal);
