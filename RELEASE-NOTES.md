@@ -1,10 +1,13 @@
-# CST Notes 0.1.15
+# CST Notes 0.1.16
 
-- Include the surgeon name in every shared filename: `Case name - Surgeon name - short ID.cstcase`.
-- Send one `.cstcase` attachment through the device share sheet instead of creating a second title-only text file on iPhone.
-- Make the single share attachment text-readable so iPhone Copy can provide the complete case data to **Paste case**.
-- When a clipboard contains only a file reference, direct the recipient to **Choose case file** and select the `.cstcase` attachment.
-- Treat a case as a duplicate only when both surgeon name and case title exactly match; offer safe replacement, opening the existing case, or cancellation.
-- Archive the previous case before a confirmed replacement so it remains recoverable.
+- Restore the iOS **Copy** activity by presenting the single `.cstcase` attachment as JSON.
+- Keep the one-file share payload with no title or text companion, preventing the extra title-only `.txt` file in Save to Files.
+- If Messages exposes only an attachment reference, open a focused paste field that can receive the copied `.cstcase` file through iOS Paste.
+- Skip recipient-profile comparison when importing into a new surgeon; review the sender profile directly before confirmation.
+- Highlight **Preview import** after comparing an existing surgeon’s profile.
+- Simplify final import confirmation while retaining the destination, profile values, case preview, consent, and actions.
+- Highlight the confirm action and separate it clearly from cancel.
+- Keep transferred Markdown comments hidden instead of displaying escaped comment markers in imported cases.
+- Preserve surgeon-named files and the exact-title/exact-surgeon duplicate replacement workflow from 0.1.15.
 
-Native Copy behavior still depends on what iOS and the Obsidian host expose. **Choose case file** remains the reliable fallback for a saved `.cstcase` attachment.
+iOS controls which activities appear for each shared data type. Physical-iPhone confirmation remains required; **Choose case file** remains the reliable fallback when the clipboard exposes only a file reference.

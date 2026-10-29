@@ -44,7 +44,7 @@ function stripReservedTransferComments(text) {
 }
 function portableMarkdown(text) {
   string(text, "Markdown");
-  return stripReservedTransferComments(text).replace(/^\uFEFF/, "").replace(/^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/, "").replace(/^([ \t]*)(`{3,}|~{3,})cst-[^\r\n]*\r?\n[\s\S]*?^\1\2[ \t]*$/gm, "").replace(/(`{3,}|~{3,})[^\r\n]*/g, "$1").replace(/`([ \t]*)(?=[=$])/g, "`$1\\").replace(/!\[(?!\[)([^\]\r\n]*)\](?![([])/g, "[$1]").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\]\(\s*(?:javascript|data|vbscript|file|obsidian):[^)]*\)/gi, "](blocked-link)");
+  return stripReservedTransferComments(text).replace(/^\uFEFF/, "").replace(/^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/, "").replace(/^([ \t]*)(`{3,}|~{3,})cst-[^\r\n]*\r?\n[\s\S]*?^\1\2[ \t]*$/gm, "").replace(/(`{3,}|~{3,})[^\r\n]*/g, "$1").replace(/`([ \t]*)(?=[=$])/g, "`$1\\").replace(/!\[(?!\[)([^\]\r\n]*)\](?![([])/g, "[$1]").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/&lt;!--([\s\S]*?)--&gt;/g, "<!--$1-->").replace(/\]\(\s*(?:javascript|data|vbscript|file|obsidian):[^)]*\)/gi, "](blocked-link)");
 }
 function imageReferences(markdown) {
   const refs = [], definitions = /* @__PURE__ */ new Map();
@@ -882,10 +882,10 @@ function installTransferFeatures(plugin, deps) {
   async function shareFile(plan, text) {
     const name = plan.exportPath.split("/").pop();
     try {
-      if (typeof deps.shareFile === "function") return await deps.shareFile({ name, type: "text/plain", text });
+      if (typeof deps.shareFile === "function") return await deps.shareFile({ name, type: "application/json", text });
       const navigator = globalThis.navigator, File = globalThis.File;
       if (typeof navigator?.share !== "function" || typeof File !== "function") return null;
-      const file = new File([text], name, { type: "text/plain" });
+      const file = new File([text], name, { type: "application/json" });
       if (typeof navigator.canShare === "function" && !navigator.canShare({ files: [file] })) return null;
       await navigator.share({ files: [file] });
       return true;
@@ -990,15 +990,13 @@ function installTransferFeatures(plugin, deps) {
       el.createEl("p", { text: `${replacing ? "Replace" : "Create"}: ${plan.casePath}` });
       if (replacing) el.createEl("p", { text: "The existing case will be archived safely before the shared case is created at this path." });
       el.createEl("p", { text: `${plan.specialtyObject ? "Use existing" : "Create"} specialty. ${plan.surgeonObject ? "Use existing" : "Create"} surgeon.` });
-      el.createEl("p", { text: "Resolved surgeon profile (changed fields update all live headers for this recipient surgeon):" });
-      el.createEl("p", { text: "Glove codes use this vault’s labels. Shared packages do not include code definitions, so confirm their meaning with the sender before importing—even when a code already exists here. Review or adjust the profile and Admin → Settings labels if needed." });
       for (const row of profileConflicts(plan.resolved, plan.recipient)) {
         el.createEl("p", { text: `${row.field}: ${plan.recipient ? row.recipient || "(empty)" : "(new profile)"} → ${row.sender || "(empty)"}` });
       }
       previewText(el, "Case content", plan.bundle.case.markdown);
-      el.createEl("p", { text: `The original bundle${plan.bundle.version === 1 ? " and its legacy sender template" : ""} is saved for recovery at ${plan.transferRoot}. Existing templates are not replaced. Images go to ${plan.attachmentRoot}. A registry backup is created before changes. If Sync interrupts, completed work stays available for review.` });
       const consent = check(el, "I reviewed the destination, case contents and profile changes.");
-      button(el, replacing ? "Confirm and replace" : "Confirm and import", async () => {
+      const actions = el.createDiv({ cls: "cst-transfer-actions cst-transfer-confirm-actions" });
+      button(actions, replacing ? "Confirm and replace" : "Confirm and import", async () => {
         if (!consent.checked) throw new Error("Review the preview and check the confirmation box.");
         if (sourceState) await service.check(sourceState);
         const result = await service.applyImport(plan);
@@ -1007,23 +1005,34 @@ function installTransferFeatures(plugin, deps) {
         notice(replacing ? `Replaced ${result.file.path}. Previous case archived: ${result.replacedArchivePath}. Recovery copy: ${result.recoveryPath}` : `Imported ${result.file.path}. Recovery copy: ${result.recoveryPath}`);
         await plugin.openFile(result.file);
         if (afterImport) await afterImport(result);
-      });
-      button(el, "Cancel", () => view.close());
+      }, "mod-cta");
+      button(actions, "Cancel", () => view.close());
     });
   }
   function importBundle(bundle, sourceState = null, afterImport = null, replacement = null) {
     return modal(replacement ? "Review CST Notes replacement" : "Import portable CST Notes case", (el, view) => {
       bundlePreview(el, bundle);
       const profileArea = el.createDiv();
-      let resolved = null, readChoice = null, nonce = 0;
+      let resolved = null, readChoice = null, nonce = 0, profileButton = null;
       const replacementContext = replacement ? plugin.caseContext(replacement.file) : null;
       const fixedChoice = replacement ? { specialty: replacementContext.specialty, surgeon: replacementContext.surgeon, title: replacement.file.basename } : null;
       if (replacement) el.createEl("p", { text: `Replacement destination: ${replacement.path}` });
-      const readDestination = replacement ? () => ({ ...fixedChoice }) : destinations(el, { ...bundle.sender, title: bundle.case.title }, () => {
+      const destinationChanged = () => {
         resolved = null;
         profileArea.empty();
         nonce++;
-      });
+        updateProfileButton();
+      };
+      const readDestination = replacement ? () => ({ ...fixedChoice }) : destinations(el, { ...bundle.sender, title: bundle.case.title }, destinationChanged);
+      const needsProfileComparison = () => {
+        if (replacement) return true;
+        const choice = readDestination();
+        return !!choice.specialty && plugin.getSurgeons(choice.specialty).includes(choice.surgeon);
+      };
+      function updateProfileButton() {
+        if (!profileButton) return;
+        profileButton.textContent = replacement ? "Review replacement profile" : needsProfileComparison() ? "Compare recipient profile" : "Review new surgeon and import";
+      }
       const profileStatus = el.createEl("p", { cls: "cst-transfer-status", attr: { role: "status", "aria-live": "polite", "aria-atomic": "true" } });
       async function prepareRecipient(choice) {
         profileStatus.textContent = "";
@@ -1036,7 +1045,7 @@ function installTransferFeatures(plugin, deps) {
           throw new Error(message);
         }
       }
-      button(el, replacement ? "Review replacement profile" : "Compare recipient profile", async () => {
+      profileButton = button(el, "", async () => {
         const token = ++nonce;
         const choice = readDestination();
         const initial = await prepareRecipient(choice);
@@ -1073,8 +1082,9 @@ function installTransferFeatures(plugin, deps) {
           if (plan.fingerprint !== baseline) throw new Error("The recipient profile changed. Compare profiles again before choosing values.");
           if (sourceState?.external) plan.externalSource = sourceState;
           confirmImport(plan, sourceState, view, afterImport);
-        });
+        }, "mod-cta");
       });
+      updateProfileButton();
     });
   }
   function duplicateImport(bundle, match, sourceState = null) {
@@ -1214,7 +1224,8 @@ function installTransferFeatures(plugin, deps) {
         await loadImport(raw, state);
         view.close();
       } catch (error) {
-        if (view.alive) status.textContent = error instanceof SyntaxError ? source === "clipboard" ? "The device copied a file reference instead of the case contents. Choose case file and select the .cstcase attachment." : "This is not a valid CST Notes share card. Ask the sender to share it again." : error.message || "Unable to read this shared case. Try another share card or use Other import options.";
+        if (view.alive && error instanceof SyntaxError && source === "clipboard") showManual(true);
+        if (view.alive) status.textContent = error instanceof SyntaxError ? source === "clipboard" ? "iOS copied an attachment reference. Tap the paste field below and choose Paste so CST Notes can read the .cstcase file, or choose case file." : "This is not a valid CST Notes share card. Ask the sender to share it again." : error.message || "Unable to read this shared case. Try another share card or use Other import options.";
       } finally {
         busy = false;
         if (view.alive) {
@@ -1252,11 +1263,12 @@ function installTransferFeatures(plugin, deps) {
     });
     const manual = alternatives.createDiv({ cls: "cst-transfer-manual-paste" });
     manual.hidden = true;
-    manual.createEl("p", { text: "Paste the complete JSON or .cstcase text unchanged below. Press Enter to leave the field, then choose Continue. Shift+Enter adds a line break." });
+    manual.createEl("p", { text: "On iPhone, tap this field and choose Paste to provide the copied .cstcase attachment. Complete JSON or .cstcase text is also accepted. Press Enter to leave the field, then choose Continue. Shift+Enter adds a line break." });
     const pasted = manual.createEl("textarea", { cls: "cst-transfer-json", attr: { "aria-label": "Paste CST Notes case text", placeholder: "Paste complete CST Notes case text", rows: "6", spellcheck: "false", autocapitalize: "off", autocomplete: "off", maxlength: String(TRANSFER_LIMITS.bytes + 1) } });
     const continueActions = manual.createDiv({ cls: "cst-transfer-actions" });
     const continueButton = button(continueActions, "Continue", () => review(() => ({ raw: pasted.value })));
     function showManual(focus = false) {
+      alternatives.open = true;
       manual.hidden = false;
       if (focus) {
         if (busy) focusManual = true;
@@ -1268,6 +1280,26 @@ function installTransferFeatures(plugin, deps) {
     };
     pasted.oncompositionend = () => {
       composing = false;
+    };
+    pasted.onpaste = (event) => {
+      const data = event?.clipboardData;
+      const files2 = Array.from(data?.files || []);
+      if (!files2.length) {
+        for (const item of Array.from(data?.items || [])) {
+          if (item?.kind !== "file" || typeof item.getAsFile !== "function") continue;
+          const file2 = item.getAsFile();
+          if (file2) {
+            files2.push(file2);
+            break;
+          }
+        }
+      }
+      const file = files2[0];
+      if (!file) return;
+      event.preventDefault?.();
+      event.stopPropagation?.();
+      pasted.value = "";
+      return review(async () => ({ raw: await clipboardValueText(file) }), "paste-event");
     };
     pasted.onkeydown = (event) => {
       if (event.key !== "Enter" || event.shiftKey || event.isComposing || composing || event.keyCode === 229) return;
@@ -6812,7 +6844,7 @@ var {
   setIcon,
   addIcon
 } = require("obsidian");
-var PLUGIN_VERSION = "0.1.15";
+var PLUGIN_VERSION = "0.1.16";
 var Modal = class extends ObsidianModal {
   constructor(...args) {
     super(...args);
