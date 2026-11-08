@@ -1,10 +1,8 @@
-# CST Notes 0.1.17
+# CST Notes 0.1.18
 
-- Make **Share case** offer **Share case file** for the preferred Messages attachment flow and **Copy text only** for a complete clipboard fallback.
-- Include the same case, surgeon profile and images in both transfer choices.
-- Make importing from Messages clearer with highlighted **Choose case file** and a separate **Paste case text** action.
-- Detect private Messages file references without displaying them as case data, then direct the recipient to save and choose the attachment.
-- Restore a single side-by-side profile review when importing into an existing surgeon, with **Keep mine** selected initially and independent **Use sender** choices.
-- Import or replace directly from the reviewed profile screen after confirmation; new surgeons continue without an unnecessary comparison.
+- Export your active CST Notes library for PeriSlate Cards from **Admin → Export / Data Portability**. The offline package preserves case notes, surgeon preferences, templates, references, and supported attachments.
+- Review what will be included and resolve missing files before preparing the package. Repeat exports preserve library identities to support comparison during a future import.
 
-Messages file attachments remain the preferred transfer for large cases. **Copy text only** produces the same result, including images, but may create a very large message.
+The library export supports PNG, JPEG, GIF, and WebP. Review packages before sharing because they are unencrypted.
+
+See the [CSTPACK format specification](docs/CSTPACK-1.md).

@@ -196,8 +196,8 @@ function createdTemplateMetadata(fm = {}) {
   const name = fm[key4];
   const rawVersion = fm[key4 === "template" ? "template_version" : key4 + "_version"];
   if (typeof name !== "string" || !name.trim() || /^(manual|unknown)$/i.test(name.trim())) return null;
-  const version = typeof rawVersion === "string" ? rawVersion : Number.isSafeInteger(rawVersion) && rawVersion >= 0 ? String(rawVersion) : "";
-  const result = { name, version };
+  const version2 = typeof rawVersion === "string" ? rawVersion : Number.isSafeInteger(rawVersion) && rawVersion >= 0 ? String(rawVersion) : "";
+  const result = { name, version: version2 };
   try {
     validateCreatedTemplate(result);
     return result;
@@ -681,8 +681,8 @@ function creationTemplateMetadata(frontmatter = {}) {
   const name = recorded.name.trim();
   const storedVersion = /^(unknown|manual)$/i.test(recorded.version.trim()) ? "" : recorded.version.trim();
   const numericVersion = /^v?([1-9]\d*)$/i.exec(storedVersion);
-  const version = numericVersion && Number.isSafeInteger(Number(numericVersion[1])) ? `v${Number(numericVersion[1])}` : storedVersion;
-  return { name, version };
+  const version2 = numericVersion && Number.isSafeInteger(Number(numericVersion[1])) ? `v${Number(numericVersion[1])}` : storedVersion;
+  return { name, version: version2 };
 }
 async function describeTemplateProvenance(plugin, file) {
   const path = file.path;
@@ -1798,9 +1798,9 @@ var ResourceCollector = class {
   resources() {
     return [...this.catalog.values()].map((entry) => {
       const sources = [...entry.sources.values()].map((source) => {
-        const parent3 = this.notes.get(source.noteId);
-        const current = !!parent3?.grabbed && parent3.entries.some((item) => item.key === entry.key && item.section === source.section);
-        return { ...source, path: parent3?.path || source.path, current };
+        const parent4 = this.notes.get(source.noteId);
+        const current = !!parent4?.grabbed && parent4.entries.some((item) => item.key === entry.key && item.section === source.section);
+        return { ...source, path: parent4?.path || source.path, current };
       });
       const noteCount = new Set(sources.filter((source) => source.current).map((source) => source.noteId)).size;
       return {
@@ -1870,8 +1870,8 @@ function decodeResourceIndex(text) {
 async function resourceFingerprint(text, aliases = []) {
   if (!globalThis.crypto?.subtle) throw new Error("Resource hashing is unavailable on this device.");
   const bytes2 = new TextEncoder().encode(JSON.stringify([comparableResourceBody(text), aliases]));
-  const digest = await globalThis.crypto.subtle.digest("SHA-256", bytes2);
-  return [...new Uint8Array(digest)].map((n) => n.toString(16).padStart(2, "0")).join("");
+  const digest2 = await globalThis.crypto.subtle.digest("SHA-256", bytes2);
+  return [...new Uint8Array(digest2)].map((n) => n.toString(16).padStart(2, "0")).join("");
 }
 function createDisconnectedResourceProvider() {
   return Object.freeze({
@@ -2231,10 +2231,10 @@ function createResourceRuntime(plugin, deps) {
       }
       safePath(path);
       fileAt(file, path);
-      const version = runtime.pathVersions.get(path) || 0;
+      const version2 = runtime.pathVersions.get(path) || 0;
       const text = await vault.read(file);
       fileAt(file, path);
-      if (version !== (runtime.pathVersions.get(path) || 0)) throw conflict();
+      if (version2 !== (runtime.pathVersions.get(path) || 0)) throw conflict();
       const next = stripResourceMarkers(text);
       if (next === text) {
         report.skipped++;
@@ -2247,7 +2247,7 @@ function createResourceRuntime(plugin, deps) {
       fileAt(file, path);
       await vault.process(file, (current2) => {
         fileAt(file, path);
-        if (current2 !== text || version !== (runtime.pathVersions.get(path) || 0) || !plugin.isCasePath(path) || !plugin.caseContext(file)) throw conflict();
+        if (current2 !== text || version2 !== (runtime.pathVersions.get(path) || 0) || !plugin.isCasePath(path) || !plugin.caseContext(file)) throw conflict();
         return next;
       });
       invalidatePath(path);
@@ -2368,7 +2368,7 @@ function createResourceRuntime(plugin, deps) {
       return;
     }
     const path = file?.path;
-    const touches = (target) => path === target || oldPath === target || file instanceof deps.TFolder && kind !== "create" && [path, oldPath].some((parent3) => parent3 && target.startsWith(parent3 + "/"));
+    const touches = (target) => path === target || oldPath === target || file instanceof deps.TFolder && kind !== "create" && [path, oldPath].some((parent4) => parent4 && target.startsWith(parent4 + "/"));
     if (touches(configured.index)) {
       runtime.indexDirty = true;
       runtime.indexGeneration++;
@@ -2859,8 +2859,8 @@ function installAdminWorkspace(plugin, deps) {
   const get = (p) => vault.getAbstractFileByPath(p);
   const isFile = (f) => f instanceof TFile2;
   const isFolder = (f) => f instanceof TFolder2;
-  const assertObject = (object2, expected) => {
-    if (!object2 || object2.path !== expected || get(expected) !== object2) throw new Error(`Sync changed or replaced ${expected}. Preview again.`);
+  const assertObject = (object3, expected) => {
+    if (!object3 || object3.path !== expected || get(expected) !== object3) throw new Error(`Sync changed or replaced ${expected}. Preview again.`);
   };
   const files = () => vault.getFiles();
   const occupied = (p) => !!get(p) || vault.getAllLoadedFiles().some((f) => f.path.toLowerCase() === p.toLowerCase());
@@ -2884,8 +2884,8 @@ function installAdminWorkspace(plugin, deps) {
     }
   }
   async function inventory(root) {
-    const object2 = get(root);
-    if (!isFolder(object2)) throw new Error(`Expected CST folder: ${root}`);
+    const object3 = get(root);
+    if (!isFolder(object3)) throw new Error(`Expected CST folder: ${root}`);
     const entries = [];
     const seen = /* @__PURE__ */ new Set();
     const walk = async (item) => {
@@ -2895,7 +2895,7 @@ function installAdminWorkspace(plugin, deps) {
       entries.push(isFile(item) ? await capture(item) : { object: item, path: path(item.path) });
       if (isFolder(item)) for (const child of [...item.children]) await walk(child);
     };
-    await walk(object2);
+    await walk(object3);
     return entries;
   }
   async function checkInventory(entries, originalRoot, currentRoot = originalRoot) {
@@ -2904,8 +2904,8 @@ function installAdminWorkspace(plugin, deps) {
     for (const entry of entries) await check(entry, currentRoot + entry.path.slice(originalRoot.length));
   }
   function assertSavedEditors(entries) {
-    for (const leaf2 of plugin.app.workspace?.getLeavesOfType?.("markdown") || []) {
-      const view = leaf2.view, entry = entries.find((e) => e.object === view?.file);
+    for (const leaf3 of plugin.app.workspace?.getLeavesOfType?.("markdown") || []) {
+      const view = leaf3.view, entry = entries.find((e) => e.object === view?.file);
       if (entry && view.editor?.getValue && view.editor.getValue() !== entry.content) {
         throw new Error("Save or close the unsaved editor before deleting: " + entry.path);
       }
@@ -3009,11 +3009,11 @@ function installAdminWorkspace(plugin, deps) {
     const backendPaths = [plugin.surgeonGraphPath(specialty, surgeon), plugin.surgeonDataPath(specialty, surgeon), plugin.legacySurgeonDataPath(specialty, surgeon)];
     const backend = [];
     for (const p of backendPaths) {
-      const object2 = get(p);
-      if (!object2) continue;
-      if (!isFile(object2)) throw new Error("A folder blocks the surgeon backend: " + p);
-      const entry = await capture(object2);
-      const fm = object2.extension === "json" ? JSON.parse(entry.content) : parseFrontmatterObject2(entry.content);
+      const object3 = get(p);
+      if (!object3) continue;
+      if (!isFile(object3)) throw new Error("A folder blocks the surgeon backend: " + p);
+      const entry = await capture(object3);
+      const fm = object3.extension === "json" ? JSON.parse(entry.content) : parseFrontmatterObject2(entry.content);
       if ((p === backendPaths[0] ? fm.cst_type !== "surgeon-node" || fm.generated !== true || fm.surgeon_id !== record.cst_id : fm.cst_id !== record.cst_id) || fm.specialty !== specialty || fm.surgeon !== surgeon) throw new Error("Surgeon backend identity is ambiguous: " + p);
       backend.push(entry);
     }
@@ -3269,8 +3269,8 @@ function installAdminWorkspace(plugin, deps) {
           if (!mapping || !["folder", "file"].includes(item.kind) || seen.has(target.toLowerCase())) throw new Error("Invalid or duplicated reset manifest entry.");
           seen.add(target.toLowerCase());
           const source = path(mapping.archive_path + target.slice(mapping.original_path.length));
-          const object2 = get(source);
-          if (!object2 || (item.kind === "folder" ? !isFolder(object2) : !isFile(object2))) throw new Error("Reset archive has missing or replaced content.");
+          const object3 = get(source);
+          if (!object3 || (item.kind === "folder" ? !isFolder(object3) : !isFile(object3))) throw new Error("Reset archive has missing or replaced content.");
           const depth = target.slice(r.content.length + 1).split("/").length;
           const category = item.kind === "folder" && target !== r.content && within(target, r.content) ? depth === 1 ? "Specialty" : depth === 2 ? "Surgeon" : "Backend folder" : item.kind === "file" && caseParts(target) ? "Case" : item.kind === "folder" ? "Backend folder" : "Backend file";
           staged.push({
@@ -3336,12 +3336,12 @@ function installAdminWorkspace(plugin, deps) {
     const match = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(text);
     if (!match) throw new Error("Archived case needs a valid frontmatter block.");
     const newline = text.includes("\r\n") ? "\r\n" : "\n";
-    let header = match[1];
+    let header2 = match[1];
     for (const [key4, value] of Object.entries(fields)) {
-      header = header.split(/\r?\n/).filter((line) => !new RegExp("^" + key4 + "\\s*:").test(line)).join(newline);
-      header += newline + key4 + ": " + JSON.stringify(value);
+      header2 = header2.split(/\r?\n/).filter((line) => !new RegExp("^" + key4 + "\\s*:").test(line)).join(newline);
+      header2 += newline + key4 + ": " + JSON.stringify(value);
     }
-    return "---" + newline + header + newline + "---" + newline + text.slice(match[0].length);
+    return "---" + newline + header2 + newline + "---" + newline + text.slice(match[0].length);
   }
   async function prepareRecoveryIdentity(entry, entries, target) {
     const changes = /* @__PURE__ */ new Map(), restoredTexts = /* @__PURE__ */ new Map();
@@ -3835,17 +3835,17 @@ function installAdminWorkspace(plugin, deps) {
       if (occupied(destination)) throw new Error("Sync occupied " + destination);
       plugin.markInternalCreate?.(destination);
       const result = await vault[method](destination, content);
-      const object2 = get(destination);
-      assertObject(object2, destination);
+      const object3 = get(destination);
+      assertObject(object3, destination);
       if (method === "createFolder") {
-        if (!isFolder(object2)) throw new Error("Created folder was replaced.");
-        created.set(destination, { object: object2, path: destination });
+        if (!isFolder(object3)) throw new Error("Created folder was replaced.");
+        created.set(destination, { object: object3, path: destination });
       } else {
-        const entry = { object: object2, path: destination, binary: false, content };
+        const entry = { object: object3, path: destination, binary: false, content };
         await check(entry);
         created.set(destination, entry);
       }
-      return result || object2;
+      return result || object3;
     };
     const scopedVault = new Proxy(vault, { get(target, key4) {
       if (key4 === "create" || key4 === "createFolder") return (p, text) => write(key4, p, text);
@@ -3891,12 +3891,12 @@ function installAdminWorkspace(plugin, deps) {
       assertObject(file, expectedPath);
       const fm = parseFrontmatterObject2(entry.content);
       patcher(fm);
-      const header = Object.entries(fm).map(([key4, value]) => {
+      const header2 = Object.entries(fm).map(([key4, value]) => {
         if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key4)) throw new Error("Unexpected generated metadata key.");
         return key4 + ": " + JSON.stringify(value);
       }).join("\n");
       const body = entry.content.replace(/^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/, "");
-      await scoped.replaceFileTextExpected(file, entry.content, "---\n" + header + "\n---\n" + body, "Reset metadata changed.", expectedPath);
+      await scoped.replaceFileTextExpected(file, entry.content, "---\n" + header2 + "\n---\n" + body, "Reset metadata changed.", expectedPath);
     };
     scoped.ensureLauncherNote = async () => {
       if (plan.launcher) {
@@ -4255,7 +4255,15 @@ function installAdminWorkspace(plugin, deps) {
     mode.onkeydown = (event) => {
       if (event.key === "Escape") resetMode();
     };
-    const nav = el.createDiv({ cls: "cst-admin-action-grid" }), body = el.createDiv();
+    const nav = el.createDiv({ cls: "cst-admin-action-grid" });
+    const exportRow = el.createDiv({ cls: "cst-library-export-entry" });
+    const body = el.createDiv();
+    button(exportRow, "Export / Data Portability", async () => {
+      resetMode();
+      body.empty();
+      const render = deps.adminPages?.portability || plugin.renderLibraryPortability;
+      await render(body);
+    });
     const pages = {
       specialtyCreate: ["New Specialty", () => plugin.openNewSpecialty()],
       surgeonDelete: ["Delete Surgeon", openDeleteSurgeon],
@@ -4412,8 +4420,8 @@ function validateAttachmentPath(path) {
 async function attachmentSHA256(bytes2) {
   if (!globalThis.crypto?.subtle) throw new Error("Image recovery hashing is unavailable on this device.");
   const copy = new Uint8Array(bytes2).slice();
-  const digest = await globalThis.crypto.subtle.digest("SHA-256", copy);
-  return [...new Uint8Array(digest)].map((value) => value.toString(16).padStart(2, "0")).join("");
+  const digest2 = await globalThis.crypto.subtle.digest("SHA-256", copy);
+  return [...new Uint8Array(digest2)].map((value) => value.toString(16).padStart(2, "0")).join("");
 }
 function relativePath(note, target) {
   const from = parent2(note).split("/").filter(Boolean), to = target.split("/");
@@ -4926,10 +4934,10 @@ function installAttachmentFeatures(plugin, { TFile: TFile2, Modal: Modal2, Notic
   const files = () => allItems().filter((item) => item instanceof TFile2);
   const occupied = (path) => allItems().find((item) => key3(item.path) === key3(path));
   const root = () => {
-    const parent3 = plugin.contentRoot.split("/").slice(0, -1).join("/");
-    return plugin.settings.imageFolder || (parent3 ? parent3 + "/" : "") + "Images";
+    const parent4 = plugin.contentRoot.split("/").slice(0, -1).join("/");
+    return plugin.settings.imageFolder || (parent4 ? parent4 + "/" : "") + "Images";
   };
-  const safePath2 = (value, label) => {
+  const safePath3 = (value, label) => {
     const path = String(value).trim();
     if (!path || path !== normalizePath2(path) || path.split("/").some((part) => !part || /^[._]/.test(part) || /[<>:"\\|?*\x00-\x1f]/.test(part) || /[. ]$/.test(part) || /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(part))) {
       throw new Error(label + " must be a portable relative vault path.");
@@ -4938,7 +4946,7 @@ function installAttachmentFeatures(plugin, { TFile: TFile2, Modal: Modal2, Notic
     return path;
   };
   const destinationRoot = (value) => {
-    const path = safePath2(value, "Image folder");
+    const path = safePath3(value, "Image folder");
     if (/[\[\]#%\x60^]/.test(path)) throw new Error("Image folder must be portable in both Markdown and wiki links.");
     if (below(path, plugin.contentRoot) || below(path, plugin.p("")) || below(plugin.contentRoot, path) || below(plugin.p(""), path) || recovery.isArchivePath(path)) {
       throw new Error("Choose a separate Images folder outside the case hierarchy, Backend, and recovery archives.");
@@ -5050,7 +5058,7 @@ function installAttachmentFeatures(plugin, { TFile: TFile2, Modal: Modal2, Notic
     const reserved2 = new Set(allItems().map((item) => key3(item.path)));
     for (const candidate of candidates.values()) {
       try {
-        safePath2(candidate.path, "Original image path");
+        safePath3(candidate.path, "Original image path");
         validateAttachmentPath(candidate.path);
         const basename2 = candidate.file.name.replace(/[\[\]#|%^\x60]/g, "-");
         let target = destination + "/" + basename2;
@@ -5059,7 +5067,7 @@ function installAttachmentFeatures(plugin, { TFile: TFile2, Modal: Modal2, Notic
           target = destination + "/" + hash + (suffix === 1 ? "" : "-" + suffix) + "-" + basename2;
         }
         if (reserved2.has(key3(target))) throw new Error("Destination already exists.");
-        candidate.target = safePath2(target, "Image path");
+        candidate.target = safePath3(target, "Image path");
         reserved2.add(key3(target));
       } catch (error) {
         candidate.blocked = error.message;
@@ -5174,7 +5182,7 @@ function installAttachmentFeatures(plugin, { TFile: TFile2, Modal: Modal2, Notic
           return file;
         };
         const createBinary = async (path, bytes2) => {
-          safePath2(path, "Image backup path");
+          safePath3(path, "Image backup path");
           if (occupied(path)) throw new Error("Image backup or recovery collision: " + path);
           plugin.markInternalCreate?.(path);
           const file = await vault.createBinary(path, bytes2.slice().buffer);
@@ -5188,7 +5196,7 @@ function installAttachmentFeatures(plugin, { TFile: TFile2, Modal: Modal2, Notic
           if (!selected.length) return { moved: 0 };
           const previousPaths = new Set(allItems().map((item) => key3(item.path)));
           snapshot = await plugin.snapshotFiles("image-organization", plan.plans.map((entry) => entry.file));
-          safePath2(snapshot, "Image snapshot");
+          safePath3(snapshot, "Image snapshot");
           if (previousPaths.has(key3(snapshot)) || !below(snapshot, plugin.p("Admin/Backups")) || plan.inventory.some((entry) => below(entry.path, snapshot))) {
             throw new Error("Image snapshot collision; existing backup preserved.");
           }
@@ -5333,19 +5341,19 @@ async function revealLauncher(plugin, file) {
   const current = () => !plugin.unloading && file && file.path === path && plugin.launcherPath() === path && plugin.app.vault.getAbstractFileByPath(path) === file;
   if (!current()) return false;
   let changed2 = false;
-  for (const leaf2 of workspace.getLeavesOfType("markdown")) {
+  for (const leaf3 of workspace.getLeavesOfType("markdown")) {
     if (!current()) break;
-    const view = leaf2.view;
-    if (view?.file !== file || view.getMode?.() === "preview" || pending.has(leaf2)) continue;
-    const state = leaf2.getViewState();
+    const view = leaf3.view;
+    if (view?.file !== file || view.getMode?.() === "preview" || pending.has(leaf3)) continue;
+    const state = leaf3.getViewState();
     if (state.type !== "markdown" || state.state?.file !== path || state.state?.mode === "preview") continue;
-    if (!current() || leaf2.view !== view || view.file !== file || !workspace.getLeavesOfType("markdown").includes(leaf2)) continue;
-    pending.set(leaf2, true);
+    if (!current() || leaf3.view !== view || view.file !== file || !workspace.getLeavesOfType("markdown").includes(leaf3)) continue;
+    pending.set(leaf3, true);
     try {
-      await leaf2.setViewState({ ...state, state: { ...state.state, mode: "preview" } });
-      if (current() && leaf2.view === view && view.file === file && workspace.getLeavesOfType("markdown").includes(leaf2)) changed2 = true;
+      await leaf3.setViewState({ ...state, state: { ...state.state, mode: "preview" } });
+      if (current() && leaf3.view === view && view.file === file && workspace.getLeavesOfType("markdown").includes(leaf3)) changed2 = true;
     } finally {
-      pending.delete(leaf2);
+      pending.delete(leaf3);
     }
   }
   return changed2;
@@ -5355,10 +5363,2450 @@ function installLauncherFeatures(plugin) {
   plugin.revealLauncher = (file) => revealLauncher(plugin, file);
   const reveal = (file) => plugin.dispatchVaultEvent("launcher rendering", () => plugin.revealLauncher(file));
   plugin.registerEvent(plugin.app.workspace.on("file-open", reveal));
-  plugin.registerEvent(plugin.app.workspace.on("active-leaf-change", (leaf2) => reveal(leaf2?.view?.file)));
+  plugin.registerEvent(plugin.app.workspace.on("active-leaf-change", (leaf3) => reveal(leaf3?.view?.file)));
   plugin.app.workspace.onLayoutReady(() => {
-    for (const leaf2 of plugin.app.workspace.getLeavesOfType("markdown")) reveal(leaf2.view?.file);
+    for (const leaf3 of plugin.app.workspace.getLeavesOfType("markdown")) reveal(leaf3.view?.file);
   });
+}
+
+// src/glove-settings.mjs
+var glove_settings_exports = {};
+__export(glove_settings_exports, {
+  DEFAULT_GLOVE_LABELS: () => DEFAULT_GLOVE_LABELS,
+  DEFAULT_GLOVE_SIZES: () => DEFAULT_GLOVE_SIZES,
+  DEFAULT_GLOVE_TYPES: () => DEFAULT_GLOVE_TYPES,
+  GloveValidationError: () => GloveValidationError,
+  createGloveSettingsDraft: () => createGloveSettingsDraft,
+  gloveHelpText: () => gloveHelpText,
+  gloveLegend: () => gloveLegend,
+  initializeGloveSettings: () => initializeGloveSettings,
+  installGloveSettingsRuntime: () => installGloveSettingsRuntime,
+  migrateGloveRegistry: () => migrateGloveRegistry,
+  migrateGloveValue: () => migrateGloveValue,
+  normalizeGloveConfig: () => normalizeGloveConfig,
+  normalizeGloveLabels: () => normalizeGloveLabels,
+  normalizeGloveSizes: () => normalizeGloveSizes,
+  normalizeGloveTypes: () => normalizeGloveTypes,
+  normalizeGloves: () => normalizeGloves,
+  parseGloves: () => parseGloves,
+  prepareGloveSettingsSave: () => prepareGloveSettingsSave,
+  renderGloveSettingsEditor: () => renderGloveSettingsEditor
+});
+var DEFAULT_GLOVE_SIZES = Object.freeze(["5.5", "6", "6.5", "7", "7.5", "8", "8.5", "9", "9.5"]);
+var DEFAULT_GLOVE_LABELS = Object.freeze({ O: "Ortho", B: "Blue", W: "White" });
+var GOWNS = Object.freeze(["XL", "XL-Long", "2X", "2X-Long", "Unknown"]);
+var LEGACY_ALIASES = Object.freeze({ O: ["ortho", "othro", "orthopedic"], B: ["blue"], W: ["white"] });
+var DEFAULT_GLOVE_TYPES = Object.freeze(Object.entries(DEFAULT_GLOVE_LABELS).map(([code, label]) => Object.freeze({ code, label, aliases: Object.freeze([...LEGACY_ALIASES[code]]) })));
+var own2 = (object3, key4) => Object.prototype.hasOwnProperty.call(object3, key4);
+var equal2 = (left, right) => JSON.stringify(left) === JSON.stringify(right);
+var phraseKey = (value) => value.trim().replace(/\s+/g, " ").normalize("NFKC").toUpperCase().toLowerCase();
+var escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+var isObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+var reserved = /* @__PURE__ */ new Set(["x", "unknown", "two", "three", "four"]);
+var GloveValidationError = class extends Error {
+  constructor(message, input, field = "gloves") {
+    super(message);
+    this.name = "GloveValidationError";
+    this.input = input;
+    this.field = field;
+  }
+};
+function invalid(message, input, field) {
+  throw new GloveValidationError(message, input, field);
+}
+function decimalSize(value) {
+  if (typeof value !== "string" && typeof value !== "number") invalid("Glove sizes must be positive decimal numbers.", value, "gloveSizes");
+  const raw = String(value).trim();
+  if (!/^(?:\d+(?:\.\d+)?|\.\d+)$/.test(raw)) invalid(`Invalid glove size: "${raw}". Use a positive decimal number.`, value, "gloveSizes");
+  const [whole, fraction = ""] = raw.split(".");
+  const integer = whole.replace(/^0+/, "") || "0";
+  const decimal = fraction.replace(/0+$/, "");
+  const normalized = integer + (decimal ? `.${decimal}` : "");
+  if (!Number.isFinite(Number(normalized)) || Number(normalized) <= 0 || Number(normalized) > Number.MAX_SAFE_INTEGER) {
+    invalid(`Invalid glove size: "${raw}". Use a finite positive decimal number.`, value, "gloveSizes");
+  }
+  return normalized;
+}
+function compareDecimals(left, right) {
+  const [li, lf = ""] = left.split("."), [ri, rf = ""] = right.split(".");
+  if (li.length !== ri.length) return li.length - ri.length;
+  if (li !== ri) return li < ri ? -1 : 1;
+  const width = Math.max(lf.length, rf.length);
+  const lp = lf.padEnd(width, "0"), rp = rf.padEnd(width, "0");
+  return lp === rp ? 0 : lp < rp ? -1 : 1;
+}
+function normalizeGloveSizes(input = DEFAULT_GLOVE_SIZES) {
+  let values;
+  if (Array.isArray(input)) values = [...input];
+  else if (typeof input === "string") {
+    const trimmed = input.trim();
+    if (!trimmed || /(?:^|,)\s*(?:,|$)/.test(trimmed)) invalid("Enter glove sizes separated by commas or spaces; a size is missing.", input, "gloveSizes");
+    values = trimmed.split(/[\s,]+/);
+  } else invalid("Glove sizes must be a list of decimal numbers.", input, "gloveSizes");
+  if (!values.length) invalid("Enter at least one glove size.", input, "gloveSizes");
+  try {
+    return [...new Set(values.map(decimalSize))].sort(compareDecimals);
+  } catch (error) {
+    if (error instanceof GloveValidationError) error.input = input;
+    throw error;
+  }
+}
+function typeCode(value) {
+  if (typeof value !== "string" || !/^[a-z]+$/i.test(value.trim()) || reserved.has(value.trim().toLowerCase())) {
+    invalid("Glove type codes must contain letters only; X, Unknown, Two, Three and Four are reserved.", value, "gloveTypes");
+  }
+  return value.trim().toUpperCase();
+}
+function inputPhrase(value) {
+  if (typeof value !== "string" || !value.trim() || /[\u0000-\u001f\u007f,;/+&|#]/.test(value) || /^[\d.]/.test(value.trim()) || /\d/.test(value) || reserved.has(phraseKey(value))) {
+    invalid("Glove labels and aliases must be nonempty text without numbers, list separators or reserved quantity words.", value, "gloveTypes");
+  }
+  return value.trim().replace(/\s+/g, " ");
+}
+function displayLabel(value) {
+  if (typeof value !== "string" || !value.trim() || /[\u0000-\u001f\u007f]/.test(value)) {
+    invalid("Enter a nonempty, single-line glove display label.", value, "gloveTypes");
+  }
+  return value.trim().replace(/\s+/g, " ");
+}
+function labelAliases(label) {
+  try {
+    return [inputPhrase(label)];
+  } catch (error) {
+    if (error instanceof GloveValidationError) return [];
+    throw error;
+  }
+}
+function uniqueAliases(values) {
+  const seen = /* @__PURE__ */ new Set();
+  return values.filter((value) => {
+    const key4 = phraseKey(value);
+    if (seen.has(key4)) return false;
+    seen.add(key4);
+    return true;
+  });
+}
+function makeTypeIndex(types) {
+  const index = /* @__PURE__ */ new Map();
+  for (const type of types) {
+    for (const phrase of [type.code, ...labelAliases(type.label), ...type.aliases]) {
+      const key4 = phraseKey(phrase);
+      const previous = index.get(key4);
+      if (previous && previous.code !== type.code) invalid(`Ambiguous glove code or label "${phrase}" belongs to both ${previous.code} and ${type.code}.`, phrase, "gloveTypes");
+      index.set(key4, { phrase, code: type.code });
+    }
+  }
+  for (const key4 of index.keys()) {
+    if (/x$/.test(key4) && (index.has(key4.slice(0, -1).trim()) || reserved.has(key4.slice(0, -1).trim()))) {
+      invalid(`Glove code or label "${index.get(key4).phrase}" is ambiguous with the quantity marker x.`, key4, "gloveTypes");
+    }
+    const suffix = /\s+(?:two|three|four|unknown)$/.exec(key4);
+    if (suffix && index.has(key4.slice(0, suffix.index))) {
+      invalid(`Glove label "${index.get(key4).phrase}" is ambiguous with another glove entry or quantity.`, key4, "gloveTypes");
+    }
+  }
+  return [...index.values()].sort((left, right) => right.phrase.length - left.phrase.length).map((entry) => ({
+    ...entry,
+    pattern: new RegExp(`^${escapeRegex(entry.phrase).replace(/ /g, "\\s+")}`, "iu")
+  }));
+}
+function normalizeGloveTypes(input = DEFAULT_GLOVE_TYPES) {
+  if (!Array.isArray(input)) invalid("Glove types must be a list of codes and display labels.", input, "gloveTypes");
+  const seen = /* @__PURE__ */ new Set();
+  const types = input.map((row) => {
+    if (!isObject(row)) invalid("Invalid glove type row.", row, "gloveTypes");
+    const code = typeCode(row.code), label = displayLabel(row.label);
+    if (seen.has(code)) invalid(`Duplicate glove type code: ${code}.`, row.code, "gloveTypes");
+    seen.add(code);
+    const aliases = row.aliases === void 0 ? LEGACY_ALIASES[code] || [] : row.aliases;
+    if (!Array.isArray(aliases)) invalid(`Aliases for ${code} must be a list.`, aliases, "gloveTypes");
+    return { code, label, aliases: uniqueAliases(aliases.map(inputPhrase)) };
+  });
+  makeTypeIndex(types);
+  return types;
+}
+function normalizeGloveConfig(settings = {}) {
+  if (!isObject(settings)) invalid("Invalid glove settings.", settings, "settings");
+  let types = settings.gloveTypes;
+  if (types === void 0) {
+    if (settings.gloveLabels !== void 0 && !isObject(settings.gloveLabels)) invalid("Invalid glove labels.", settings.gloveLabels, "gloveTypes");
+    const labels = { ...DEFAULT_GLOVE_LABELS, ...settings.gloveLabels };
+    types = Object.entries(labels).map(([code, label]) => ({ code, label: label || DEFAULT_GLOVE_LABELS[code] }));
+  }
+  const gloveTypes = normalizeGloveTypes(types);
+  return {
+    gloveSizes: normalizeGloveSizes(settings.gloveSizes),
+    gloveTypes,
+    gloveLabels: Object.fromEntries(gloveTypes.map(({ code, label }) => [code, label]))
+  };
+}
+function normalizeGloveLabels(labels) {
+  return normalizeGloveConfig(labels === void 0 ? {} : { gloveLabels: labels }).gloveLabels;
+}
+function parseDetailed(input, config) {
+  if (input !== void 0 && input !== null && typeof input !== "string") invalid("Gloves must be text.", input);
+  const raw = input ?? "";
+  if (!raw.trim()) return [{ unknown: true }];
+  const index = makeTypeIndex(config.gloveTypes), sizes = new Set(config.gloveSizes);
+  const entries = [];
+  let offset = 0;
+  const fail2 = () => invalid(`Could not normalize glove entry: "${raw}" (near "${raw.slice(offset)}").`, raw);
+  const skipSpace = () => {
+    offset += /^\s*/.exec(raw.slice(offset))[0].length;
+  };
+  while (offset < raw.length) {
+    offset += /^[\s,;/+&|]*/.exec(raw.slice(offset))[0].length;
+    if (offset === raw.length) break;
+    const unknown = /^unknown(?![\p{L}\p{M}_])/iu.exec(raw.slice(offset));
+    if (unknown) {
+      entries.push({ unknown: true });
+      offset += unknown[0].length;
+      continue;
+    }
+    const sizeMatch = /^#?\s*(?:\d+(?:\.\d+)?|\.\d+)/.exec(raw.slice(offset));
+    if (!sizeMatch) fail2();
+    let size;
+    try {
+      size = decimalSize(sizeMatch[0].replace(/^#?\s*/, ""));
+    } catch {
+      fail2();
+    }
+    if (!sizes.has(size)) fail2();
+    offset += sizeMatch[0].length;
+    skipSpace();
+    let code = "", typeStart = offset, typeEnd = offset;
+    for (const entry of index) {
+      const match = entry.pattern.exec(raw.slice(offset));
+      if (!match) continue;
+      const rest = raw.slice(offset + match[0].length);
+      if (/^[\p{L}\p{M}_]/u.test(rest) && !/^x\s*\d/i.test(rest)) continue;
+      code = entry.code;
+      offset += match[0].length;
+      typeEnd = offset;
+      break;
+    }
+    skipSpace();
+    let quantity = 1;
+    const count = /^x\s*(\d+)/i.exec(raw.slice(offset));
+    const word = /^(two|three|four)(?![\p{L}\p{M}\d_])/iu.exec(raw.slice(offset));
+    if (count) {
+      quantity = Number(count[1]);
+      offset += count[0].length;
+      if (!Number.isSafeInteger(quantity) || quantity < 1 || quantity > 99 || raw[offset] === ".") fail2();
+    } else if (word) {
+      quantity = { two: 2, three: 3, four: 4 }[word[1].toLowerCase()];
+      offset += word[0].length;
+    }
+    entries.push({ size, code, quantity, typeStart, typeEnd });
+    if (raw[offset] === ".") fail2();
+  }
+  if (!entries.length) fail2();
+  return entries;
+}
+function parseGloves(input, settings = {}) {
+  return parseDetailed(input, normalizeGloveConfig(settings)).map((entry) => entry.unknown ? { unknown: true } : { size: entry.size, code: entry.code, quantity: entry.quantity });
+}
+function normalizeGloves(input, settings = {}) {
+  return parseGloves(input, settings).map((entry) => entry.unknown ? "Unknown" : `${entry.size}${entry.code}${entry.quantity > 1 ? `x${entry.quantity}` : ""}`).join(" / ");
+}
+function gloveLegend(value, settings = {}) {
+  const config = normalizeGloveConfig(settings);
+  const used = new Set(parseDetailed(value, config).filter((entry) => !entry.unknown).map((entry) => entry.code));
+  return config.gloveTypes.filter((type) => used.has(type.code)).map((type) => `${type.code} = ${type.label}`).join(" · ");
+}
+function gloveHelpText(settings = {}) {
+  const config = normalizeGloveConfig(settings);
+  const example = `${config.gloveSizes[0]}${config.gloveTypes[0]?.code || ""}x2`;
+  const describe = (raw) => {
+    try {
+      return `"${raw}" → ${normalizeGloves(raw, config).replace(/x(\d+)/g, " x$1")}`;
+    } catch (error) {
+      if (error instanceof GloveValidationError) return "";
+      throw error;
+    }
+  };
+  const examples = ["8b8w", "8wx2"].map(describe).filter(Boolean);
+  if (!examples.length) examples.push(describe(example.toLowerCase()));
+  return {
+    legend: config.gloveTypes.map((type) => `${type.code} = ${type.label}`).join(" · "),
+    inputLegend: config.gloveTypes.map((type) => `${type.code.toLowerCase()} = ${type.label}`).join(" · "),
+    examples: `Examples: ${examples.join(" · ")}`,
+    sizes: config.gloveSizes.join(", "),
+    example,
+    description: "Enter size, optional type code, and optional x quantity (1–99). Use / between entries. Unknown is always available."
+  };
+}
+function createGloveSettingsDraft(settings = {}, { includeOrdinarySettings = false } = {}) {
+  const config = normalizeGloveConfig(settings);
+  return {
+    gloveSizes: config.gloveSizes.join(", "),
+    gloveTypes: config.gloveTypes.map((type) => ({ ...type, aliases: [...type.aliases], originalCode: type.code })),
+    ...includeOrdinarySettings ? { defaultGown: settings.defaultGown ?? "XL" } : {},
+    ...includeOrdinarySettings && settings.developerMode === true ? { verificationDebounceSeconds: String((settings.verificationDebounceMs ?? 45e3) / 1e3) } : {}
+  };
+}
+function validateOrdinaryValue(key4, value) {
+  if (key4 === "defaultGown" && GOWNS.includes(value)) return value;
+  if (key4 === "verificationDebounceMs" && Number.isSafeInteger(value) && value >= 5e3 && value <= 2147483647) return value;
+  invalid(key4 === "defaultGown" ? "Choose a supported default gown." : "Verification debounce must be at least 5 seconds and within the timer limit.", value, key4);
+}
+function ordinaryValue(settings, key4) {
+  return settings?.[key4] ?? (key4 === "defaultGown" ? "XL" : 45e3);
+}
+function ordinaryChanges(baseline, current, draft) {
+  const changes = {};
+  const set = (key4, value) => {
+    validateOrdinaryValue(key4, value);
+    const before = ordinaryValue(current, key4);
+    const merged = mergeField(ordinaryValue(baseline, key4), value, before, key4);
+    if (!equal2(merged, before)) changes[key4] = { before, value: merged };
+  };
+  if (own2(draft, "defaultGown")) set("defaultGown", draft.defaultGown);
+  if (own2(draft, "verificationDebounceSeconds")) {
+    const text = String(draft.verificationDebounceSeconds).trim();
+    if (!/^(?:\d+(?:\.\d+)?|\.\d+)$/.test(text)) invalid("Enter a valid verification debounce in seconds.", draft.verificationDebounceSeconds, "verificationDebounceMs");
+    const [seconds, rawFraction = ""] = text.split(".");
+    const fraction = rawFraction.replace(/0+$/, "");
+    if (fraction.length > 3) invalid("Verification debounce supports millisecond precision (three decimal places).", draft.verificationDebounceSeconds, "verificationDebounceMs");
+    const value = Number(seconds || "0") * 1e3 + Number(fraction.padEnd(3, "0"));
+    if (current?.developerMode !== true && value !== ordinaryValue(baseline, "verificationDebounceMs")) {
+      invalid("Developer mode is required to change verification debounce.", text, "verificationDebounceMs");
+    }
+    set("verificationDebounceMs", value);
+  }
+  return changes;
+}
+function resolveOrdinaryChanges(changes, current) {
+  const patch = {};
+  for (const [key4, change] of Object.entries(changes || {})) {
+    validateOrdinaryValue(key4, change.value);
+    patch[key4] = mergeField(change.before, change.value, ordinaryValue(current, key4), key4);
+  }
+  return patch;
+}
+function conflict2(field) {
+  invalid(`Glove ${field} changed in another window or device. Reload settings before saving.`, field, "conflict");
+}
+function mergeField(base, draft, current, field) {
+  if (equal2(base, draft)) return current;
+  if (!equal2(base, current) && !equal2(draft, current)) conflict2(field);
+  return draft;
+}
+function prepareGloveSettingsSave({ baselineSettings, currentSettings = baselineSettings, draft }) {
+  const base = normalizeGloveConfig(baselineSettings), current = normalizeGloveConfig(currentSettings);
+  if (!isObject(draft) || !Array.isArray(draft.gloveTypes)) invalid("Invalid glove settings draft.", draft, "settings");
+  const ordinary = ordinaryChanges(baselineSettings, currentSettings, draft);
+  const desiredSizes = normalizeGloveSizes(draft.gloveSizes);
+  const gloveSizes = mergeField(base.gloveSizes, desiredSizes, current.gloveSizes, "sizes");
+  const desired = draft.gloveTypes.map((row) => ({ ...normalizeGloveTypes([row])[0], originalCode: row.originalCode }));
+  const baselineRows = new Map(base.gloveTypes.map((row) => [row.code, row]));
+  const latestRows = new Map(current.gloveTypes.map((row) => [row.code, { ...row, aliases: [...row.aliases] }]));
+  const seen = /* @__PURE__ */ new Set(), renames = {};
+  for (const row of desired) {
+    if (row.originalCode == null) {
+      if (baselineRows.has(row.code) || latestRows.has(row.code)) conflict2(`type code ${row.code}`);
+      latestRows.set(row.code, { code: row.code, label: row.label, aliases: [...row.aliases] });
+      continue;
+    }
+    const original = row.originalCode;
+    if (!baselineRows.has(original) || seen.has(original)) invalid("Invalid or duplicate original glove type row.", original, "gloveTypes");
+    seen.add(original);
+    const before = baselineRows.get(original), latest = latestRows.get(original);
+    const requested = { code: row.code, label: row.label, aliases: row.aliases };
+    if (equal2(before, requested)) continue;
+    if (!latest) conflict2(`type ${original}`);
+    const merged = {
+      code: mergeField(before.code, row.code, latest.code, `code ${original}`),
+      label: mergeField(before.label, row.label, latest.label, `label ${original}`),
+      aliases: mergeField(before.aliases, row.aliases, latest.aliases, `aliases ${original}`)
+    };
+    if (merged.code !== original && (baselineRows.has(merged.code) || latestRows.has(merged.code))) {
+      invalid(`Code ${merged.code} already belongs to another glove type; choose an unused code.`, merged.code, "gloveTypes");
+    }
+    merged.aliases = uniqueAliases([
+      ...merged.aliases,
+      ...merged.code !== original ? [original] : [],
+      ...merged.label !== latest.label ? labelAliases(latest.label) : []
+    ]);
+    if (merged.code === original) latestRows.set(original, merged);
+    else {
+      const ordered2 = [...latestRows].map(([key4, value]) => key4 === original ? [merged.code, merged] : [key4, value]);
+      latestRows.clear();
+      for (const [key4, value] of ordered2) latestRows.set(key4, value);
+    }
+    if (merged.code !== original) renames[original] = merged.code;
+  }
+  for (const before of base.gloveTypes) {
+    if (seen.has(before.code)) continue;
+    const latest = latestRows.get(before.code);
+    if (latest && !equal2(before, latest)) conflict2(`type ${before.code}`);
+    latestRows.delete(before.code);
+  }
+  const config = normalizeGloveConfig({ gloveSizes, gloveTypes: [...latestRows.values()] });
+  const settingsPatch = resolveOrdinaryChanges(ordinary, currentSettings);
+  if (!equal2(current.gloveSizes, config.gloveSizes)) settingsPatch.gloveSizes = config.gloveSizes;
+  if (!equal2(current.gloveTypes, config.gloveTypes)) {
+    settingsPatch.gloveTypes = config.gloveTypes;
+    settingsPatch.gloveLabels = config.gloveLabels;
+  }
+  const remaining = new Set(config.gloveTypes.map((type) => type.code));
+  const migrationRequired = Object.keys(renames).length > 0 || current.gloveSizes.some((size) => !config.gloveSizes.includes(size)) || current.gloveTypes.some((type) => !remaining.has(type.code) || type.aliases.some((alias) => !config.gloveTypes.find((row) => row.code === type.code)?.aliases.includes(alias)));
+  return { settingsPatch, ordinaryChanges: ordinary, config, previousConfig: current, renames, migrationRequired, changed: Object.keys(settingsPatch).length > 0 };
+}
+function migrationContext(plan) {
+  const previousConfig = normalizeGloveConfig(plan.previousConfig), config = normalizeGloveConfig(plan.config);
+  if (!isObject(plan.renames)) invalid("Invalid glove code migration map.", plan.renames, "migration");
+  const oldCodes = new Set(previousConfig.gloveTypes.map((type) => type.code));
+  const newCodes = new Set(config.gloveTypes.map((type) => type.code));
+  const targets = /* @__PURE__ */ new Set();
+  for (const [from, to] of Object.entries(plan.renames)) {
+    if (!oldCodes.has(from) || !newCodes.has(to) || targets.has(to) || from !== to && oldCodes.has(to)) {
+      invalid("Glove code migrations require distinct existing source codes and unused destination codes.", plan.renames, "migration");
+    }
+    targets.add(to);
+  }
+  return { previousConfig, config, renames: plan.renames, newCodes };
+}
+function migrateValue(value, context) {
+  const { previousConfig, config, renames, newCodes } = context;
+  let entries, parsedCurrent = false;
+  try {
+    entries = parseDetailed(value, previousConfig);
+  } catch (previousError) {
+    try {
+      entries = parseDetailed(value, { ...config, gloveSizes: [.../* @__PURE__ */ new Set([...previousConfig.gloveSizes, ...config.gloveSizes])] });
+      parsedCurrent = true;
+    } catch {
+      throw previousError;
+    }
+  }
+  const previousIndex = parsedCurrent ? makeTypeIndex(previousConfig.gloveTypes) : [];
+  let next = value;
+  for (const entry of [...entries].reverse()) {
+    if (entry.unknown) continue;
+    let sourceCode = entry.code;
+    if (parsedCurrent && entry.code) {
+      const spelling = value.slice(entry.typeStart, entry.typeEnd);
+      const previous = previousIndex.find((type) => type.pattern.exec(spelling)?.[0].length === spelling.length);
+      if (previous && own2(renames, previous.code)) sourceCode = previous.code;
+    }
+    const code = own2(renames, sourceCode) ? renames[sourceCode] : entry.code;
+    if (code && !newCodes.has(code)) invalid(`Glove type ${entry.code} is still used by a profile. Keep it or rename it before saving.`, value, "migration");
+    if (!config.gloveSizes.includes(entry.size)) invalid(`Glove size ${entry.size} is still used by a profile. Keep it before saving.`, value, "migration");
+    if (code !== sourceCode) next = next.slice(0, entry.typeStart) + code + next.slice(entry.typeEnd);
+  }
+  parseDetailed(next, config);
+  return next;
+}
+function migrateGloveValue(value, plan) {
+  return migrateValue(value, migrationContext(plan));
+}
+function migrateGloveRegistry(registry, plan) {
+  if (!isObject(registry) || !isObject(registry.surgeons)) invalid("Invalid surgeon registry; glove migration stopped.", registry, "registry");
+  const context = migrationContext(plan), changedKeys = [];
+  const surgeons = Object.fromEntries(Object.entries(registry.surgeons).map(([key4, record]) => {
+    if (!isObject(record)) invalid(`Invalid surgeon record: ${key4}.`, record, "registry");
+    if (!own2(record, "gloves")) return [key4, record];
+    let gloves;
+    try {
+      gloves = migrateValue(record.gloves, context);
+    } catch (error) {
+      error.recordKey = key4;
+      throw error;
+    }
+    if (gloves === record.gloves) return [key4, record];
+    changedKeys.push(key4);
+    return [key4, { ...record, gloves }];
+  }));
+  return { registry: changedKeys.length ? { ...registry, surgeons } : registry, changedKeys };
+}
+function bridgeConfig(plan) {
+  const renamed = new Set(Object.keys(plan.renames));
+  const retained = new Set(plan.config.gloveTypes.map((type) => type.code));
+  return normalizeGloveConfig({
+    gloveSizes: [...plan.previousConfig.gloveSizes, ...plan.config.gloveSizes],
+    gloveTypes: [...plan.config.gloveTypes, ...plan.previousConfig.gloveTypes.filter((type) => !renamed.has(type.code) && !retained.has(type.code))]
+  });
+}
+function initializeGloveSettings(plugin) {
+  try {
+    Object.assign(plugin.settings, normalizeGloveConfig(plugin.settings));
+    plugin.gloveSettingsError = "";
+  } catch (error) {
+    plugin.gloveSettingsError = error.message;
+  }
+}
+async function persistGlovePatch(plugin, patch) {
+  if (plugin.unloading) throw new Error("CST Notes is unloading. Retry the glove update after reopening it.");
+  const before = Object.fromEntries(Object.keys(patch).map((key4) => [key4, { present: own2(plugin.settings, key4), value: plugin.settings[key4] }]));
+  Object.assign(plugin.settings, patch);
+  try {
+    await plugin.saveSettings();
+  } catch (error) {
+    for (const [key4, previous] of Object.entries(before)) {
+      if (!equal2(plugin.settings[key4], patch[key4])) continue;
+      if (previous.present) plugin.settings[key4] = previous.value;
+      else delete plugin.settings[key4];
+    }
+    throw error;
+  }
+}
+function installGloveSettingsRuntime(plugin, { refresh = async () => {
+} } = {}) {
+  if (plugin.gloveSettingsRuntimeInstalled) return;
+  plugin.gloveSettingsRuntimeInstalled = true;
+  const mutate = plugin.mutateSurgeonRegistry.bind(plugin);
+  plugin.mutateSurgeonRegistry = (mutator, options) => mutate((registry) => {
+    const previous = new Map(Object.entries(registry.surgeons).map(([key4, record]) => [key4, record?.gloves]));
+    const result = mutator(registry);
+    for (const [key4, record] of Object.entries(registry.surgeons)) {
+      if (record && record.gloves !== previous.get(key4)) {
+        const config = plugin.settings.gloveMigration?.config || plugin.settings;
+        normalizeGloves(record.gloves, config);
+      }
+    }
+    return result;
+  }, options);
+  const reload = async () => {
+    if (plugin.unloading) throw new Error("CST Notes is unloading. Retry the glove update after reopening it.");
+    const saved = await plugin.loadData();
+    if (saved && typeof saved === "object") {
+      Object.assign(plugin.settings, saved);
+      for (const key4 of ["gloveTypes", "gloveSizes", "gloveLabels", "gloveMigration"]) {
+        if (!own2(saved, key4)) delete plugin.settings[key4];
+      }
+    }
+    initializeGloveSettings(plugin);
+  };
+  const refreshAfterSave = async () => {
+    try {
+      await refresh();
+    } catch (error) {
+      plugin.gloveDisplayRefreshError = error.message || String(error);
+    }
+  };
+  const finish = async (plan) => {
+    const state = await plugin.readSurgeonRegistry({ create: false });
+    if (state.invalid) throw new Error(`Glove settings stopped: ${state.error}`);
+    if (state.missing && plugin.settings.initialized) throw new Error("The surgeon registry is missing. Wait for Sync before retrying the glove update.");
+    if (!state.missing) {
+      await plugin.mutateSurgeonRegistry((registry) => {
+        if (plugin.unloading) throw new Error("CST Notes is unloading. Retry the glove update after reopening it.");
+        if (!equal2(plugin.settings.gloveMigration, plan)) conflict2("pending update");
+        const migrated = migrateGloveRegistry(registry, plan);
+        registry.surgeons = migrated.registry.surgeons;
+        return migrated.changedKeys;
+      }, { create: false });
+    }
+    await reload();
+    if (!equal2(plugin.settings.gloveMigration, plan) || !equal2(normalizeGloveConfig(plugin.settings), bridgeConfig(plan))) conflict2("pending update");
+    await persistGlovePatch(plugin, { ...plan.config, ...resolveOrdinaryChanges(plan.ordinaryChanges, plugin.settings), gloveMigration: null });
+    initializeGloveSettings(plugin);
+    await refreshAfterSave();
+    return plugin.settings;
+  };
+  plugin.resumeGloveConfiguration = () => plugin.serializedAdminMutation(async () => {
+    await reload();
+    const plan = plugin.settings.gloveMigration;
+    if (!plan) return plugin.settings;
+    if (plan.version !== 1) throw new Error("Unsupported pending glove update. Keep the saved settings for review.");
+    migrationContext(plan);
+    return finish(plan);
+  });
+  plugin.saveGloveConfiguration = (draft, baselineSettings) => plugin.serializedAdminMutation(async () => {
+    await reload();
+    if (plugin.settings.gloveMigration) throw new Error("A glove update is pending. Use Retry glove update before making more changes.");
+    const plan = prepareGloveSettingsSave({ baselineSettings, currentSettings: plugin.settings, draft });
+    if (!plan.changed) return plugin.settings;
+    if (!plan.migrationRequired) {
+      await persistGlovePatch(plugin, plan.settingsPatch);
+      initializeGloveSettings(plugin);
+      await refreshAfterSave();
+      return plugin.settings;
+    }
+    const state = await plugin.readSurgeonRegistry({ create: false });
+    if (state.invalid) throw new Error(`Glove settings stopped: ${state.error}`);
+    if (state.missing && plugin.settings.initialized) throw new Error("The surgeon registry is missing. Wait for Sync before changing glove types or sizes.");
+    if (!state.missing) migrateGloveRegistry(state.registry, plan);
+    const journal = { version: 1, previousConfig: plan.previousConfig, config: plan.config, renames: plan.renames, ordinaryChanges: plan.ordinaryChanges };
+    await persistGlovePatch(plugin, { ...bridgeConfig(plan), gloveMigration: journal });
+    return finish(journal);
+  });
+}
+function renderGloveSettingsEditor(parent4, plugin, { rows = [] } = {}) {
+  const root = parent4.createDiv({ cls: "cst-glove-settings cst-settings-editor" });
+  let baseline, draft;
+  try {
+    baseline = { ...plugin.settings, ...normalizeGloveConfig(plugin.settings) };
+    draft = createGloveSettingsDraft(baseline, { includeOrdinarySettings: true });
+  } catch (error2) {
+    root.createEl("p", { text: `Glove settings need correction: ${error2.message}`, cls: "cst-warning" });
+    return root;
+  }
+  const controls = [];
+  const input = (parentEl, value, name) => {
+    const field = parentEl.createEl("input", { type: "text", attr: { "aria-label": name } });
+    field.value = value;
+    field.onkeydown = exitSingleLineOnEnter;
+    controls.push(field);
+    return field;
+  };
+  const table = root.createEl("table", { cls: "cst-table" });
+  const summary = (name, value) => {
+    const row = table.createEl("tr");
+    row.createEl("th", { text: name });
+    return row.createEl("td", { text: value });
+  };
+  for (const [name, value] of rows) summary(name, String(value));
+  const gown = summary("Default gown", "").createEl("select", { attr: { "aria-label": "Default gown" } });
+  for (const value of GOWNS) gown.createEl("option", { value, text: value });
+  gown.value = draft.defaultGown;
+  gown.onchange = () => {
+    draft.defaultGown = gown.value;
+  };
+  controls.push(gown);
+  let debounce;
+  if (own2(draft, "verificationDebounceSeconds")) {
+    debounce = input(summary("Verification debounce (seconds)", ""), draft.verificationDebounceSeconds, "Verification debounce (seconds)");
+    debounce.oninput = () => {
+      draft.verificationDebounceSeconds = debounce.value;
+    };
+  }
+  const sizeCell = summary("Glove sizes", "");
+  const sizes = input(sizeCell, draft.gloveSizes, "Glove sizes");
+  sizes.oninput = () => {
+    draft.gloveSizes = sizes.value;
+  };
+  const typeSummary = summary("Glove types", gloveHelpText(baseline).legend);
+  typeSummary.setAttribute("aria-readonly", "true");
+  root.createEl("p", { text: "Edit type codes and labels below. X is reserved for quantities. Unknown is always available. Changes apply only when you select Save.", cls: "cst-muted" });
+  const editor = root.createDiv({ cls: "cst-glove-type-editor" });
+  const renderTypes = () => {
+    editor.empty();
+    for (const row of draft.gloveTypes) {
+      const line = editor.createDiv({ cls: "cst-modal-grid" });
+      const code = input(line, row.code, "Glove type code");
+      code.oninput = () => {
+        row.code = code.value;
+      };
+      const label = input(line, row.label, "Glove display label");
+      label.oninput = () => {
+        row.label = label.value;
+      };
+      const remove = line.createEl("button", { text: "Remove type" });
+      controls.push(remove);
+      remove.onclick = () => {
+        draft.gloveTypes.splice(draft.gloveTypes.indexOf(row), 1);
+        renderTypes();
+      };
+    }
+  };
+  renderTypes();
+  const add = root.createEl("button", { text: "Add label" });
+  controls.push(add);
+  add.onclick = () => {
+    draft.gloveTypes.push({ originalCode: null, code: "", label: "", aliases: [] });
+    renderTypes();
+  };
+  const error = root.createEl("p", { cls: "cst-warning", attr: { role: "alert", "aria-live": "polite" } });
+  const save = root.createEl("button", { text: "Save", cls: "mod-cta" });
+  controls.push(save);
+  const retry = root.createEl("button", { text: "Retry glove update" });
+  const updatePending = () => {
+    retry.hidden = !plugin.settings.gloveMigration;
+    for (const control of controls) control.disabled = !!plugin.settings.gloveMigration;
+  };
+  updatePending();
+  if (plugin.settings.gloveMigration) error.setText("A glove update is pending. Select Retry glove update to finish before editing these settings.");
+  const persist = async (action) => {
+    if (root.gloveSaveBusy) return;
+    root.gloveSaveBusy = true;
+    for (const control of controls) control.disabled = true;
+    retry.disabled = true;
+    error.setText("");
+    try {
+      const saved = await action();
+      baseline = { ...saved, ...normalizeGloveConfig(saved) };
+      draft = createGloveSettingsDraft(baseline, { includeOrdinarySettings: true });
+      gown.value = draft.defaultGown;
+      if (debounce) debounce.value = draft.verificationDebounceSeconds ?? String((saved.verificationDebounceMs ?? 45e3) / 1e3);
+      sizes.value = draft.gloveSizes;
+      typeSummary.setText(gloveHelpText(baseline).legend);
+      renderTypes();
+      error.setText("Settings saved.");
+    } catch (failure) {
+      error.setText(`${failure.message || failure}${plugin.settings.gloveMigration ? " The compatible settings were retained. Select Retry glove update to finish." : ""}`);
+    } finally {
+      root.gloveSaveBusy = false;
+      for (const control of controls) control.disabled = false;
+      retry.disabled = false;
+      updatePending();
+    }
+  };
+  save.onclick = () => save.disabled ? void 0 : persist(() => plugin.saveGloveConfiguration(draft, baseline));
+  retry.onclick = () => retry.disabled ? void 0 : persist(() => plugin.resumeGloveConfiguration());
+  return root;
+}
+
+// src/library-package.mjs
+var MAX_ARCHIVE_BYTES = 64 * 1024 * 1024;
+var MAX_ENTRY_BYTES = 12 * 1024 * 1024;
+var MAX_ENTRIES = 1e4;
+var MAX_JSON_DEPTH = 128;
+var ZIP_VERSION = 20;
+var ZIP_UTF8 = 2048;
+var ZIP_DATE = 33;
+var ZIP_FILE_ATTRIBUTES = 32;
+var ZIP_NON_FILE_ATTRIBUTES = 65496;
+var LOCAL_SIGNATURE = 67324752;
+var CENTRAL_SIGNATURE = 33639248;
+var END_SIGNATURE = 101010256;
+var LOCAL_SIZE = 30;
+var CENTRAL_SIZE = 46;
+var END_SIZE = 22;
+var encoder;
+var decoder;
+var encode = (text) => (encoder ?? (encoder = new TextEncoder())).encode(text);
+var decode = (bytes2) => (decoder ?? (decoder = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }))).decode(bytes2);
+var crcTable = Uint32Array.from({ length: 256 }, (_, index) => {
+  let crc = index;
+  for (let bit = 0; bit < 8; bit++) {
+    crc = crc >>> 1 ^ (crc & 1 ? 3988292384 : 0);
+  }
+  return crc;
+});
+function requirePackage(condition, message) {
+  if (!condition) throw new Error(`Invalid library package: ${message}`);
+}
+function plainObject(value) {
+  if (value === null || typeof value !== "object") return false;
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}
+function jsonString(value) {
+  requirePackage(!/[\uD800-\uDFFF]/u.test(value), "unpaired surrogate in JSON");
+  return JSON.stringify(value);
+}
+function canonicalJson(value) {
+  const ancestors = /* @__PURE__ */ new Set();
+  function serialize(item, depth) {
+    if (item === null || typeof item === "boolean") return JSON.stringify(item);
+    if (typeof item === "number") {
+      requirePackage(Number.isFinite(item), "nonfinite JSON number");
+      return JSON.stringify(item);
+    }
+    if (typeof item === "string") return jsonString(item);
+    requirePackage(depth <= MAX_JSON_DEPTH, "JSON nesting exceeds limit");
+    requirePackage(!ancestors.has(item), "cyclic JSON data");
+    ancestors.add(item);
+    let result;
+    if (Array.isArray(item)) {
+      requirePackage(Reflect.ownKeys(item).length === item.length + 1, "expected a dense JSON array");
+      const elements = [];
+      for (let index = 0; index < item.length; index++) {
+        const descriptor = Object.getOwnPropertyDescriptor(item, index);
+        requirePackage(descriptor?.enumerable && Object.hasOwn(descriptor, "value"), "expected a JSON array element");
+        elements.push(serialize(descriptor.value, depth + 1));
+      }
+      result = `[${elements.join(",")}]`;
+    } else {
+      requirePackage(plainObject(item), "expected plain JSON data");
+      const keys = Object.keys(item).sort();
+      requirePackage(keys.length === Reflect.ownKeys(item).length, "expected enumerable JSON keys");
+      result = `{${keys.map((key4) => {
+        const descriptor = Object.getOwnPropertyDescriptor(item, key4);
+        requirePackage(Object.hasOwn(descriptor, "value"), "accessor in JSON data");
+        return `${jsonString(key4)}:${serialize(descriptor.value, depth + 1)}`;
+      }).join(",")}}`;
+    }
+    ancestors.delete(item);
+    return result;
+  }
+  return serialize(value, 0);
+}
+async function sha256(bytes2) {
+  requirePackage(bytes2 instanceof Uint8Array, "expected SHA-256 input bytes");
+  const digest2 = new Uint8Array(await globalThis.crypto.subtle.digest("SHA-256", bytes2));
+  return Array.from(digest2, (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+function crc32(bytes2) {
+  let crc = 4294967295;
+  for (const byte of bytes2) crc = crc >>> 8 ^ crcTable[(crc ^ byte) & 255];
+  return (crc ^ 4294967295) >>> 0;
+}
+function equalBytes2(left, right) {
+  return left.length === right.length && left.every((byte, index) => byte === right[index]);
+}
+function writeZip(files, signal) {
+  requirePackage(files.size <= MAX_ENTRIES, "too many ZIP entries");
+  const entries = [];
+  let localBytes = 0;
+  let centralBytes = 0;
+  for (const [path, data] of files) {
+    const name = encode(path);
+    entries.push({ name, data, offset: localBytes });
+    localBytes += LOCAL_SIZE + name.length + data.length;
+    centralBytes += CENTRAL_SIZE + name.length;
+  }
+  const size = localBytes + centralBytes + END_SIZE;
+  requirePackage(size <= MAX_ARCHIVE_BYTES, "ZIP exceeds total size limit");
+  const bytes2 = new Uint8Array(size);
+  const view = new DataView(bytes2.buffer);
+  const set16 = (offset, value) => view.setUint16(offset, value, true);
+  const set32 = (offset, value) => view.setUint32(offset, value, true);
+  let central = localBytes;
+  for (const { name, data, offset } of entries) {
+    signal?.throwIfAborted();
+    const crc = crc32(data);
+    set32(offset, LOCAL_SIGNATURE);
+    set16(offset + 4, ZIP_VERSION);
+    set16(offset + 6, ZIP_UTF8);
+    set16(offset + 12, ZIP_DATE);
+    set32(offset + 14, crc);
+    set32(offset + 18, data.length);
+    set32(offset + 22, data.length);
+    set16(offset + 26, name.length);
+    bytes2.set(name, offset + LOCAL_SIZE);
+    bytes2.set(data, offset + LOCAL_SIZE + name.length);
+    set32(central, CENTRAL_SIGNATURE);
+    set16(central + 4, ZIP_VERSION);
+    set16(central + 6, ZIP_VERSION);
+    set16(central + 8, ZIP_UTF8);
+    set16(central + 14, ZIP_DATE);
+    set32(central + 16, crc);
+    set32(central + 20, data.length);
+    set32(central + 24, data.length);
+    set16(central + 28, name.length);
+    set32(central + 38, ZIP_FILE_ATTRIBUTES);
+    set32(central + 42, offset);
+    bytes2.set(name, central + CENTRAL_SIZE);
+    central += CENTRAL_SIZE + name.length;
+  }
+  set32(central, END_SIGNATURE);
+  set16(central + 8, entries.length);
+  set16(central + 10, entries.length);
+  set32(central + 12, centralBytes);
+  set32(central + 16, localBytes);
+  return bytes2;
+}
+function readZip(bytes2, allowedPath) {
+  requirePackage(bytes2.length >= END_SIZE, "truncated ZIP");
+  const view = new DataView(bytes2.buffer, bytes2.byteOffset, bytes2.byteLength);
+  const get16 = (offset) => view.getUint16(offset, true);
+  const get32 = (offset) => view.getUint32(offset, true);
+  const end = bytes2.length - END_SIZE;
+  requirePackage(get32(end) === END_SIGNATURE && get16(end + 20) === 0, "invalid ZIP end record");
+  requirePackage(get16(end + 4) === 0 && get16(end + 6) === 0, "multidisk ZIP");
+  const count = get16(end + 10);
+  requirePackage(count === get16(end + 8) && count <= MAX_ENTRIES, "invalid ZIP entry count");
+  const centralStart = get32(end + 16);
+  requirePackage(centralStart + get32(end + 12) === end, "invalid ZIP central directory bounds");
+  const files = /* @__PURE__ */ new Map();
+  const foldedPaths = /* @__PURE__ */ new Set();
+  const localRanges = [];
+  let central = centralStart;
+  for (let index = 0; index < count; index++) {
+    requirePackage(central + CENTRAL_SIZE <= end && get32(central) === CENTRAL_SIGNATURE, "invalid ZIP central header");
+    const version2 = get16(central + 6);
+    const flags = get16(central + 8);
+    const method = get16(central + 10);
+    requirePackage(
+      version2 >= 10 && version2 <= ZIP_VERSION && (flags === 0 || flags === ZIP_UTF8) && method === 0,
+      "unsupported ZIP version, flags, or compression method"
+    );
+    const nameLength = get16(central + 28);
+    const nextCentral = central + CENTRAL_SIZE + nameLength;
+    requirePackage(nameLength > 0 && nextCentral <= end, "invalid ZIP filename bounds");
+    requirePackage(
+      get16(central + 30) === 0 && get16(central + 32) === 0 && get16(central + 34) === 0,
+      "unsupported ZIP extra fields, comments, or disks"
+    );
+    const attributes = get32(central + 38);
+    const fileType = attributes >>> 16 & 61440;
+    requirePackage(
+      (attributes & ZIP_NON_FILE_ATTRIBUTES) === 0 && (fileType === 0 || fileType === 32768),
+      "ZIP entry is not a regular file"
+    );
+    const crc = get32(central + 16);
+    const size = get32(central + 24);
+    requirePackage(size <= MAX_ENTRY_BYTES && size === get32(central + 20), "invalid ZIP entry size");
+    const local = get32(central + 42);
+    const dataStart = local + LOCAL_SIZE + nameLength;
+    const dataEnd = dataStart + size;
+    requirePackage(dataEnd <= centralStart && get32(local) === LOCAL_SIGNATURE, "invalid ZIP local header bounds");
+    requirePackage(get16(local + 4) === version2 && get16(local + 6) === flags && get16(local + 8) === method && get32(local + 10) === get32(central + 12) && get32(local + 14) === crc && get32(local + 18) === size && get32(local + 22) === size && get16(local + 26) === nameLength && get16(local + 28) === 0, "ZIP local and central headers differ");
+    const name = bytes2.subarray(central + CENTRAL_SIZE, nextCentral);
+    requirePackage(equalBytes2(name, bytes2.subarray(local + LOCAL_SIZE, dataStart)), "ZIP local and central filenames differ");
+    const path = decode(name);
+    requirePackage(allowedPath(path), "unsupported or unsafe ZIP path");
+    const folded = path.toLowerCase();
+    requirePackage(!foldedPaths.has(folded), "duplicate ZIP path");
+    foldedPaths.add(folded);
+    const data = bytes2.subarray(dataStart, dataEnd);
+    files.set(path, data);
+    localRanges.push({ local, dataEnd, crc, data });
+    central = nextCentral;
+  }
+  requirePackage(central === end, "unaccounted ZIP central directory bytes");
+  let nextLocal = 0;
+  localRanges.sort((left, right) => left.local - right.local);
+  for (const { local, dataEnd } of localRanges) {
+    requirePackage(local === nextLocal, "overlapping or unaccounted ZIP local entries");
+    nextLocal = dataEnd;
+  }
+  requirePackage(nextLocal === centralStart, "unaccounted ZIP local bytes");
+  for (const { crc, data } of localRanges) {
+    requirePackage(crc32(data) === crc, "ZIP CRC-32 mismatch");
+  }
+  return files;
+}
+var HASH = /^[0-9a-f]{64}$/;
+var CONTENT_PATH = /^content\/([A-Za-z0-9][A-Za-z0-9_-]{0,127})\.md$/;
+var ASSET_PATH = /^assets\/([0-9a-f]{64})\.(?:png|jpe?g|gif|webp)$/;
+var RESERVED_WINDOWS_NAME = /^(?:con|prn|aux|nul|com[0-9]|lpt[0-9])$/i;
+var MANIFEST_PATH = "manifest.json";
+var MANIFEST_HASH_PATH = "manifest.sha256";
+var MANIFEST_PROFILE = {
+  format: "perislate-library",
+  schemaVersion: "1.0.0",
+  kind: "library-snapshot",
+  absencePolicy: "no-deletion",
+  scope: "active-library",
+  reportPath: "report.json"
+};
+var RECORD_PATHS = {
+  specialties: "records/specialties.json",
+  surgeons: "records/surgeons.json",
+  cases: "records/cases.json",
+  templates: "records/templates.json",
+  references: "records/references.json",
+  resources: "records/resources.json",
+  documents: "records/documents.json",
+  assets: "records/assets.json",
+  report: MANIFEST_PROFILE.reportPath
+};
+var RECORD_KINDS = Object.keys(RECORD_PATHS).filter((kind) => kind !== "report").sort();
+var FIXED_PATHS = /* @__PURE__ */ new Set([MANIFEST_PATH, MANIFEST_HASH_PATH, ...Object.values(RECORD_PATHS)]);
+function contentId(path) {
+  if (typeof path !== "string") return;
+  const match = CONTENT_PATH.exec(path);
+  if (match?.[0] === path && !RESERVED_WINDOWS_NAME.test(match[1])) return match[1];
+}
+function assetHash(path) {
+  if (typeof path !== "string") return;
+  const match = ASSET_PATH.exec(path);
+  if (match?.[0] === path) return match[1];
+}
+function imageHeaderMatches(path, bytes2) {
+  const extension = path.slice(path.lastIndexOf(".") + 1);
+  if (extension === "png") {
+    return [137, 80, 78, 71, 13, 10, 26, 10].every((byte, index) => bytes2[index] === byte);
+  }
+  if (extension === "jpg" || extension === "jpeg") {
+    return bytes2[0] === 255 && bytes2[1] === 216 && bytes2[2] === 255;
+  }
+  const header2 = String.fromCharCode(...bytes2.subarray(0, 12));
+  if (extension === "gif") return header2.startsWith("GIF87a") || header2.startsWith("GIF89a");
+  return header2.startsWith("RIFF") && header2.slice(8) === "WEBP";
+}
+function jsonBytes(value) {
+  return encode(canonicalJson(value));
+}
+function readJson(bytes2, path) {
+  let text;
+  let value;
+  try {
+    text = decode(bytes2);
+    value = JSON.parse(text);
+  } catch {
+    throw new Error(`Invalid library package: invalid UTF-8 JSON in ${path}`);
+  }
+  requirePackage(canonicalJson(value) === text, `noncanonical JSON in ${path}`);
+  return value;
+}
+function isHash(value) {
+  return typeof value === "string" && value.length === 64 && HASH.test(value);
+}
+function checkEntry(path, bytes2) {
+  requirePackage(bytes2 instanceof Uint8Array, `expected bytes for ${path}`);
+  requirePackage(bytes2.length <= MAX_ENTRY_BYTES, `ZIP entry exceeds size limit: ${path}`);
+}
+function isPayloadPath(path) {
+  return !!(contentId(path) || assetHash(path));
+}
+function compareStrings(left, right) {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+function compareKeys([left], [right]) {
+  return compareStrings(left, right);
+}
+function validId(id2) {
+  return typeof id2 === "string" && id2.length > 0 && id2.length <= 256 && !/[\u0000-\u001f\u007f]/u.test(id2);
+}
+function checkLinks(records, ids) {
+  const specialties = ids.get("specialties");
+  const documents = ids.get("documents");
+  const templates = ids.get("templates");
+  const assets = ids.get("assets");
+  const cases = ids.get("cases");
+  const surgeonSpecialties = /* @__PURE__ */ new Map();
+  function hasDocument(id2, kind) {
+    const document2 = documents.get(id2);
+    return document2 && (document2.kind === void 0 || document2.kind === kind);
+  }
+  for (const specialty of records.specialties) {
+    requirePackage(specialty.documentIds === void 0 || Array.isArray(specialty.documentIds) && specialty.documentIds.every((id2) => hasDocument(id2, "specialty-note")), "unknown specialty document");
+  }
+  for (const surgeon of records.surgeons) {
+    let memberships;
+    if (surgeon.associations === void 0) {
+      memberships = /* @__PURE__ */ new Set([surgeon.specialtyId]);
+    } else {
+      requirePackage(Array.isArray(surgeon.associations) && surgeon.associations.length > 0 && surgeon.associations.every(plainObject), "invalid surgeon associations");
+      memberships = new Set(surgeon.associations.map((association) => association.specialtyId));
+      requirePackage(memberships.size === surgeon.associations.length, "duplicate surgeon specialty association");
+      requirePackage(surgeon.specialtyId === void 0 || memberships.has(surgeon.specialtyId), "conflicting surgeon specialty");
+    }
+    requirePackage([...memberships].every((id2) => specialties.has(id2)), "unknown surgeon specialty");
+    surgeonSpecialties.set(surgeon.id, memberships);
+  }
+  for (const item of records.cases) {
+    const memberships = surgeonSpecialties.get(item.surgeonId);
+    requirePackage(
+      specialties.has(item.specialtyId) && memberships && hasDocument(item.documentId, "case"),
+      "unknown case relationship"
+    );
+    requirePackage(memberships.has(item.specialtyId), "case and surgeon specialties differ");
+    const template = item.currentTemplate;
+    requirePackage(template == null || plainObject(template) && (template.templateId == null || templates.has(template.templateId)), "unknown case template");
+  }
+  for (const kind of ["template", "reference"]) {
+    for (const item of records[kind + "s"]) {
+      requirePackage(hasDocument(item.documentId, kind), `unknown ${kind} document`);
+    }
+  }
+  for (const template of records.templates) {
+    requirePackage(
+      template.revisions === void 0 || Array.isArray(template.revisions) && template.revisions.every((item) => plainObject(item) && hasDocument(item.documentId, "version")),
+      "unknown template revision document"
+    );
+  }
+  for (const document2 of records.documents) {
+    if (document2.attachments === void 0) continue;
+    requirePackage(Array.isArray(document2.attachments) && document2.attachments.every((item) => plainObject(item) && (item.status === "resolved" ? assets.has(item.assetId) : item.assetId == null)), "invalid document attachment relationship");
+  }
+  for (const resource of records.resources) {
+    requirePackage(resource.sources === void 0 || Array.isArray(resource.sources) && resource.sources.every((item) => plainObject(item) && cases.has(item.caseId)), "unknown resource source case");
+  }
+}
+function checkRecords(records, files) {
+  const ids = /* @__PURE__ */ new Map();
+  const fingerprints = [];
+  requirePackage(plainObject(records.report), "expected a report object");
+  for (const kind of RECORD_KINDS) {
+    requirePackage(Array.isArray(records[kind]), `expected a ${kind} record array`);
+    const index = /* @__PURE__ */ new Map();
+    for (const record of records[kind]) {
+      requirePackage(plainObject(record) && validId(record.id), `invalid ${kind} record ID`);
+      requirePackage(!index.has(record.id), `duplicate ${kind} record ID`);
+      index.set(record.id, record);
+      const { id: id2 } = record;
+      const fingerprint = record.fingerprint === void 0 && kind === "assets" ? id2 : record.fingerprint;
+      requirePackage(isHash(fingerprint), `invalid ${kind} record fingerprint`);
+      fingerprints.push([kind, id2, fingerprint]);
+    }
+    ids.set(kind, index);
+  }
+  checkLinks(records, ids);
+  const payloadPaths = /* @__PURE__ */ new Set();
+  for (const document2 of records.documents) {
+    requirePackage(contentId(document2.path) === document2.id, "invalid document path");
+    payloadPaths.add(document2.path);
+  }
+  for (const asset of records.assets) {
+    requirePackage(assetHash(asset.path) === asset.id, "invalid asset path or ID");
+    payloadPaths.add(asset.path);
+  }
+  requirePackage(
+    files.size === payloadPaths.size && [...payloadPaths].every((path) => files.has(path)),
+    "document and asset records must match the payload files"
+  );
+  return fingerprints;
+}
+function recordCounts(records) {
+  return Object.fromEntries(RECORD_KINDS.map((kind) => [kind, records[kind].length]));
+}
+function checkMetadata({ packageId, createdAt, source, libraryId, gloveConfig, resourceAliases }) {
+  requirePackage(validId(packageId) && validId(libraryId), "invalid package or library ID");
+  requirePackage(
+    typeof createdAt === "string" && /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d{3})?Z$/.test(createdAt) && Number.isFinite(Date.parse(createdAt)) && new Date(createdAt).toISOString() === (createdAt.length === 20 ? createdAt.replace("Z", ".000Z") : createdAt),
+    "invalid creation timestamp"
+  );
+  requirePackage(plainObject(source), "expected source metadata");
+  requirePackage(plainObject(gloveConfig) && Array.isArray(resourceAliases), "invalid library configuration");
+}
+async function hashSnapshot(fingerprints, { gloveConfig, resourceAliases }) {
+  const configuration = [
+    ["configuration", "gloveConfig", await sha256(jsonBytes(gloveConfig))],
+    ["configuration", "resourceAliases", await sha256(jsonBytes(resourceAliases))]
+  ];
+  const tuples = [...fingerprints, ...configuration].sort((left, right) => compareStrings(left[0], right[0]) || compareStrings(left[1], right[1]));
+  return sha256(jsonBytes(tuples));
+}
+async function inventoryFor(files, signal) {
+  const inventory = [];
+  for (const [path, bytes2] of [...files].sort(compareKeys)) {
+    signal?.throwIfAborted();
+    const hash = await sha256(bytes2);
+    const asset = assetHash(path);
+    requirePackage(!asset || hash === asset, "asset content does not match its SHA-256 ID");
+    requirePackage(!asset || imageHeaderMatches(path, bytes2), "asset signature does not match its image extension");
+    inventory.push({ path, size: bytes2.length, sha256: hash });
+  }
+  return inventory;
+}
+function checkPayloadMetadata(records, inventory) {
+  const byPath = new Map(inventory.map((entry) => [entry.path, entry]));
+  for (const { path, sha256: hash } of records.documents) {
+    requirePackage(hash === void 0 || hash === byPath.get(path).sha256, "document SHA-256 mismatch");
+  }
+  for (const { path, size } of records.assets) {
+    requirePackage(size === void 0 || size === byPath.get(path).size, "asset size mismatch");
+  }
+}
+async function writeLibraryPackage(snapshot, {
+  packageId = globalThis.crypto.randomUUID(),
+  createdAt = (/* @__PURE__ */ new Date()).toISOString(),
+  source = { application: "CST Notes" },
+  libraryId = globalThis.crypto.randomUUID(),
+  signal
+} = {}) {
+  signal?.throwIfAborted();
+  requirePackage(plainObject(snapshot?.records) && snapshot.files instanceof Map, "expected a library snapshot");
+  const { gloveConfig = {}, resourceAliases = [] } = snapshot;
+  const metadata = { packageId, createdAt, source, libraryId, gloveConfig, resourceAliases };
+  checkMetadata(metadata);
+  const ownedMetadata = JSON.parse(canonicalJson(metadata));
+  requirePackage(snapshot.files.size + FIXED_PATHS.size <= MAX_ENTRIES, "too many ZIP entries");
+  const files = /* @__PURE__ */ new Map();
+  let payloadBytes = 0;
+  const foldedPaths = /* @__PURE__ */ new Set();
+  for (const [path, data] of snapshot.files) {
+    requirePackage(isPayloadPath(path), "unsupported or unsafe payload path");
+    const folded = path.toLowerCase();
+    requirePackage(!foldedPaths.has(folded), "duplicate ZIP path");
+    foldedPaths.add(folded);
+    checkEntry(path, data);
+    payloadBytes += data.length;
+    requirePackage(payloadBytes <= MAX_ARCHIVE_BYTES, "ZIP exceeds total size limit");
+  }
+  for (const [path, data] of snapshot.files) files.set(path, new Uint8Array(data));
+  const records = {};
+  const archive = new Map(files);
+  for (const [kind, path] of Object.entries(RECORD_PATHS)) {
+    const bytes2 = jsonBytes(snapshot.records[kind]);
+    checkEntry(path, bytes2);
+    payloadBytes += bytes2.length;
+    requirePackage(payloadBytes <= MAX_ARCHIVE_BYTES, "ZIP exceeds total size limit");
+    archive.set(path, bytes2);
+    records[kind] = JSON.parse(decode(bytes2));
+  }
+  const fingerprints = checkRecords(records, files);
+  const inventory = await inventoryFor(archive, signal);
+  checkPayloadMetadata(records, inventory);
+  const snapshotHash = await hashSnapshot(fingerprints, ownedMetadata);
+  const manifest = {
+    ...MANIFEST_PROFILE,
+    ...ownedMetadata,
+    requiredFeatures: [],
+    counts: recordCounts(records),
+    files: inventory,
+    snapshotHash
+  };
+  const manifestBytes = jsonBytes(manifest);
+  checkEntry(MANIFEST_PATH, manifestBytes);
+  archive.set(MANIFEST_PATH, manifestBytes);
+  archive.set(MANIFEST_HASH_PATH, encode(await sha256(manifestBytes)));
+  signal?.throwIfAborted();
+  return { bytes: writeZip(new Map([...archive].sort(compareKeys)), signal), manifest };
+}
+async function validateLibraryPackage(bytes2) {
+  requirePackage(bytes2 instanceof Uint8Array, "expected ZIP bytes");
+  requirePackage(bytes2.length <= MAX_ARCHIVE_BYTES, "ZIP exceeds total size limit");
+  const archive = readZip(new Uint8Array(bytes2), (path) => FIXED_PATHS.has(path) || isPayloadPath(path));
+  requirePackage([...FIXED_PATHS].every((path) => archive.has(path)), "missing required ZIP entry");
+  const manifestBytes = archive.get(MANIFEST_PATH);
+  requirePackage(equalBytes2(archive.get(MANIFEST_HASH_PATH), encode(await sha256(manifestBytes))), "manifest SHA-256 mismatch");
+  const manifest = readJson(manifestBytes, MANIFEST_PATH);
+  requirePackage(
+    plainObject(manifest) && Object.entries(MANIFEST_PROFILE).every(([key4, value]) => manifest[key4] === value),
+    "unsupported manifest format, version, or policy"
+  );
+  requirePackage(Array.isArray(manifest.requiredFeatures) && manifest.requiredFeatures.length === 0, "unsupported required features");
+  checkMetadata(manifest);
+  requirePackage(isHash(manifest.snapshotHash), "invalid snapshot hash");
+  archive.delete(MANIFEST_PATH);
+  archive.delete(MANIFEST_HASH_PATH);
+  const inventory = await inventoryFor(archive);
+  requirePackage(canonicalJson(manifest.files) === canonicalJson(inventory), "manifest inventory or entry SHA-256 mismatch");
+  const records = {};
+  for (const [kind, path] of Object.entries(RECORD_PATHS)) {
+    records[kind] = readJson(archive.get(path), path);
+    archive.delete(path);
+  }
+  const fingerprints = checkRecords(records, archive);
+  checkPayloadMetadata(records, inventory);
+  requirePackage(canonicalJson(manifest.counts) === canonicalJson(recordCounts(records)), "manifest record counts mismatch");
+  requirePackage(await hashSnapshot(fingerprints, manifest) === manifest.snapshotHash, "snapshot hash mismatch");
+  return { manifest, records, files: archive };
+}
+
+// src/library-snapshot.mjs
+init_template_lifecycle();
+var MiB = 1024 * 1024;
+var MAX_TOTAL = 64 * MiB;
+var MAX_ENTRY = 12 * MiB;
+var MAX_ENTRIES2 = 1e4;
+var encoder2;
+var decoder2;
+var encode2 = (text) => (encoder2 ?? (encoder2 = new TextEncoder())).encode(text);
+var safeId = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$/;
+var windowsDevice = /^(con|prn|aux|nul|com[0-9¹²³]|lpt[0-9¹²³])(?:\.|$)/i;
+var supportedImage = /\.(png|jpe?g|gif|webp)$/i;
+var imageLike = /\.(png|jpe?g|gif|webp|svg|bmp|avif|hei[cf]|ico|tiff?)(?:[#?]|$)/i;
+var remoteLink = /^(?:[a-z][a-z0-9+.-]*:|\/\/)/i;
+var mediaTypes = { png: "image/png", jpg: "image/jpeg", gif: "image/gif", webp: "image/webp" };
+var ordered = (a, b) => a < b ? -1 : a > b ? 1 : 0;
+var fold2 = (value) => value.normalize("NFC").toLowerCase();
+var leaf2 = (path) => path.slice(path.lastIndexOf("/") + 1);
+var parent3 = (path) => path.slice(0, Math.max(0, path.lastIndexOf("/")));
+var nameOf = (path) => leaf2(path).replace(/\.md$/i, "");
+var within3 = (path, root) => path === root || path.startsWith(root + "/");
+var object2 = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+var sourceIdOf = (value) => typeof value === "string" && value.trim() && value.length <= 512 && !/[\x00-\x1f\x7f]/.test(value) ? value : "";
+var textOf = (value) => typeof value === "string" ? value : "";
+var strings = (value) => Array.isArray(value) ? value.filter((item) => typeof item === "string") : [];
+var digest = (value) => sha256(encode2(canonicalJson(value)));
+function safePath2(path) {
+  return typeof path === "string" && path.length <= 1024 && path.split("/").every((part) => part && !/[\\:*?"<>|\x00-\x1f\x7f]/.test(part) && !/[. ]$/.test(part) && !windowsDevice.test(part));
+}
+function getImageType(bytes2) {
+  if ([137, 80, 78, 71, 13, 10, 26, 10].every((value, i) => bytes2[i] === value)) return "png";
+  if (bytes2[0] === 255 && bytes2[1] === 216 && bytes2[2] === 255) return "jpg";
+  const header2 = String.fromCharCode(...bytes2.subarray(0, 12));
+  if (header2.startsWith("GIF87a") || header2.startsWith("GIF89a")) return "gif";
+  if (header2.startsWith("RIFF") && header2.slice(8) === "WEBP") return "webp";
+  return "";
+}
+function semanticMetadata(frontmatter) {
+  const ignored = /^(?:cst_id|cst_type|specialty|surgeon|surgeon_id|graph_parent|schema_version|template(?:_initialized|_version|_created(?:_version)?)?|cst_created_template(?:_version)?|cst_transfer_.*|(?:cst_)?(?:created|updated|modified|last_verified|verified|verification)(?:_.*)?)$/i;
+  let remaining = MAX_ENTRY, nodes = MAX_ENTRIES2;
+  function copy(value, depth) {
+    if (--nodes < 0 || depth > 32) throw new Error("Frontmatter structure exceeds the library limit.");
+    if (typeof value === "string") {
+      remaining -= value.length;
+      if (remaining < 0) throw new Error("Expanded frontmatter exceeds the library limit.");
+    }
+    if (value instanceof Date) return value.toISOString();
+    if (Array.isArray(value)) return value.map((item) => copy(item, depth + 1));
+    if (object2(value)) return Object.fromEntries(Object.entries(value).map(([key4, item]) => [key4, copy(item, depth + 1)]));
+    return value;
+  }
+  return copy(Object.fromEntries(Object.entries(frontmatter).filter(([key4]) => !ignored.test(key4))), 0);
+}
+function scanMarkdown(text, countSpan) {
+  const fm = /^\uFEFF?---[ \t]*(?:\r\n|\n|\r)(?:[\s\S]*?(?:\r\n|\n|\r))?(?:---|\.\.\.)[ \t]*(?:\r\n|\n|\r|$)/.exec(text);
+  const start = fm?.[0].length ?? (text.startsWith("\uFEFF") ? 1 : 0);
+  const headings = [], fences = [], mask = [], listIndents = [];
+  let fence, comment = false;
+  const lines = /[^\r\n]*(?:\r\n|\n|\r|$)/g;
+  lines.lastIndex = start;
+  for (let line; (line = lines.exec(text))?.[0]; ) {
+    const raw = line[0];
+    const from = line.index, to = from + raw.length;
+    const bare = raw.replace(/(?:\r\n|\n|\r)$/, "");
+    const delimiter = /^ {0,3}(?:>[ \t]?)*(?:(?:[-+*]|\d+[.)])[ \t]+)? {0,3}(`{3,}|~{3,})(.*)$/.exec(bare);
+    if (fence) {
+      if (delimiter && delimiter[1][0] === fence.token[0] && delimiter[1].length >= fence.token.length && !delimiter[2].trim()) {
+        countSpan();
+        fences.push({ start: fence.start, end: to, info: fence.info });
+        fence = void 0;
+      }
+      continue;
+    }
+    if (delimiter && !comment && !(delimiter[1][0] === "`" && delimiter[2].includes("`"))) {
+      fence = { start: from, token: delimiter[1], info: delimiter[2].trim() };
+      continue;
+    }
+    let indentedCode = false;
+    if (!comment && bare.trim()) {
+      const whitespace = /^[ \t]*/.exec(bare)[0];
+      let indent = 0;
+      for (const char of whitespace) indent += char === "	" ? 4 - indent % 4 : 1;
+      while (listIndents.length && indent < listIndents.at(-1)) listIndents.pop();
+      indentedCode = indent - (listIndents.at(-1) ?? 0) >= 4;
+      const marker = /^(?:[-+*]|\d{1,9}[.)])( {1,4})(?=\S)/.exec(bare.slice(whitespace.length));
+      if (marker && !indentedCode) listIndents.push(indent + marker[0].length);
+    }
+    if (!comment) {
+      const heading = /^ {0,3}(#{1,6})(?:[ \t]+(.*)|$)/.exec(bare);
+      if (heading) {
+        countSpan();
+        headings.push({
+          level: heading[1].length,
+          heading: (heading[2] || "").replace(/[ \t]+#+[ \t]*$/, "").trim(),
+          start: from,
+          bodyStart: to
+        });
+      }
+    }
+    const inline = /<!--|-->|(?<!`)(`+)(?!`)[^`\r\n]*?(?<!`)\1(?!`)/g;
+    let commentStart = comment ? from : -1;
+    for (const token of bare.matchAll(inline)) {
+      if (token[0] === "<!--" && !comment) {
+        commentStart = from + token.index;
+        comment = true;
+      } else if (token[0] === "-->" && comment) {
+        countSpan();
+        mask.push({ start: commentStart, end: from + token.index + 3 });
+        comment = false;
+      } else if (token[1] && !comment) {
+        countSpan();
+        mask.push({ start: from + token.index, end: from + token.index + token[0].length });
+      }
+    }
+    if (comment || indentedCode) {
+      countSpan();
+      mask.push({ start: indentedCode ? from : commentStart, end: to });
+    }
+  }
+  if (fence) {
+    countSpan();
+    fences.push({ start: fence.start, end: text.length, info: fence.info });
+  }
+  return {
+    start,
+    fences,
+    mask,
+    sections: headings.map((heading, i) => ({ ...heading, end: headings[i + 1]?.start ?? text.length })),
+    preamble: { start, end: headings[0]?.start ?? text.length }
+  };
+}
+function markdownLinks(text, scan, add) {
+  const spans = [...scan.fences, ...scan.mask].sort((a, b) => a.start - b.start || a.end - b.end);
+  const parts = [];
+  let cursor = scan.start;
+  for (const span of spans) {
+    if (span.end <= cursor) continue;
+    if (span.start > cursor) parts.push(text.slice(cursor, span.start));
+    parts.push(text.slice(Math.max(cursor, span.start), span.end).replace(/[^\r\n]/g, " "));
+    cursor = span.end;
+  }
+  parts.push(text.slice(cursor));
+  const visible = parts.join("");
+  const definitions = /* @__PURE__ */ new Map();
+  const labelKey = (label) => label.trim().replace(/\s+/g, " ").toLowerCase();
+  const destination = (value) => {
+    const raw = value.trim();
+    return raw.startsWith("<") ? /^<([^<>]*)>(?:\s|$)/.exec(raw)?.[1] : raw.replace(/[ \t]+(?:"[^"]*"|'[^']*'|\([^()]*\))[ \t]*$/, "");
+  };
+  for (const match of visible.matchAll(/^ {0,3}\[([^\]\r\n]+)\]:[ \t]*(.+)$/gm)) {
+    const key4 = labelKey(match[1]);
+    if (!definitions.has(key4)) definitions.set(key4, destination(match[2]));
+  }
+  const links = /(!?)\[\[([^\[\]\r\n]+)\]\]|(!?)\[([^\[\]\r\n]*)\](?!:)(\(|\[([^\[\]\r\n]*)\])?|<(img|audio|video|iframe|object|embed|picture|source)\b[^<>\r\n]*>/gi;
+  let lastConsumed = 0;
+  for (const match of visible.matchAll(links)) {
+    if (match.index < lastConsumed) continue;
+    const start = scan.start + match.index;
+    let escape = start;
+    while (escape > scan.start && text[escape - 1] === "\\") escape--;
+    if ((start - escape) % 2) continue;
+    let target, end = match.index + match[0].length;
+    const embedded = match[1] === "!" || match[3] === "!" || !!match[7];
+    const syntax = match[2] !== void 0 ? "wiki" : match[4] !== void 0 ? "markdown" : "html";
+    let invalid2 = "";
+    if (syntax === "html") {
+      const src = /(?:^|\s)src\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i.exec(match[0]);
+      target = (src?.[1] ?? src?.[2] ?? src?.[3])?.replace(/&amp;/g, "&");
+      if (match[7].toLowerCase() !== "img") invalid2 = "This HTML embed is outside the supported image formats.";
+      else if (/\bsrcset\s*=/i.test(match[0])) invalid2 = "Responsive HTML images are unsupported.";
+    } else if (syntax === "wiki") {
+      target = match[2].split(/[|#]/, 1)[0];
+    } else if (match[5] === "(") {
+      let depth = 1, angle = false, i = end;
+      for (; i < visible.length && visible[i] !== "\n" && visible[i] !== "\r"; i++) {
+        const ch = visible[i];
+        if (ch === "\\") {
+          i++;
+          continue;
+        }
+        if (ch === "<") angle = true;
+        if (ch === ">") angle = false;
+        if (angle) continue;
+        if (ch === "(") depth++;
+        if (ch === ")" && --depth === 0) break;
+      }
+      if (!depth) {
+        target = destination(visible.slice(end, i));
+        end = i + 1;
+      }
+    } else {
+      target = definitions.get(labelKey(match[6] || match[4]));
+    }
+    lastConsumed = end;
+    if (!embedded && (!imageLike.test(target || "") || remoteLink.test(target))) continue;
+    if (target?.length > 1024) invalid2 = "The image destination exceeds the supported path length.";
+    add({ start, end: scan.start + end, target: target?.slice(0, 1024) || "", syntax, embedded, invalid: invalid2 });
+  }
+}
+async function collectLibrarySnapshot(plugin, deps, { identify, signal, progress } = {}) {
+  const report = { warnings: [], errors: [], exclusions: [] };
+  const records = { specialties: [], surgeons: [], cases: [], templates: [], references: [], resources: [], documents: [], assets: [], report };
+  const vault = plugin?.app?.vault;
+  const files = /* @__PURE__ */ new Map();
+  const warn = (code, path, message) => report.warnings.push({ code, path, message });
+  const exclude = (path, message) => report.exclusions.push({ path, message });
+  const block = (code, path, message) => report.errors.push({ code, path, message });
+  function assertNoBlockers() {
+    if (!report.errors.length) return;
+    const message = report.errors.length === 1 ? report.errors[0].message : `Resolve ${report.errors.length} library export blockers and review the library again.`;
+    throw Object.assign(new Error(message), { report });
+  }
+  function stop(message, path = "", code = "snapshot-blocked", cause) {
+    const errors = [...report.errors, { code, path, message }];
+    throw Object.assign(new Error(message, { cause }), { report: { ...report, errors } });
+  }
+  function active() {
+    if (signal?.aborted) throw signal.reason ?? new DOMException("Library collection canceled.", "AbortError");
+    if (plugin.unloading || plugin.settings?.resetNeedsReview || plugin.adminWorkspace?.resetNeedsReview) {
+      stop("Finish the pending CST Notes recovery before exporting the library.");
+    }
+  }
+  if (!vault?.getAbstractFileByPath || typeof deps?.TFile !== "function" || typeof deps?.TFolder !== "function" || typeof deps.parseFrontmatterObject !== "function" || typeof identify !== "function") {
+    stop("Library collection requires vault file types, a fresh Markdown parser, and an identity callback.");
+  }
+  const isFile = (value) => value instanceof deps.TFile;
+  const isFolder = (value) => value instanceof deps.TFolder;
+  const lookup = (path) => vault.getAbstractFileByPath(path) ?? null;
+  const changed2 = (path) => stop(`The vault changed at "${path}". Wait for Sync to settle and preview the library again.`, path, "stale-snapshot");
+  function roots() {
+    const content = plugin.contentRoot, backend = plugin.p();
+    const result = {
+      content,
+      backend,
+      templates: plugin.p("_Templates/Cases"),
+      versions: plugin.p("_Templates/_Versions"),
+      references: plugin.p("References"),
+      attachments: plugin.p("Attachments"),
+      images: plugin.settings?.imageFolder || [parent3(content), "Images"].filter(Boolean).join("/"),
+      registry: plugin.surgeonRegistryPath(),
+      resources: plugin.p("_Data/Resource Library.md"),
+      migration: plugin.migrationSessionPath(),
+      example: plugin.exampleTemplatePath?.() || plugin.p("_Templates/Cases/Example.md")
+    };
+    if (Object.values(result).some((path) => !safePath2(path)) || within3(fold2(content), fold2(backend)) || within3(fold2(backend), fold2(content)) || Object.entries(result).some(([role, path]) => !["content", "backend", "example", "images"].includes(role) && (path === backend || !within3(path, backend))) || result.example === result.templates || !within3(result.example, result.templates)) {
+      stop("CST Notes library roots are unsafe or overlap. Review the configured content and backend paths.");
+    }
+    const imagePath2 = fold2(result.images);
+    if ([content, backend].some((path) => within3(imagePath2, fold2(path)) || within3(fold2(path), imagePath2))) {
+      stop("Choose an Images folder outside the content and backend roots before exporting.", result.images, "unsafe-path");
+    }
+    const scoped = Object.entries(result).filter(([role]) => !["content", "backend", "example", "images"].includes(role));
+    for (const [i, [, path]] of scoped.entries()) {
+      if (scoped.slice(i + 1).some(([, other]) => within3(fold2(path), fold2(other)) || within3(fold2(other), fold2(path)))) {
+        stop("CST Notes backend library paths overlap. Review the configured storage paths.", path);
+      }
+    }
+    return result;
+  }
+  function gloveSettings() {
+    try {
+      const { gloveTypes, gloveSizes } = normalizeGloveConfig(plugin.settings);
+      return { gloveTypes, gloveSizes };
+    } catch (error) {
+      stop(`Review CST Notes glove settings before exporting. ${error.message}`, "", "invalid-glove-settings", error);
+    }
+  }
+  active();
+  const scope = roots(), scopeKey = canonicalJson(scope);
+  const gloveConfig = gloveSettings(), configKey = canonicalJson(gloveConfig);
+  const stamp = (stat) => canonicalJson([stat?.size ?? null, stat?.ctime ?? null, stat?.mtime ?? null]);
+  function inventory() {
+    active();
+    const entries2 = /* @__PURE__ */ new Map(), paths = /* @__PURE__ */ new Map();
+    function add(path, item, role) {
+      if (!safePath2(path) || item && (item.path !== path || lookup(path) !== item)) {
+        stop(`Unsafe or inconsistent library path "${path}". Verify its location before exporting.`, path, "unsafe-path");
+      }
+      const key4 = fold2(path);
+      if (paths.has(key4)) stop(`Library paths "${paths.get(key4)}" and "${path}" conflict across devices. Resolve the names before exporting.`, path, "path-collision");
+      if (entries2.size >= MAX_ENTRIES2) stop("Library scope exceeds the 10,000-entry limit. Reduce its inventory and retry.", path, "entry-limit");
+      paths.set(key4, path);
+      entries2.set(path, { path, item, role, stamp: isFile(item) ? stamp(item.stat) : "", size: item?.stat?.size });
+    }
+    function walk(root, role, required = false) {
+      const item = lookup(root);
+      if (!item && required || item && !isFolder(item)) {
+        stop(`The library folder "${root}" is unavailable. Check its configured location or wait for Sync.`, root, "missing-root");
+      }
+      add(root, item, role + "-root");
+      if (!item) return;
+      const visit = (folder, depth, attachmentTree) => {
+        if (depth > 128) stop(`Library folder nesting exceeds the safe export limit at "${folder.path}".`, folder.path, "unsafe-path");
+        if (!Array.isArray(folder.children) || folder.children.length > MAX_ENTRIES2 - entries2.size) {
+          stop(`Library folder "${folder.path}" exceeds the 10,000-entry limit or has an unavailable inventory.`, folder.path, "entry-limit");
+        }
+        for (const child of folder.children) {
+          const path = child?.path;
+          if (typeof path !== "string" || parent3(path) !== folder.path || !(isFile(child) || isFolder(child))) {
+            stop(`A library item under "${folder.path}" has an inconsistent path. Wait for Sync and retry.`, folder.path, "unsafe-path");
+          }
+          const name = leaf2(path);
+          let type = "excluded";
+          const hidden2 = name.startsWith(".") || role === "content" && depth <= 2 && isFolder(child) && name.startsWith("_") || role === "template" && name === "_Versions";
+          if (!hidden2 && isFolder(child)) {
+            type = role === "content" && depth <= 2 ? ["specialty", "surgeon"][depth - 1] : "folder";
+          } else if (!hidden2 && isFile(child)) {
+            if (/\.md$/i.test(name)) {
+              if (role === "content") type = depth === 3 && !attachmentTree ? "case" : depth === 2 ? "specialty-note" : "supplemental";
+              else if (role === "version") type = templateRevisionNumber(name) ? "version" : "excluded";
+              else if (role !== "attachment") type = role;
+            } else if (!/\.md$/i.test(name) && role !== "version") {
+              type = "attachment";
+            }
+          }
+          add(path, child, type);
+          if (isFolder(child) && !hidden2) visit(child, depth + 1, attachmentTree || role === "content" && depth >= 3);
+        }
+      };
+      visit(item, 1, false);
+    }
+    walk(scope.content, "content", true);
+    walk(scope.templates, "template");
+    walk(scope.versions, "version");
+    walk(scope.references, "reference");
+    walk(scope.attachments, "attachment");
+    walk(scope.images, "attachment");
+    for (const role of ["registry", "resources", "migration"]) {
+      const path = scope[role], item = lookup(path);
+      if (item && !isFile(item)) stop(`The library data path "${path}" is occupied by a folder. Restore the expected file before exporting.`, path);
+      add(path, item, role);
+    }
+    return entries2;
+  }
+  const before = inventory();
+  const entries = [...before.values()].sort((a, b) => ordered(a.path, b.path));
+  const inputs = /* @__PURE__ */ new Map(), readSet = /* @__PURE__ */ new Map();
+  let inputBytes = 0;
+  function assertItem(entry) {
+    active();
+    if (lookup(entry.path) !== entry.item || entry.item?.path !== entry.path || stamp(entry.item.stat) !== entry.stamp) changed2(entry.path);
+  }
+  async function freshStat(entry) {
+    if (typeof vault.adapter?.stat !== "function") return;
+    let live;
+    try {
+      live = await vault.adapter.stat(entry.path);
+    } catch (error) {
+      stop(`Could not verify the size of "${entry.path}". Wait for Sync and retry.`, entry.path, "read-failed", error);
+    }
+    if (!live || live.type && live.type !== "file" || live.size !== entry.size || ["mtime", "ctime"].some((key4) => entry.item.stat?.[key4] != null && live[key4] !== entry.item.stat[key4])) changed2(entry.path);
+    assertItem(entry);
+  }
+  function reserve(entry) {
+    if (!entry?.item || inputs.has(entry.path)) return;
+    if (!Number.isSafeInteger(entry.size) || entry.size < 0 || entry.size > MAX_ENTRY) {
+      stop(`"${entry.path}" exceeds 12 MiB or has an unknown size. Check that the file has fully synced before exporting.`, entry.path, "entry-limit");
+    }
+    inputBytes += entry.size;
+    if (inputBytes > MAX_TOTAL) stop("Library input exceeds 64 MiB. Reduce the managed library or referenced image size before exporting.", entry.path, "size-limit");
+    inputs.set(entry.path, entry);
+  }
+  async function read(entry, binaryRequired = false) {
+    assertItem(entry);
+    await freshStat(entry);
+    let bytes2;
+    try {
+      if (typeof vault.readBinary === "function") {
+        const raw = await vault.readBinary(entry.item);
+        bytes2 = ArrayBuffer.isView(raw) ? new Uint8Array(raw.buffer, raw.byteOffset, raw.byteLength) : new Uint8Array(raw);
+      } else if (!binaryRequired) {
+        bytes2 = encode2(await vault.read(entry.item));
+      } else {
+        stop("Binary vault reads are required to export local images.", entry.path);
+      }
+    } catch (error) {
+      if (error.report) throw error;
+      stop(`Could not read "${entry.path}". Check that it is available locally and retry.`, entry.path, "read-failed", error);
+    }
+    assertItem(entry);
+    await freshStat(entry);
+    if (bytes2.byteLength !== entry.size) changed2(entry.path);
+    const hash = await sha256(bytes2);
+    assertItem(entry);
+    return { bytes: bytes2, hash };
+  }
+  async function collect(entry, binary = false) {
+    const value = await read(entry, binary);
+    readSet.set(entry.path, { entry, hash: value.hash, binary });
+    return value;
+  }
+  function decode2(value, path) {
+    try {
+      return (decoder2 ?? (decoder2 = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }))).decode(value.bytes);
+    } catch (error) {
+      stop(`"${path}" is not valid UTF-8 Markdown. Save it as UTF-8 before exporting.`, path, "invalid-markdown", error);
+    }
+  }
+  async function data(role, parse) {
+    const entry = before.get(scope[role]);
+    if (!entry.item) return null;
+    const text = decode2(await collect(entry), entry.path).replace(/^\uFEFF/, "");
+    try {
+      return parse(text);
+    } catch (error) {
+      stop(`Review "${entry.path}" before exporting. ${error.message}`, entry.path, "invalid-" + role, error);
+    }
+  }
+  const ids = /* @__PURE__ */ new Set(), sources = /* @__PURE__ */ new Set();
+  async function entity(kind, key4, sourceId, fingerprint) {
+    active();
+    if (sourceId) {
+      const claim = canonicalJson([kind, sourceId]);
+      if (sources.has(claim)) stop(`Duplicate ${kind} source identity at "${key4}". Resolve the duplicate in CST Notes before exporting.`, key4, "duplicate-source-id");
+      sources.add(claim);
+    }
+    const id2 = await identify(kind, key4, sourceId, fingerprint);
+    active();
+    if (typeof id2 !== "string" || !safeId.test(id2) || windowsDevice.test(id2) || ids.has(fold2(id2))) {
+      stop(`The ${kind} at "${key4}" has an unsafe or duplicate package identity. Review the library identity record.`, key4, "invalid-identity");
+    }
+    ids.add(fold2(id2));
+    return id2;
+  }
+  const noteRoles = ["case", "template", "reference", "specialty-note", "supplemental"];
+  const notes = entries.filter((entry) => noteRoles.includes(entry.role));
+  const revisionOwner = /* @__PURE__ */ new Map();
+  const templateByRevisionRoot = new Map(notes.filter((entry) => entry.role === "template").map((entry) => [
+    scope.versions + "/" + entry.path.slice(scope.templates.length + 1).replace(/\.md$/i, ""),
+    entry.path
+  ]));
+  const latest = /* @__PURE__ */ new Map();
+  for (const entry of entries) {
+    if (entry.role !== "version") continue;
+    const template = templateByRevisionRoot.get(parent3(entry.path));
+    if (!template) {
+      exclude(entry.path, "Template revision has no active template.");
+      continue;
+    }
+    revisionOwner.set(entry.path, template);
+    notes.push(entry);
+    const n = templateRevisionNumber(leaf2(entry.path));
+    const old = latest.get(template);
+    if (!old || n > old.n) latest.set(template, { path: entry.path, n });
+  }
+  for (const entry of notes) reserve(entry);
+  for (const role of ["registry", "resources", "migration"]) reserve(before.get(scope[role]));
+  if (typeof vault.readBinary !== "function") warn("text-read-fallback", "", "This vault cannot read exact note bytes. Markdown will be encoded from fresh text reads.");
+  const registry = await data("registry", (text) => {
+    const block2 = /^```cst-registry-data[ \t]*\r?\n([\s\S]*?)\r?\n```[ \t]*$/m.exec(text);
+    const parsed = block2 && JSON.parse(block2[1]);
+    if (!object2(parsed?.surgeons) || parsed.version !== void 0 && parsed.version !== 1) {
+      throw new Error("Restore a supported surgeon registry with its complete cst-registry-data block.");
+    }
+    return parsed.surgeons;
+  });
+  const migration = await data("migration", (text) => plugin.parseMigrationSessionText(text));
+  const reviewStatus = /* @__PURE__ */ new Map();
+  for (const path of migration?.order ?? []) {
+    const status = migration.status?.[path] ?? "remaining";
+    if (!within3(path, scope.content) || !/^(?:remaining|needs[ _-]review)$/i.test(status)) continue;
+    if (!before.get(path)?.item) {
+      stop(`The pending legacy case "${path}" is unavailable. Wait for Sync or review its location before exporting.`, path, "missing-migration-case");
+    }
+    reviewStatus.set(path, status === "remaining" ? "remaining" : "needs-review");
+    warn("pending-migration", path, `"${path}" is pending legacy review. Its saved source Markdown is included as-is.`);
+  }
+  const resourceIndex = await data("resources", decodeResourceIndex);
+  const surgeons = entries.filter((entry) => entry.role === "surgeon");
+  if (surgeons.length && !registry) stop("The surgeon registry is missing. Wait for Sync or repair CST Notes before exporting.", scope.registry, "missing-registry");
+  const registryRows = /* @__PURE__ */ new Map();
+  for (const entry of surgeons) {
+    const key4 = plugin.surgeonKey(leaf2(parent3(entry.path)), leaf2(entry.path));
+    if (registryRows.has(key4) || !Object.hasOwn(registry, key4) || !object2(registry[key4])) {
+      stop(`The surgeon folder "${entry.path}" does not have one matching registry record. Verify Sync or repair the registry before exporting.`, entry.path, "registry-mismatch");
+    }
+    const row = registry[key4];
+    const sourceId = sourceIdOf(row.cst_id) || sourceIdOf(row.id);
+    registryRows.set(key4, { entry, row, sourceId });
+  }
+  if (Object.keys(registry ?? {}).some((key4) => !registryRows.has(key4))) {
+    stop("The surgeon registry contains a record without a matching managed folder. Verify Sync or repair the registry before exporting.", scope.registry, "registry-mismatch");
+  }
+  for (const entry of entries) {
+    if (entry.role === "excluded") exclude(entry.path, "Outside the managed note and image layout.");
+  }
+  const byPath = /* @__PURE__ */ new Map(), byName = /* @__PURE__ */ new Map(), byStem = /* @__PURE__ */ new Map(), externalLookups = /* @__PURE__ */ new Map();
+  function index(map, key4, entry) {
+    const list = map.get(key4) ?? [];
+    list.push(entry);
+    map.set(key4, list);
+  }
+  for (const entry of entries) {
+    if (entry.role !== "attachment" && !noteRoles.includes(entry.role)) continue;
+    byPath.set(fold2(entry.path), entry);
+    index(byName, fold2(leaf2(entry.path)), entry);
+    if (supportedImage.test(entry.path)) index(byStem, fold2(leaf2(entry.path).replace(/\.[^.]+$/, "")), entry);
+  }
+  function explicitImage(target) {
+    if (!supportedImage.test(target) || !safePath2(target) || target.split("/").some((part) => part.startsWith(".")) || [scope.content, scope.backend, scope.images, "CST Recovery Archive"].some((root) => within3(fold2(target), fold2(root)))) return null;
+    if (externalLookups.has(target)) return externalLookups.get(target);
+    const item = lookup(target);
+    if (item && (!isFile(item) || item.path !== target)) {
+      stop(`The explicit image path "${target}" does not identify a single file with that exact vault path.`, target, "unsafe-path");
+    }
+    const entry = item ? { path: target, item, role: "attachment", size: item.stat?.size, stamp: stamp(item.stat) } : null;
+    externalLookups.set(target, entry);
+    return entry;
+  }
+  function resolve(link, path) {
+    if (link.invalid) return { status: "unsupported", detail: link.invalid };
+    if (!link.target) return { status: "missing", detail: "The image link has no resolved destination." };
+    let target;
+    try {
+      target = decodeURIComponent(link.target.split(/[?#]/, 1)[0].replace(/\\([() ])/g, "$1"));
+    } catch {
+      return { status: "unsupported", detail: "The image link has invalid URL escaping." };
+    }
+    if (remoteLink.test(target) || /[\\\x00-\x1f\x7f]/.test(target)) {
+      return { status: "unsupported", detail: "Remote, inline, and non-vault image links are unsupported." };
+    }
+    const pieces = target.startsWith("/") ? [] : parent3(path).split("/");
+    for (const segment of target.replace(/^\//, "").split("/")) {
+      if (segment === "..") {
+        if (!pieces.length) return { status: "unsupported", detail: "The image link traverses outside the vault." };
+        pieces.pop();
+      } else if (segment !== ".") pieces.push(segment);
+    }
+    const relative = pieces.join("/");
+    if (!safePath2(relative)) return { status: "unsupported", detail: "The image link has an unsafe path." };
+    const local = byPath.get(fold2(relative));
+    const rootRelative = target.replace(/^\//, "");
+    const absolute = safePath2(rootRelative) && (byPath.get(fold2(rootRelative)) || (target.startsWith("/") || link.syntax === "wiki" && target.includes("/")) && explicitImage(rootRelative));
+    let matches;
+    if (/^\.{1,2}\//.test(target)) matches = local ? [local] : [];
+    else if (target.startsWith("/")) matches = absolute ? [absolute] : [];
+    else if (target.includes("/")) {
+      matches = [...new Set([local, absolute].filter(Boolean))];
+      if (!matches.length && link.syntax === "wiki" && safePath2(target)) {
+        const suffix = "/" + fold2(target);
+        matches = (byName.get(fold2(leaf2(target))) ?? []).filter((entry2) => fold2(entry2.path).endsWith(suffix));
+      }
+    } else if (local) matches = [local];
+    else matches = byName.get(fold2(target)) ?? (link.syntax === "wiki" ? byStem.get(fold2(target)) : null) ?? [];
+    if (matches.length > 1) return { status: "ambiguous", detail: "Several scoped files match this image link. Use an explicit path." };
+    const [entry] = matches;
+    if (!entry && /\.[a-z0-9]+$/i.test(target) && !supportedImage.test(target) || entry && !supportedImage.test(entry.path)) {
+      const extension = /\.[a-z0-9]+$/i.exec(entry?.path || target)?.[0];
+      return { status: "unsupported", detail: `${extension ? extension + " attachments are" : "This attachment is"} unsupported. Use a local PNG, JPEG, GIF or WebP image.` };
+    }
+    if (!entry) return { status: "missing", detail: "No matching image was found within the managed library roots." };
+    return { status: "resolved", entry };
+  }
+  const pending2 = [], imageEntries = /* @__PURE__ */ new Map(), revisionHashes = /* @__PURE__ */ new Map();
+  let scanned = 0, linkCount = 0, spanCount = 0;
+  for (const entry of notes) {
+    const raw = await collect(entry);
+    const text = decode2(raw, entry.path);
+    let frontmatter, metadata;
+    try {
+      frontmatter = deps.parseFrontmatterObject(text.replace(/^\uFEFF/, "")) || {};
+      metadata = canonicalJson(semanticMetadata(frontmatter));
+    } catch (error) {
+      stop(`Review the frontmatter in "${entry.path}". ${error.message}`, entry.path, "invalid-markdown", error);
+    }
+    const scan = scanMarkdown(text, () => {
+      if (++spanCount > MAX_ENTRIES2 * 10) stop("Markdown structure exceeds the library export limit. Split or simplify the managed notes.", entry.path, "entry-limit");
+    });
+    const links = [];
+    markdownLinks(text, scan, (link) => {
+      if (++linkCount > MAX_ENTRIES2) stop("Library image references exceed the 10,000-entry limit. Reduce repeated images before exporting.", entry.path, "entry-limit");
+      const resolution = resolve(link, revisionOwner.get(entry.path) ?? entry.path);
+      if (resolution.entry) {
+        reserve(resolution.entry);
+        imageEntries.set(resolution.entry.path, resolution.entry);
+      } else {
+        block(
+          "image-" + resolution.status,
+          entry.path,
+          `${resolution.detail} Link: ${link.target.slice(0, 240) || "(empty)"} in "${entry.path}".`
+        );
+      }
+      links.push({ ...link, ...resolution });
+    });
+    const semanticBody = [];
+    let cursor = scan.start;
+    for (const fence of scan.fences) {
+      if (fence.info !== "cst-surgeon-header") continue;
+      semanticBody.push(text.slice(cursor, fence.start));
+      cursor = fence.end;
+    }
+    semanticBody.push(text.slice(cursor));
+    const body = stripResourceMarkers(semanticBody.join("")).replace(/<!-- cst-example-template: [^\r\n]*? -->/g, "").replace(/\r\n?/g, "\n").trim();
+    const type = textOf(frontmatter.cst_type);
+    const role = entry.role === "case" && type && type !== "case" ? "supplemental" : entry.role;
+    pending2.push({
+      entry,
+      role,
+      raw,
+      frontmatter,
+      metadataHash: await sha256(encode2(metadata)),
+      scan,
+      links,
+      bodyHash: await sha256(encode2(body))
+    });
+    if (role === "version") revisionHashes.set(entry.path, raw.hash);
+    progress?.({ phase: "collect", completed: ++scanned, total: notes.length });
+  }
+  for (const entry of entries) {
+    if (entry.role === "attachment" && !imageEntries.has(entry.path)) {
+      exclude(entry.path, imageLike.test(entry.path) ? "Unreferenced image." : "Unreferenced non-image attachment.");
+    }
+  }
+  const imageAt = /* @__PURE__ */ new Map(), assets = /* @__PURE__ */ new Map();
+  for (const entry of [...imageEntries.values()].sort((a, b) => ordered(a.path, b.path))) {
+    const { bytes: bytes2, hash } = await collect(entry, true);
+    const extension = getImageType(bytes2);
+    const advertised = leaf2(entry.path).split(".").at(-1).toLowerCase().replace(/^jpeg$/, "jpg");
+    if (!extension || extension !== advertised) {
+      block("image-unsupported", entry.path, `The required image "${entry.path}" does not match its file type. Replace it with a valid supported image.`);
+      continue;
+    }
+    imageAt.set(entry.path, hash);
+    const filename = leaf2(entry.path);
+    const existing = assets.get(hash);
+    if (existing) {
+      if (!existing.originalFilenames.includes(filename)) existing.originalFilenames.push(filename);
+      continue;
+    }
+    const path = `assets/${hash}.${extension}`;
+    const asset = { id: hash, path, fingerprint: hash, size: bytes2.byteLength, originalFilenames: [filename], mediaType: mediaTypes[extension] };
+    assets.set(hash, asset);
+    records.assets.push(asset);
+    files.set(path, bytes2);
+  }
+  assertNoBlockers();
+  const specialtyAt = /* @__PURE__ */ new Map(), surgeonAt = /* @__PURE__ */ new Map(), caseAt = /* @__PURE__ */ new Map(), templateAt = /* @__PURE__ */ new Map();
+  for (const entry of entries.filter((item) => item.role === "specialty")) {
+    const name = leaf2(entry.path);
+    const fingerprint = await digest({ name });
+    const id2 = await entity("specialty", entry.path, "", fingerprint);
+    const record = { id: id2, name, fingerprint, documentIds: [] };
+    specialtyAt.set(entry.path, record);
+    records.specialties.push(record);
+  }
+  const surgeonGroups = /* @__PURE__ */ new Map();
+  for (const { entry, row, sourceId } of registryRows.values()) {
+    const specialty = specialtyAt.get(parent3(entry.path));
+    const name = leaf2(entry.path);
+    if (row.specialty && row.specialty !== specialty.name || row.surgeon && plugin.surgeonKey(specialty.name, row.surgeon) !== plugin.surgeonKey(specialty.name, name)) {
+      stop(`The registry metadata disagrees with the surgeon folder "${entry.path}". Review its profile and folder before exporting.`, entry.path, "registry-mismatch");
+    }
+    const glovesRaw = typeof row.gloves === "string" ? row.gloves : row.gloves == null ? "" : canonicalJson(row.gloves);
+    let gloves = null, gloveParseStatus = "unsupported";
+    try {
+      gloves = parseGloves(glovesRaw, gloveConfig);
+      gloveParseStatus = gloves.every((entry2) => entry2.unknown) ? "unknown" : "parsed";
+    } catch {
+      warn("unsupported-gloves", entry.path, "The glove entry uses an unsupported format. Its original value is included for review.");
+    }
+    const profile = { gloves, glovesRaw, gloveParseStatus, gown: textOf(row.gown) || "Unknown", music: textOf(row.music || row.music_preferences) };
+    const aliases = strings(row.aliases);
+    const key4 = sourceId ? "source:" + sourceId : "path:" + entry.path;
+    const group = surgeonGroups.get(key4) ?? { sourceId, entries: [] };
+    group.entries.push({ path: entry.path, association: { specialtyId: specialty.id, name, aliases, profile } });
+    surgeonGroups.set(key4, group);
+  }
+  const gloveConfigHash = await digest(gloveConfig);
+  for (const { sourceId, entries: group } of surgeonGroups.values()) {
+    const associations = group.map(({ association }) => association);
+    const specialtyIds = new Set(associations.map((item) => item.specialtyId));
+    if (specialtyIds.size !== associations.length) {
+      stop(`Surgeon identity has multiple profiles in the same specialty. Review "${group[0].path}" before exporting.`, group[0].path, "duplicate-surgeon-association");
+    }
+    const semantic = associations.map(({ specialtyId, name, aliases, profile }) => ({ specialtyId, name, aliases, gloves: profile.gloves ?? profile.glovesRaw, gown: profile.gown, music: profile.music })).sort((a, b) => ordered(a.specialtyId, b.specialtyId));
+    const fingerprint = await digest({ gloveConfigHash, associations: semantic });
+    const id2 = await entity("surgeon", group[0].path, sourceId, fingerprint);
+    const record = {
+      id: id2,
+      sourceId,
+      name: associations[0].name,
+      associations,
+      fingerprint,
+      ...associations.length === 1 ? associations[0] : {}
+    };
+    for (const { path, association } of group) surgeonAt.set(path, { id: id2, sourceId, ...association });
+    records.surgeons.push(record);
+  }
+  const byRole = ["template", "version", "specialty-note", "supplemental", "case", "reference"];
+  for (const role of byRole) {
+    for (const note of pending2.filter((item) => item.role === role)) {
+      const { entry, raw, frontmatter: fm, scan, links, bodyHash, metadataHash } = note;
+      const path = entry.path;
+      const sourceId = role === "version" ? "" : sourceIdOf(fm.cst_id);
+      const title = nameOf(path);
+      const attachments = links.map(({ entry: entry2, start, end, target, syntax, embedded }) => ({ start, end, target, syntax, embedded, status: "resolved", assetId: imageAt.get(entry2.path) }));
+      const fingerprint = await digest({ bodyHash, metadataHash, assets: attachments.map(({ assetId }) => assetId) });
+      const documentId = await entity("document", path, sourceId, fingerprint);
+      const documentPath = `content/${documentId}.md`;
+      records.documents.push({
+        id: documentId,
+        path: documentPath,
+        title,
+        sourcePath: path,
+        kind: role,
+        fingerprint,
+        sha256: raw.hash,
+        offsetUnit: "utf16",
+        preamble: scan.preamble,
+        sections: scan.sections,
+        fences: scan.fences,
+        attachments,
+        ...reviewStatus.has(path) ? { reviewStatus: reviewStatus.get(path) } : {}
+      });
+      files.set(documentPath, raw.bytes);
+      if (role === "specialty-note") {
+        specialtyAt.get(parent3(path)).documentIds.push(documentId);
+      } else if (role === "template") {
+        const revision = latest.get(path);
+        let currentVersion = null;
+        if (revision) {
+          if (revisionHashes.get(revision.path) === raw.hash) currentVersion = `v${revision.n}`;
+          else warn("template-version-stale", path, "The current template differs from its latest saved revision. Its current version is unknown.");
+        }
+        const semantic = await digest({ title, fingerprint });
+        const id2 = await entity("template", path, sourceId, semantic);
+        const template = { id: id2, sourceId, title, documentId, currentVersion, revisions: [], fingerprint: semantic };
+        templateAt.set(path, template);
+        records.templates.push(template);
+      } else if (role === "version") {
+        const template = templateAt.get(revisionOwner.get(path));
+        template.revisions.push({ version: `v${templateRevisionNumber(leaf2(path))}`, documentId });
+      } else if (role === "case") {
+        const surgeon = surgeonAt.get(parent3(path));
+        const specialty = specialtyAt.get(parent3(parent3(path)));
+        if (fm.specialty && fm.specialty !== specialty.name || fm.surgeon && plugin.surgeonKey(specialty.name, fm.surgeon) !== plugin.surgeonKey(specialty.name, surgeon.name) || fm.surgeon_id && surgeon.sourceId && fm.surgeon_id !== surgeon.sourceId) {
+          stop(`Case metadata disagrees with the managed location of "${path}". Review its CST Notes identity before exporting.`, path, "case-mismatch");
+        }
+        const created = creationTemplateMetadata(fm);
+        const currentName = textOf(fm.template) || created.name;
+        let template;
+        if (currentName === "Example") template = templateAt.get(scope.example);
+        else if (currentName && !/[\\/]/.test(currentName)) {
+          const relative = /^Spine-(Cervical|Lumbar|Thoracic)$/.test(currentName) ? "Spine/" + currentName.slice(6) : currentName.endsWith("-Default") ? "_Default" : currentName;
+          template = templateAt.get(`${scope.templates}/${relative}.md`);
+        }
+        const createdTemplate = created.name ? created : null;
+        const currentTemplate = currentName ? {
+          name: currentName,
+          version: template?.currentVersion ?? null,
+          templateId: template?.id ?? null,
+          recordedVersion: typeof fm.template_version === "number" ? String(fm.template_version) : textOf(fm.template_version)
+        } : null;
+        const semantic = await digest({ title, specialtyId: specialty.id, surgeonId: surgeon.id, fingerprint, createdTemplate });
+        const id2 = await entity("case", path, sourceId, semantic);
+        const record = {
+          id: id2,
+          sourceId,
+          title,
+          specialtyId: specialty.id,
+          surgeonId: surgeon.id,
+          documentId,
+          createdTemplate,
+          currentTemplate,
+          fingerprint: semantic
+        };
+        records.cases.push(record);
+        caseAt.set(path, record);
+      } else if (role === "reference") {
+        const category = textOf(fm.reference_type) || path.slice(scope.references.length + 1).split("/").slice(0, -1).join("/");
+        const aliases = strings(fm.aliases);
+        const semantic = await digest({ title, category, fingerprint });
+        const id2 = await entity("reference", path, sourceId, semantic);
+        records.references.push({ id: id2, sourceId, title, category, aliases, documentId, fingerprint: semantic });
+      }
+    }
+  }
+  for (const template of records.templates) {
+    template.revisions.sort((a, b) => Number(a.version.slice(1)) - Number(b.version.slice(1)));
+  }
+  const hidden = new Set(resourceIndex?.hidden);
+  const catalog = [...resourceIndex?.catalog ?? []].sort((a, b) => ordered(a.key, b.key));
+  if (catalog.length > MAX_ENTRIES2) stop("The resource catalog exceeds the 10,000-entry limit.", scope.resources, "entry-limit");
+  const resourceKeys = /* @__PURE__ */ new Set();
+  for (const entry of catalog) {
+    if (resourceKeys.has(entry.key)) stop("Resolve duplicate resource catalog identities before exporting.", scope.resources, "duplicate-resource");
+    resourceKeys.add(entry.key);
+    const fields = { key: entry.key, kind: entry.kind, label: entry.label, section: entry.section, hidden: hidden.has(entry.key) };
+    const fingerprint = await digest(fields);
+    const sourceId = await digest(entry.key);
+    const key4 = scope.resources + "#" + sourceId;
+    const id2 = await entity("resource", key4, sourceId, fingerprint);
+    const sources2 = [];
+    for (const source of entry.sources) {
+      const record = caseAt.get(source.path);
+      if (record && (source.noteId === "id:" + record.sourceId || source.noteId === "path:" + source.path)) {
+        sources2.push({ caseId: record.id, section: source.section, raw: source.raw, quantity: source.quantity });
+      } else {
+        warn("unresolved-resource-source", scope.resources, "A resource source could not be matched to an exported case.");
+      }
+    }
+    records.resources.push({ id: id2, sourceId, ...fields, sources: sources2, fingerprint });
+  }
+  const resourceAliases = resourceIndex?.aliases ?? [];
+  const packageCount = files.size + Object.keys(records).length + 2;
+  const payloadBytes = [...files.values()].reduce((total, bytes2) => total + bytes2.byteLength, 0);
+  let metadataSize = 0;
+  for (const value of Object.values(records)) {
+    const size = encode2(canonicalJson(value)).byteLength;
+    if (size > MAX_ENTRY) stop("A library record list exceeds 12 MiB. Reduce the managed library before exporting.", "", "entry-limit");
+    metadataSize += size;
+  }
+  const sourceSize = encode2(canonicalJson({ gloveConfig, resourceAliases })).byteLength;
+  const overhead = sourceSize + 4096 + packageCount * 512;
+  if (packageCount > MAX_ENTRIES2 || sourceSize + 4096 + packageCount * 256 > MAX_ENTRY || payloadBytes + metadataSize + overhead > MAX_TOTAL) {
+    stop("The library package may exceed the 10,000-entry or 64 MiB limit. Reduce the managed library before exporting.", "", "size-limit");
+  }
+  function assertInventory() {
+    if (canonicalJson(roots()) !== scopeKey || canonicalJson(gloveSettings()) !== configKey) changed2(scope.content);
+    const current = inventory();
+    if (current.size !== before.size) changed2(scope.content);
+    for (const [path, previous] of before) {
+      const entry = current.get(path);
+      if (!entry || entry.item !== previous.item || entry.role !== previous.role || entry.stamp !== previous.stamp) changed2(path);
+    }
+    for (const [path, entry] of externalLookups) {
+      if (entry) assertItem(entry);
+      else if (lookup(path)) changed2(path);
+    }
+  }
+  async function assertCurrent() {
+    active();
+    assertInventory();
+    for (const { entry, hash, binary } of readSet.values()) {
+      if ((await read(entry, binary)).hash !== hash) changed2(entry.path);
+    }
+    assertInventory();
+  }
+  await assertCurrent();
+  return { records, files, gloveConfig, resourceAliases, assertCurrent };
+}
+
+// src/library-identity.mjs
+var header = "# CST Notes portability identity\n\nThis export-owned record preserves library identity across exports. Keep it with your vault backups.\n\n```cst-portability-identity\n";
+var footer = "\n```\n";
+var version = 1;
+var uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+var safeId2 = /^[a-z][a-z0-9-]{0,95}$/;
+var keyOf = (kind, key4) => JSON.stringify([kind, key4]);
+function encodeIdentity(ledger) {
+  return header + canonicalJson(ledger) + footer;
+}
+function decodeIdentity(text) {
+  const normalized = text.replace(/\r\n/g, "\n");
+  if (!normalized.startsWith(header) || !normalized.endsWith(footer) || normalized.length > 8 * 1024 * 1024) {
+    throw new Error("The portability identity record is damaged. Restore the previous record before exporting.");
+  }
+  const ledger = JSON.parse(normalized.slice(header.length, -footer.length));
+  if (ledger.version !== version || !uuid.test(ledger.libraryId) || !Array.isArray(ledger.entries) || ledger.entries.length > 24e3) {
+    throw new Error("Unsupported portability identity record. Restore the previous record before exporting.");
+  }
+  const paths = /* @__PURE__ */ new Set();
+  const ids = /* @__PURE__ */ new Map();
+  for (const entry of ledger.entries) {
+    if (!entry || typeof entry.kind !== "string" || !/^[a-z][a-z-]{0,31}$/.test(entry.kind) || typeof entry.key !== "string" || !entry.key || entry.key.length > 1024 || typeof entry.sourceId !== "string" || entry.sourceId.length > 512 || typeof entry.evidence !== "string" || entry.evidence.length > 512 || typeof entry.id !== "string" || !safeId2.test(entry.id) || paths.has(keyOf(entry.kind, entry.key))) {
+      throw new Error("The portability identity record contains an invalid or duplicate mapping.");
+    }
+    const previous = ids.get(entry.id);
+    if (previous && (previous.kind !== entry.kind || !entry.sourceId || previous.sourceId !== entry.sourceId)) {
+      throw new Error("The portability identity record has conflicting identities.");
+    }
+    paths.add(keyOf(entry.kind, entry.key));
+    ids.set(entry.id, entry);
+  }
+  return ledger;
+}
+var IdentityReview = class extends Error {
+  constructor(kind, key4, candidates) {
+    super("Review the export identity for " + key4 + ".");
+    this.kind = kind;
+    this.key = key4;
+    this.candidates = candidates;
+  }
+};
+function createIdentityDraft(ledger, { exists, renames = /* @__PURE__ */ new Map(), choices = /* @__PURE__ */ new Map() }) {
+  const entries = new Map(ledger.entries.map((entry) => [keyOf(entry.kind, entry.key), { ...entry }]));
+  const previous = [...entries.values()];
+  const used = /* @__PURE__ */ new Set();
+  async function identify(kind, key4, sourceId = "", evidence = "") {
+    if (!/^[a-z][a-z-]{0,31}$/.test(kind) || typeof key4 !== "string" || !key4 || key4.length > 1024 || typeof sourceId !== "string" || sourceId.length > 512 || typeof evidence !== "string" || evidence.length > 512) {
+      throw new Error("Invalid source identity for " + key4 + ".");
+    }
+    const slot = keyOf(kind, key4);
+    const exact = entries.get(slot);
+    const compatible = (entry) => !sourceId || !entry.sourceId || sourceId === entry.sourceId;
+    let match = exact && compatible(exact) ? exact : null;
+    if (!match && sourceId) {
+      match = previous.find((entry) => entry.kind === kind && entry.sourceId === sourceId) || null;
+    }
+    if (!match) {
+      const original = renames.get(key4);
+      const renamed = original && entries.get(keyOf(kind, original));
+      if (renamed && compatible(renamed) && !exists(renamed.key)) match = renamed;
+    }
+    if (!match) {
+      const candidates = previous.filter((entry) => entry.kind === kind && !entry.sourceId && !used.has(entry.id) && !exists(entry.key) && entries.has(keyOf(kind, entry.key)));
+      const choice = choices.get(slot);
+      if (candidates.length && choice === void 0) throw new IdentityReview(kind, key4, candidates);
+      if (choice && choice !== "new") {
+        match = candidates.find((entry) => entry.id === choice);
+        if (!match) throw new IdentityReview(kind, key4, candidates);
+      }
+    }
+    const stable = match?.id || kind + "-" + (sourceId ? await sha256(new TextEncoder().encode(canonicalJson([ledger.libraryId, kind, sourceId]))) : globalThis.crypto.randomUUID());
+    if (match && match.key !== key4 && !exists(match.key)) entries.delete(keyOf(kind, match.key));
+    entries.set(slot, { kind, key: key4, id: stable, sourceId: sourceId || match?.sourceId || "", evidence });
+    used.add(stable);
+    return stable;
+  }
+  return {
+    identify,
+    ledger() {
+      const sorted = [...entries].sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0).map(([, value]) => value);
+      return { version, libraryId: ledger.libraryId, entries: sorted };
+    }
+  };
+}
+function identityChoiceKey(kind, key4) {
+  return keyOf(kind, key4);
+}
+function newIdentity() {
+  return { version, libraryId: globalThis.crypto.randomUUID(), entries: [] };
+}
+
+// src/library-portability.mjs
+var identityRelativePath = "_Data/Portability Identity.md";
+var inside = (path, root) => typeof path === "string" && !!root && (path === root || path.startsWith(root + "/"));
+var editorText = (text) => text.replace(/\r\n/g, "\n");
+var sizeText = (bytes2) => bytes2 < 1024 * 1024 ? Math.ceil(bytes2 / 1024) + " KiB" : (bytes2 / (1024 * 1024)).toFixed(1) + " MiB";
+function createLibraryPortability(plugin, { TFile: TFile2, TFolder: TFolder2 }) {
+  const vault = plugin.app.vault;
+  const lookup = (path) => vault.getAbstractFileByPath(path);
+  const renames = /* @__PURE__ */ new Map();
+  let preparing = false;
+  function scoped(path) {
+    return inside(path, plugin.contentRoot) || inside(path, plugin.p());
+  }
+  function observeRename(item, previousPath) {
+    if (!scoped(previousPath) || !scoped(item?.path)) return;
+    const prior = renames.get(previousPath);
+    renames.delete(previousPath);
+    if (renames.size < 24e3) {
+      renames.set(item.path, { item, from: prior?.item === item ? prior.from : previousPath });
+    }
+    if (item instanceof TFolder2) {
+      for (const child of item.children) {
+        observeRename(child, previousPath + "/" + child.name);
+      }
+    }
+  }
+  async function assertNoUnsaved() {
+    if (plugin.unloading || plugin.featureMutationActive || plugin.settings.resetNeedsReview) {
+      throw new Error("Wait for the current CST Notes operation to finish before exporting.");
+    }
+    for (const leaf3 of plugin.app.workspace.getLeavesOfType?.("markdown") || []) {
+      const view = leaf3.view;
+      const file = view?.file;
+      const path = file?.path;
+      if (!path || !scoped(path) || !view.editor?.getValue) continue;
+      const saved = await vault.read(file);
+      if (leaf3.view !== view || view.file !== file || lookup(path) !== file || editorText(view.editor.getValue()) !== editorText(saved)) {
+        throw new Error("Save or close the unsaved editor before exporting: " + path);
+      }
+    }
+  }
+  async function readIdentity(allowNew) {
+    const path = plugin.p(identityRelativePath);
+    const file = lookup(path);
+    if (file && !(file instanceof TFile2)) throw new Error("The portability identity path is occupied.");
+    if (!file) {
+      if (!allowNew) throw new Error("Restore the existing portability identity record, or confirm this is your first library export.");
+      return { path, file: null, text: "", ledger: newIdentity() };
+    }
+    if (file.stat?.size > 8 * 1024 * 1024) throw new Error("The portability identity record exceeds the supported size.");
+    const text = await vault.read(file);
+    if (lookup(path) !== file || file.path !== path) throw new Error("The portability identity changed during review.");
+    return { path, file, text, ledger: decodeIdentity(text) };
+  }
+  async function commitIdentity(basis, ledger) {
+    const { path, file, text } = basis;
+    if (path !== plugin.p(identityRelativePath) || (lookup(path) || null) !== file) {
+      throw new Error("The portability identity changed. Review the library again.");
+    }
+    const next = encodeIdentity(ledger);
+    decodeIdentity(next);
+    if (next === text) {
+      if (await vault.read(file) !== text || lookup(path) !== file) throw new Error("The portability identity changed. Review again.");
+      return;
+    }
+    const identity = file || await vault.create(path, next);
+    if (file) {
+      await vault.process(file, (current) => {
+        if (current !== text || lookup(path) !== file || file.path !== path) {
+          throw new Error("The portability identity changed. Review the library again.");
+        }
+        return next;
+      });
+    }
+    if (lookup(path) !== identity || await vault.read(identity) !== next || identity.path !== path) {
+      throw new Error("The saved portability identity could not be verified.");
+    }
+  }
+  async function review({ allowNew, signal, choices, progress }, deps) {
+    await assertNoUnsaved();
+    signal.throwIfAborted();
+    const basis = await readIdentity(allowNew);
+    const observed = new Map([...renames].filter(([path, move]) => lookup(path) === move.item).map(([path, move]) => [path, move.from]));
+    const draft = createIdentityDraft(basis.ledger, { exists: (path) => !!lookup(path), renames: observed, choices });
+    const snapshot = await collectLibrarySnapshot(plugin, deps, { identify: draft.identify, signal, progress });
+    signal.throwIfAborted();
+    await assertNoUnsaved();
+    return { snapshot, basis, ledger: draft.ledger(), observed };
+  }
+  async function prepare(plan, signal, assertActive = () => signal.throwIfAborted()) {
+    if (preparing) throw new Error("Another library export is being prepared.");
+    preparing = true;
+    try {
+      signal.throwIfAborted();
+      await assertNoUnsaved();
+      const createdAt = (/* @__PURE__ */ new Date()).toISOString();
+      const packageId = globalThis.crypto.randomUUID();
+      const packageData = await writeLibraryPackage(plan.snapshot, {
+        packageId,
+        createdAt,
+        libraryId: plan.ledger.libraryId,
+        signal,
+        source: { application: "CST Notes", version: plugin.manifest.version, schemaVersion: plugin.settings.schemaVersion || 3 }
+      });
+      await validateLibraryPackage(packageData.bytes);
+      await assertNoUnsaved();
+      await plan.snapshot.assertCurrent();
+      assertActive();
+      await commitIdentity(plan.basis, plan.ledger);
+      for (const { key: key4 } of plan.ledger.entries) {
+        const move = renames.get(key4);
+        if (move && plan.observed?.get(key4) === move.from && lookup(key4) === move.item) renames.delete(key4);
+      }
+      signal.throwIfAborted();
+      return {
+        ...packageData,
+        name: "CST Notes Library " + createdAt.slice(0, 10) + " " + packageId + ".cstpack"
+      };
+    } finally {
+      preparing = false;
+    }
+  }
+  async function saveToVault({ bytes: bytes2, name }) {
+    if (plugin.unloading) throw new Error("CST Notes is unloading. Reopen Data Portability to save the package.");
+    const partial = name + ".partial";
+    if (lookup(name) || lookup(partial) || scoped(name) || scoped(partial)) {
+      throw new Error("The export destination is occupied or overlaps a CST Notes data root.");
+    }
+    const expected = await sha256(bytes2);
+    if (lookup(name) || lookup(partial)) throw new Error("The export destination is occupied.");
+    try {
+      const file = await vault.createBinary(partial, bytes2.slice().buffer);
+      if (lookup(partial) !== file || await sha256(new Uint8Array(await vault.readBinary(file))) !== expected) {
+        throw new Error("The written bytes did not match the validated package.");
+      }
+      await plugin.renameVaultItem(file, name, partial);
+      if (lookup(name) !== file) throw new Error("The completed export could not be verified at its destination.");
+      const completedHash = await sha256(new Uint8Array(await vault.readBinary(file)));
+      if (lookup(name) !== file || file.path !== name) throw new Error("The export destination changed during verification.");
+      if (completedHash !== expected) {
+        await plugin.renameVaultItem(file, partial, name);
+        throw new Error("The completed export changed during verification and was moved back to its staged name.");
+      }
+    } catch (error) {
+      throw new Error(error.message + " Check the export destination for the staged file.");
+    }
+    return name;
+  }
+  return { observeRename, review, prepare, saveToVault, hasIdentity: () => !!lookup(plugin.p(identityRelativePath)) };
+}
+function installLibraryPortability(plugin, deps) {
+  const service = createLibraryPortability(plugin, deps);
+  plugin.registerEvent(plugin.app.vault.on("rename", service.observeRename));
+  const views = /* @__PURE__ */ new WeakMap();
+  plugin.renderLibraryPortability = (hostEl) => {
+    views.get(hostEl)?.abort();
+    hostEl.empty();
+    const el = hostEl.createDiv({ cls: "cst-library-portability" });
+    el.createEl("h2", { text: "Export / Data Portability" });
+    el.createEl("p", { text: "Export library for PeriSlate as one offline .cstpack file. Includes active cases, specialties, surgeon preferences, templates, references, and supported assets. Recovery archives and unrelated vault files are outside this export." });
+    el.createEl("p", { text: "The package is unencrypted. Review your library for patient identifiers and material you are not authorized to share before exporting." });
+    const consentLabel = el.createEl("label");
+    const consent = consentLabel.createEl("input", { attr: { type: "checkbox" } });
+    consentLabel.createSpan({ text: " I have reviewed the library and am authorized to export it." });
+    let newIdentityBox;
+    if (!service.hasIdentity()) {
+      const identityLabel = el.createEl("label", { cls: "cst-portability-identity" });
+      newIdentityBox = identityLabel.createEl("input", { attr: { type: "checkbox" } });
+      identityLabel.createSpan({ text: " This is my first library export. Create an export identity record. If you exported before, restore the existing record instead." });
+    }
+    const actions = el.createDiv({ cls: "cst-admin-action-grid" });
+    const review = actions.createEl("button", { text: "Review library", attr: { type: "button" } });
+    const cancel = actions.createEl("button", { text: "Cancel preparation", attr: { type: "button" } });
+    cancel.disabled = true;
+    const status = el.createEl("p", { attr: { role: "status", "aria-live": "polite" } });
+    const result = el.createDiv();
+    const choices = /* @__PURE__ */ new Map();
+    let operation;
+    function button(parent4, label, handler) {
+      const control = parent4.createEl("button", { text: label, attr: { type: "button" } });
+      control.onclick = handler;
+      return control;
+    }
+    function canExport() {
+      if (!consent.checked) throw new Error("Confirm you have reviewed the library before exporting.");
+    }
+    function showReport(report) {
+      const details = result.createEl("details");
+      details.createEl("summary", { text: "Export report" });
+      for (const [heading, messages] of Object.entries(report || {})) {
+        if (!Array.isArray(messages) || !messages.length) continue;
+        details.createEl("h4", { text: heading });
+        const list = details.createEl("ul");
+        for (const item of messages) {
+          list.createEl("li", { text: typeof item === "string" ? item : item.message || item.reason || JSON.stringify(item) });
+        }
+      }
+    }
+    function showIdentityReview(error) {
+      result.createEl("p", { text: "Select the previous location if this is the same item, or identify it as a new item." });
+      const select = result.createEl("select", { attr: { "aria-label": "Previous export identity" } });
+      select.createEl("option", { text: "Choose an identity", attr: { value: "" } });
+      for (const candidate of error.candidates) {
+        select.createEl("option", { text: candidate.key, attr: { value: candidate.id } });
+      }
+      select.createEl("option", { text: "This is a new item", attr: { value: "new" } });
+      button(result, "Apply choice and review again", () => {
+        if (!select.value) return;
+        choices.set(identityChoiceKey(error.kind, error.key), select.value);
+        review.onclick();
+      });
+    }
+    async function run(task) {
+      if (operation) return;
+      result.empty();
+      const controller = new AbortController();
+      operation = controller;
+      views.set(hostEl, controller);
+      review.disabled = true;
+      cancel.disabled = false;
+      const live = () => {
+        if (status.isConnected === false || plugin.unloading) controller.abort();
+        controller.signal.throwIfAborted();
+        canExport();
+      };
+      try {
+        canExport();
+        live();
+        await task(controller.signal, live);
+      } catch (error) {
+        status.setText(controller.signal.aborted ? "Export cancelled." : error.message);
+        if (!controller.signal.aborted) {
+          if (error instanceof IdentityReview) showIdentityReview(error);
+          if (error.report) showReport(error.report);
+        }
+      } finally {
+        operation = null;
+        review.disabled = false;
+        cancel.disabled = true;
+      }
+    }
+    function showSave(artifact) {
+      const doc = el.ownerDocument || document;
+      const host = doc.defaultView || globalThis;
+      const file = new host.File([artifact.bytes], artifact.name, { type: "application/zip" });
+      status.setText("Package validated. " + sizeText(file.size) + " ready to save or share.");
+      function download(name) {
+        try {
+          canExport();
+          const href = host.URL.createObjectURL(file);
+          try {
+            const anchor = doc.createElement("a");
+            anchor.href = href;
+            anchor.download = name;
+            anchor.click();
+            status.setText("Save requested. Check your downloads or Files.");
+          } finally {
+            host.setTimeout(() => host.URL.revokeObjectURL(href), 6e4);
+          }
+        } catch (error) {
+          status.setText(error.message);
+        }
+      }
+      button(result, "Save file", () => download(artifact.name));
+      let canShare = false;
+      try {
+        canShare = typeof host.navigator?.share === "function" && (typeof host.navigator.canShare !== "function" || host.navigator.canShare({ files: [file] }));
+      } catch {
+      }
+      if (canShare) button(result, "Share file", async () => {
+        try {
+          canExport();
+          await host.navigator.share({ files: [file] });
+          status.setText("Package handed to the share sheet.");
+        } catch (error) {
+          status.setText(error.name === "AbortError" ? "Share cancelled." : "Sharing is unavailable. Use a save option.");
+        }
+      });
+      const local = result.createEl("details");
+      local.createEl("summary", { text: "Other save options" });
+      button(local, "Save with ZIP extension", () => download(artifact.name + ".zip"));
+      local.createEl("p", { text: "This writes a copy at the vault root. Your existing vault sync settings may transfer that copy to other devices." });
+      const save = button(local, "Save validated copy to vault", async () => {
+        save.disabled = true;
+        try {
+          canExport();
+          const name = await service.saveToVault(artifact);
+          status.setText("Saved in the vault: " + name);
+        } catch (error) {
+          status.setText(error.message);
+          save.disabled = false;
+        }
+      });
+    }
+    cancel.onclick = () => operation?.abort();
+    review.onclick = () => run(async (signal, live) => {
+      status.setText("Reading library…");
+      const plan = await service.review({ allowNew: !!newIdentityBox?.checked, choices, signal, progress: () => live() }, deps);
+      live();
+      const { records, files } = plan.snapshot;
+      const counts = ["specialties", "surgeons", "cases", "templates", "references", "assets"].map((key4) => records[key4].length + " " + key4).join(" · ");
+      const bytes2 = [...files.values()].reduce((total, value) => total + value.byteLength, 0) + new TextEncoder().encode(JSON.stringify(records)).byteLength;
+      status.setText(counts + " · Estimated " + sizeText(bytes2) + " plus ZIP and integrity metadata.");
+      showReport(records.report);
+      button(result, "Prepare export", () => run(async (signal2, live2) => {
+        status.setText("Building and validating package…");
+        const artifact = await service.prepare(plan, signal2, live2);
+        live2();
+        showSave(artifact);
+      }));
+    });
+  };
 }
 
 // src/feature-workspace.mjs
@@ -5453,6 +7901,7 @@ function installFeatures(plugin, deps) {
   installResourceFeatures(plugin, supplied);
   installAttachmentFeatures(plugin, supplied);
   installLauncherFeatures(plugin);
+  installLibraryPortability(plugin, supplied);
   plugin.renderImportWorkspace = (el) => {
     el.empty();
     el.createEl("h2", { text: "Import" });
@@ -5467,6 +7916,7 @@ function installFeatures(plugin, deps) {
   };
   installAdminWorkspace(plugin, { ...supplied, adminPages: {
     import: (el) => plugin.renderImportWorkspace(el),
+    portability: (el) => plugin.renderLibraryPortability(el),
     resources: (el) => plugin.renderResourceAdmin(el),
     images: (el) => plugin.renderImageAdmin(el)
   } });
@@ -5487,9 +7937,9 @@ function installFeatures(plugin, deps) {
   for (const [, processor, renderer] of Object.values(FEATURE_PAGES)) {
     const render = plugin[renderer];
     plugin[renderer] = async function(el, ...args) {
-      let parent3 = el.parentElement;
-      while (parent3 && !featurePageHosts.has(parent3)) parent3 = parent3.parentElement;
-      const nested = !!parent3;
+      let parent4 = el.parentElement;
+      while (parent4 && !featurePageHosts.has(parent4)) parent4 = parent4.parentElement;
+      const nested = !!parent4;
       featurePageHosts.add(el);
       try {
         return await render.call(this, el, ...args);
@@ -5778,7 +8228,7 @@ ${EXAMPLE_TEMPLATE_BODY}`);
     if (!(template instanceof TFile2) || !(await vault.read(template)).startsWith(templateMarker(owned.token) + "\n")) {
       throw new Error("The Example template is not owned by this onboarding session. It was preserved.");
     }
-    const version = await plugin.ensureTemplateVersion(template, false, templatePath);
+    const version2 = await plugin.ensureTemplateVersion(template, false, templatePath);
     assertFolder();
     let file = vault.getAbstractFileByPath(casePath);
     if (!file) {
@@ -5795,9 +8245,9 @@ surgeon_id: ${yamlString2(owned.surgeonId)}
 graph_parent: ${yamlString2(graph)}
 schema_version: 3
 template: Example
-template_version: v${version}
+template_version: v${version2}
 cst_created_template: Example
-cst_created_template_version: v${version}
+cst_created_template_version: v${version2}
 template_initialized: true
 created: ${yamlString2(created)}
 last_verified: ${yamlString2(created)}
@@ -6231,685 +8681,6 @@ function openOnboardingCompletion(plugin, deps) {
   modal.open();
 }
 
-// src/glove-settings.mjs
-var glove_settings_exports = {};
-__export(glove_settings_exports, {
-  DEFAULT_GLOVE_LABELS: () => DEFAULT_GLOVE_LABELS,
-  DEFAULT_GLOVE_SIZES: () => DEFAULT_GLOVE_SIZES,
-  DEFAULT_GLOVE_TYPES: () => DEFAULT_GLOVE_TYPES,
-  GloveValidationError: () => GloveValidationError,
-  createGloveSettingsDraft: () => createGloveSettingsDraft,
-  gloveHelpText: () => gloveHelpText,
-  gloveLegend: () => gloveLegend,
-  initializeGloveSettings: () => initializeGloveSettings,
-  installGloveSettingsRuntime: () => installGloveSettingsRuntime,
-  migrateGloveRegistry: () => migrateGloveRegistry,
-  migrateGloveValue: () => migrateGloveValue,
-  normalizeGloveConfig: () => normalizeGloveConfig,
-  normalizeGloveLabels: () => normalizeGloveLabels,
-  normalizeGloveSizes: () => normalizeGloveSizes,
-  normalizeGloveTypes: () => normalizeGloveTypes,
-  normalizeGloves: () => normalizeGloves,
-  parseGloves: () => parseGloves,
-  prepareGloveSettingsSave: () => prepareGloveSettingsSave,
-  renderGloveSettingsEditor: () => renderGloveSettingsEditor
-});
-var DEFAULT_GLOVE_SIZES = Object.freeze(["5.5", "6", "6.5", "7", "7.5", "8", "8.5", "9", "9.5"]);
-var DEFAULT_GLOVE_LABELS = Object.freeze({ O: "Ortho", B: "Blue", W: "White" });
-var GOWNS = Object.freeze(["XL", "XL-Long", "2X", "2X-Long", "Unknown"]);
-var LEGACY_ALIASES = Object.freeze({ O: ["ortho", "othro", "orthopedic"], B: ["blue"], W: ["white"] });
-var DEFAULT_GLOVE_TYPES = Object.freeze(Object.entries(DEFAULT_GLOVE_LABELS).map(([code, label]) => Object.freeze({ code, label, aliases: Object.freeze([...LEGACY_ALIASES[code]]) })));
-var own2 = (object2, key4) => Object.prototype.hasOwnProperty.call(object2, key4);
-var equal2 = (left, right) => JSON.stringify(left) === JSON.stringify(right);
-var phraseKey = (value) => value.trim().replace(/\s+/g, " ").normalize("NFKC").toUpperCase().toLowerCase();
-var escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-var isObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
-var reserved = /* @__PURE__ */ new Set(["x", "unknown", "two", "three", "four"]);
-var GloveValidationError = class extends Error {
-  constructor(message, input, field = "gloves") {
-    super(message);
-    this.name = "GloveValidationError";
-    this.input = input;
-    this.field = field;
-  }
-};
-function invalid(message, input, field) {
-  throw new GloveValidationError(message, input, field);
-}
-function decimalSize(value) {
-  if (typeof value !== "string" && typeof value !== "number") invalid("Glove sizes must be positive decimal numbers.", value, "gloveSizes");
-  const raw = String(value).trim();
-  if (!/^(?:\d+(?:\.\d+)?|\.\d+)$/.test(raw)) invalid(`Invalid glove size: "${raw}". Use a positive decimal number.`, value, "gloveSizes");
-  const [whole, fraction = ""] = raw.split(".");
-  const integer = whole.replace(/^0+/, "") || "0";
-  const decimal = fraction.replace(/0+$/, "");
-  const normalized = integer + (decimal ? `.${decimal}` : "");
-  if (!Number.isFinite(Number(normalized)) || Number(normalized) <= 0 || Number(normalized) > Number.MAX_SAFE_INTEGER) {
-    invalid(`Invalid glove size: "${raw}". Use a finite positive decimal number.`, value, "gloveSizes");
-  }
-  return normalized;
-}
-function compareDecimals(left, right) {
-  const [li, lf = ""] = left.split("."), [ri, rf = ""] = right.split(".");
-  if (li.length !== ri.length) return li.length - ri.length;
-  if (li !== ri) return li < ri ? -1 : 1;
-  const width = Math.max(lf.length, rf.length);
-  const lp = lf.padEnd(width, "0"), rp = rf.padEnd(width, "0");
-  return lp === rp ? 0 : lp < rp ? -1 : 1;
-}
-function normalizeGloveSizes(input = DEFAULT_GLOVE_SIZES) {
-  let values;
-  if (Array.isArray(input)) values = [...input];
-  else if (typeof input === "string") {
-    const trimmed = input.trim();
-    if (!trimmed || /(?:^|,)\s*(?:,|$)/.test(trimmed)) invalid("Enter glove sizes separated by commas or spaces; a size is missing.", input, "gloveSizes");
-    values = trimmed.split(/[\s,]+/);
-  } else invalid("Glove sizes must be a list of decimal numbers.", input, "gloveSizes");
-  if (!values.length) invalid("Enter at least one glove size.", input, "gloveSizes");
-  try {
-    return [...new Set(values.map(decimalSize))].sort(compareDecimals);
-  } catch (error) {
-    if (error instanceof GloveValidationError) error.input = input;
-    throw error;
-  }
-}
-function typeCode(value) {
-  if (typeof value !== "string" || !/^[a-z]+$/i.test(value.trim()) || reserved.has(value.trim().toLowerCase())) {
-    invalid("Glove type codes must contain letters only; X, Unknown, Two, Three and Four are reserved.", value, "gloveTypes");
-  }
-  return value.trim().toUpperCase();
-}
-function inputPhrase(value) {
-  if (typeof value !== "string" || !value.trim() || /[\u0000-\u001f\u007f,;/+&|#]/.test(value) || /^[\d.]/.test(value.trim()) || /\d/.test(value) || reserved.has(phraseKey(value))) {
-    invalid("Glove labels and aliases must be nonempty text without numbers, list separators or reserved quantity words.", value, "gloveTypes");
-  }
-  return value.trim().replace(/\s+/g, " ");
-}
-function displayLabel(value) {
-  if (typeof value !== "string" || !value.trim() || /[\u0000-\u001f\u007f]/.test(value)) {
-    invalid("Enter a nonempty, single-line glove display label.", value, "gloveTypes");
-  }
-  return value.trim().replace(/\s+/g, " ");
-}
-function labelAliases(label) {
-  try {
-    return [inputPhrase(label)];
-  } catch (error) {
-    if (error instanceof GloveValidationError) return [];
-    throw error;
-  }
-}
-function uniqueAliases(values) {
-  const seen = /* @__PURE__ */ new Set();
-  return values.filter((value) => {
-    const key4 = phraseKey(value);
-    if (seen.has(key4)) return false;
-    seen.add(key4);
-    return true;
-  });
-}
-function makeTypeIndex(types) {
-  const index = /* @__PURE__ */ new Map();
-  for (const type of types) {
-    for (const phrase of [type.code, ...labelAliases(type.label), ...type.aliases]) {
-      const key4 = phraseKey(phrase);
-      const previous = index.get(key4);
-      if (previous && previous.code !== type.code) invalid(`Ambiguous glove code or label "${phrase}" belongs to both ${previous.code} and ${type.code}.`, phrase, "gloveTypes");
-      index.set(key4, { phrase, code: type.code });
-    }
-  }
-  for (const key4 of index.keys()) {
-    if (/x$/.test(key4) && (index.has(key4.slice(0, -1).trim()) || reserved.has(key4.slice(0, -1).trim()))) {
-      invalid(`Glove code or label "${index.get(key4).phrase}" is ambiguous with the quantity marker x.`, key4, "gloveTypes");
-    }
-    const suffix = /\s+(?:two|three|four|unknown)$/.exec(key4);
-    if (suffix && index.has(key4.slice(0, suffix.index))) {
-      invalid(`Glove label "${index.get(key4).phrase}" is ambiguous with another glove entry or quantity.`, key4, "gloveTypes");
-    }
-  }
-  return [...index.values()].sort((left, right) => right.phrase.length - left.phrase.length).map((entry) => ({
-    ...entry,
-    pattern: new RegExp(`^${escapeRegex(entry.phrase).replace(/ /g, "\\s+")}`, "iu")
-  }));
-}
-function normalizeGloveTypes(input = DEFAULT_GLOVE_TYPES) {
-  if (!Array.isArray(input)) invalid("Glove types must be a list of codes and display labels.", input, "gloveTypes");
-  const seen = /* @__PURE__ */ new Set();
-  const types = input.map((row) => {
-    if (!isObject(row)) invalid("Invalid glove type row.", row, "gloveTypes");
-    const code = typeCode(row.code), label = displayLabel(row.label);
-    if (seen.has(code)) invalid(`Duplicate glove type code: ${code}.`, row.code, "gloveTypes");
-    seen.add(code);
-    const aliases = row.aliases === void 0 ? LEGACY_ALIASES[code] || [] : row.aliases;
-    if (!Array.isArray(aliases)) invalid(`Aliases for ${code} must be a list.`, aliases, "gloveTypes");
-    return { code, label, aliases: uniqueAliases(aliases.map(inputPhrase)) };
-  });
-  makeTypeIndex(types);
-  return types;
-}
-function normalizeGloveConfig(settings = {}) {
-  if (!isObject(settings)) invalid("Invalid glove settings.", settings, "settings");
-  let types = settings.gloveTypes;
-  if (types === void 0) {
-    if (settings.gloveLabels !== void 0 && !isObject(settings.gloveLabels)) invalid("Invalid glove labels.", settings.gloveLabels, "gloveTypes");
-    const labels = { ...DEFAULT_GLOVE_LABELS, ...settings.gloveLabels };
-    types = Object.entries(labels).map(([code, label]) => ({ code, label: label || DEFAULT_GLOVE_LABELS[code] }));
-  }
-  const gloveTypes = normalizeGloveTypes(types);
-  return {
-    gloveSizes: normalizeGloveSizes(settings.gloveSizes),
-    gloveTypes,
-    gloveLabels: Object.fromEntries(gloveTypes.map(({ code, label }) => [code, label]))
-  };
-}
-function normalizeGloveLabels(labels) {
-  return normalizeGloveConfig(labels === void 0 ? {} : { gloveLabels: labels }).gloveLabels;
-}
-function parseDetailed(input, config) {
-  if (input !== void 0 && input !== null && typeof input !== "string") invalid("Gloves must be text.", input);
-  const raw = input ?? "";
-  if (!raw.trim()) return [{ unknown: true }];
-  const index = makeTypeIndex(config.gloveTypes), sizes = new Set(config.gloveSizes);
-  const entries = [];
-  let offset = 0;
-  const fail2 = () => invalid(`Could not normalize glove entry: "${raw}" (near "${raw.slice(offset)}").`, raw);
-  const skipSpace = () => {
-    offset += /^\s*/.exec(raw.slice(offset))[0].length;
-  };
-  while (offset < raw.length) {
-    offset += /^[\s,;/+&|]*/.exec(raw.slice(offset))[0].length;
-    if (offset === raw.length) break;
-    const unknown = /^unknown(?![\p{L}\p{M}_])/iu.exec(raw.slice(offset));
-    if (unknown) {
-      entries.push({ unknown: true });
-      offset += unknown[0].length;
-      continue;
-    }
-    const sizeMatch = /^#?\s*(?:\d+(?:\.\d+)?|\.\d+)/.exec(raw.slice(offset));
-    if (!sizeMatch) fail2();
-    let size;
-    try {
-      size = decimalSize(sizeMatch[0].replace(/^#?\s*/, ""));
-    } catch {
-      fail2();
-    }
-    if (!sizes.has(size)) fail2();
-    offset += sizeMatch[0].length;
-    skipSpace();
-    let code = "", typeStart = offset, typeEnd = offset;
-    for (const entry of index) {
-      const match = entry.pattern.exec(raw.slice(offset));
-      if (!match) continue;
-      const rest = raw.slice(offset + match[0].length);
-      if (/^[\p{L}\p{M}_]/u.test(rest) && !/^x\s*\d/i.test(rest)) continue;
-      code = entry.code;
-      offset += match[0].length;
-      typeEnd = offset;
-      break;
-    }
-    skipSpace();
-    let quantity = 1;
-    const count = /^x\s*(\d+)/i.exec(raw.slice(offset));
-    const word = /^(two|three|four)(?![\p{L}\p{M}\d_])/iu.exec(raw.slice(offset));
-    if (count) {
-      quantity = Number(count[1]);
-      offset += count[0].length;
-      if (!Number.isSafeInteger(quantity) || quantity < 1 || quantity > 99 || raw[offset] === ".") fail2();
-    } else if (word) {
-      quantity = { two: 2, three: 3, four: 4 }[word[1].toLowerCase()];
-      offset += word[0].length;
-    }
-    entries.push({ size, code, quantity, typeStart, typeEnd });
-    if (raw[offset] === ".") fail2();
-  }
-  if (!entries.length) fail2();
-  return entries;
-}
-function parseGloves(input, settings = {}) {
-  return parseDetailed(input, normalizeGloveConfig(settings)).map((entry) => entry.unknown ? { unknown: true } : { size: entry.size, code: entry.code, quantity: entry.quantity });
-}
-function normalizeGloves(input, settings = {}) {
-  return parseGloves(input, settings).map((entry) => entry.unknown ? "Unknown" : `${entry.size}${entry.code}${entry.quantity > 1 ? `x${entry.quantity}` : ""}`).join(" / ");
-}
-function gloveLegend(value, settings = {}) {
-  const config = normalizeGloveConfig(settings);
-  const used = new Set(parseDetailed(value, config).filter((entry) => !entry.unknown).map((entry) => entry.code));
-  return config.gloveTypes.filter((type) => used.has(type.code)).map((type) => `${type.code} = ${type.label}`).join(" · ");
-}
-function gloveHelpText(settings = {}) {
-  const config = normalizeGloveConfig(settings);
-  const example = `${config.gloveSizes[0]}${config.gloveTypes[0]?.code || ""}x2`;
-  const describe = (raw) => {
-    try {
-      return `"${raw}" → ${normalizeGloves(raw, config).replace(/x(\d+)/g, " x$1")}`;
-    } catch (error) {
-      if (error instanceof GloveValidationError) return "";
-      throw error;
-    }
-  };
-  const examples = ["8b8w", "8wx2"].map(describe).filter(Boolean);
-  if (!examples.length) examples.push(describe(example.toLowerCase()));
-  return {
-    legend: config.gloveTypes.map((type) => `${type.code} = ${type.label}`).join(" · "),
-    inputLegend: config.gloveTypes.map((type) => `${type.code.toLowerCase()} = ${type.label}`).join(" · "),
-    examples: `Examples: ${examples.join(" · ")}`,
-    sizes: config.gloveSizes.join(", "),
-    example,
-    description: "Enter size, optional type code, and optional x quantity (1–99). Use / between entries. Unknown is always available."
-  };
-}
-function createGloveSettingsDraft(settings = {}, { includeOrdinarySettings = false } = {}) {
-  const config = normalizeGloveConfig(settings);
-  return {
-    gloveSizes: config.gloveSizes.join(", "),
-    gloveTypes: config.gloveTypes.map((type) => ({ ...type, aliases: [...type.aliases], originalCode: type.code })),
-    ...includeOrdinarySettings ? { defaultGown: settings.defaultGown ?? "XL" } : {},
-    ...includeOrdinarySettings && settings.developerMode === true ? { verificationDebounceSeconds: String((settings.verificationDebounceMs ?? 45e3) / 1e3) } : {}
-  };
-}
-function validateOrdinaryValue(key4, value) {
-  if (key4 === "defaultGown" && GOWNS.includes(value)) return value;
-  if (key4 === "verificationDebounceMs" && Number.isSafeInteger(value) && value >= 5e3 && value <= 2147483647) return value;
-  invalid(key4 === "defaultGown" ? "Choose a supported default gown." : "Verification debounce must be at least 5 seconds and within the timer limit.", value, key4);
-}
-function ordinaryValue(settings, key4) {
-  return settings?.[key4] ?? (key4 === "defaultGown" ? "XL" : 45e3);
-}
-function ordinaryChanges(baseline, current, draft) {
-  const changes = {};
-  const set = (key4, value) => {
-    validateOrdinaryValue(key4, value);
-    const before = ordinaryValue(current, key4);
-    const merged = mergeField(ordinaryValue(baseline, key4), value, before, key4);
-    if (!equal2(merged, before)) changes[key4] = { before, value: merged };
-  };
-  if (own2(draft, "defaultGown")) set("defaultGown", draft.defaultGown);
-  if (own2(draft, "verificationDebounceSeconds")) {
-    const text = String(draft.verificationDebounceSeconds).trim();
-    if (!/^(?:\d+(?:\.\d+)?|\.\d+)$/.test(text)) invalid("Enter a valid verification debounce in seconds.", draft.verificationDebounceSeconds, "verificationDebounceMs");
-    const [seconds, rawFraction = ""] = text.split(".");
-    const fraction = rawFraction.replace(/0+$/, "");
-    if (fraction.length > 3) invalid("Verification debounce supports millisecond precision (three decimal places).", draft.verificationDebounceSeconds, "verificationDebounceMs");
-    const value = Number(seconds || "0") * 1e3 + Number(fraction.padEnd(3, "0"));
-    if (current?.developerMode !== true && value !== ordinaryValue(baseline, "verificationDebounceMs")) {
-      invalid("Developer mode is required to change verification debounce.", text, "verificationDebounceMs");
-    }
-    set("verificationDebounceMs", value);
-  }
-  return changes;
-}
-function resolveOrdinaryChanges(changes, current) {
-  const patch = {};
-  for (const [key4, change] of Object.entries(changes || {})) {
-    validateOrdinaryValue(key4, change.value);
-    patch[key4] = mergeField(change.before, change.value, ordinaryValue(current, key4), key4);
-  }
-  return patch;
-}
-function conflict2(field) {
-  invalid(`Glove ${field} changed in another window or device. Reload settings before saving.`, field, "conflict");
-}
-function mergeField(base, draft, current, field) {
-  if (equal2(base, draft)) return current;
-  if (!equal2(base, current) && !equal2(draft, current)) conflict2(field);
-  return draft;
-}
-function prepareGloveSettingsSave({ baselineSettings, currentSettings = baselineSettings, draft }) {
-  const base = normalizeGloveConfig(baselineSettings), current = normalizeGloveConfig(currentSettings);
-  if (!isObject(draft) || !Array.isArray(draft.gloveTypes)) invalid("Invalid glove settings draft.", draft, "settings");
-  const ordinary = ordinaryChanges(baselineSettings, currentSettings, draft);
-  const desiredSizes = normalizeGloveSizes(draft.gloveSizes);
-  const gloveSizes = mergeField(base.gloveSizes, desiredSizes, current.gloveSizes, "sizes");
-  const desired = draft.gloveTypes.map((row) => ({ ...normalizeGloveTypes([row])[0], originalCode: row.originalCode }));
-  const baselineRows = new Map(base.gloveTypes.map((row) => [row.code, row]));
-  const latestRows = new Map(current.gloveTypes.map((row) => [row.code, { ...row, aliases: [...row.aliases] }]));
-  const seen = /* @__PURE__ */ new Set(), renames = {};
-  for (const row of desired) {
-    if (row.originalCode == null) {
-      if (baselineRows.has(row.code) || latestRows.has(row.code)) conflict2(`type code ${row.code}`);
-      latestRows.set(row.code, { code: row.code, label: row.label, aliases: [...row.aliases] });
-      continue;
-    }
-    const original = row.originalCode;
-    if (!baselineRows.has(original) || seen.has(original)) invalid("Invalid or duplicate original glove type row.", original, "gloveTypes");
-    seen.add(original);
-    const before = baselineRows.get(original), latest = latestRows.get(original);
-    const requested = { code: row.code, label: row.label, aliases: row.aliases };
-    if (equal2(before, requested)) continue;
-    if (!latest) conflict2(`type ${original}`);
-    const merged = {
-      code: mergeField(before.code, row.code, latest.code, `code ${original}`),
-      label: mergeField(before.label, row.label, latest.label, `label ${original}`),
-      aliases: mergeField(before.aliases, row.aliases, latest.aliases, `aliases ${original}`)
-    };
-    if (merged.code !== original && (baselineRows.has(merged.code) || latestRows.has(merged.code))) {
-      invalid(`Code ${merged.code} already belongs to another glove type; choose an unused code.`, merged.code, "gloveTypes");
-    }
-    merged.aliases = uniqueAliases([
-      ...merged.aliases,
-      ...merged.code !== original ? [original] : [],
-      ...merged.label !== latest.label ? labelAliases(latest.label) : []
-    ]);
-    if (merged.code === original) latestRows.set(original, merged);
-    else {
-      const ordered = [...latestRows].map(([key4, value]) => key4 === original ? [merged.code, merged] : [key4, value]);
-      latestRows.clear();
-      for (const [key4, value] of ordered) latestRows.set(key4, value);
-    }
-    if (merged.code !== original) renames[original] = merged.code;
-  }
-  for (const before of base.gloveTypes) {
-    if (seen.has(before.code)) continue;
-    const latest = latestRows.get(before.code);
-    if (latest && !equal2(before, latest)) conflict2(`type ${before.code}`);
-    latestRows.delete(before.code);
-  }
-  const config = normalizeGloveConfig({ gloveSizes, gloveTypes: [...latestRows.values()] });
-  const settingsPatch = resolveOrdinaryChanges(ordinary, currentSettings);
-  if (!equal2(current.gloveSizes, config.gloveSizes)) settingsPatch.gloveSizes = config.gloveSizes;
-  if (!equal2(current.gloveTypes, config.gloveTypes)) {
-    settingsPatch.gloveTypes = config.gloveTypes;
-    settingsPatch.gloveLabels = config.gloveLabels;
-  }
-  const remaining = new Set(config.gloveTypes.map((type) => type.code));
-  const migrationRequired = Object.keys(renames).length > 0 || current.gloveSizes.some((size) => !config.gloveSizes.includes(size)) || current.gloveTypes.some((type) => !remaining.has(type.code) || type.aliases.some((alias) => !config.gloveTypes.find((row) => row.code === type.code)?.aliases.includes(alias)));
-  return { settingsPatch, ordinaryChanges: ordinary, config, previousConfig: current, renames, migrationRequired, changed: Object.keys(settingsPatch).length > 0 };
-}
-function migrationContext(plan) {
-  const previousConfig = normalizeGloveConfig(plan.previousConfig), config = normalizeGloveConfig(plan.config);
-  if (!isObject(plan.renames)) invalid("Invalid glove code migration map.", plan.renames, "migration");
-  const oldCodes = new Set(previousConfig.gloveTypes.map((type) => type.code));
-  const newCodes = new Set(config.gloveTypes.map((type) => type.code));
-  const targets = /* @__PURE__ */ new Set();
-  for (const [from, to] of Object.entries(plan.renames)) {
-    if (!oldCodes.has(from) || !newCodes.has(to) || targets.has(to) || from !== to && oldCodes.has(to)) {
-      invalid("Glove code migrations require distinct existing source codes and unused destination codes.", plan.renames, "migration");
-    }
-    targets.add(to);
-  }
-  return { previousConfig, config, renames: plan.renames, newCodes };
-}
-function migrateValue(value, context) {
-  const { previousConfig, config, renames, newCodes } = context;
-  let entries, parsedCurrent = false;
-  try {
-    entries = parseDetailed(value, previousConfig);
-  } catch (previousError) {
-    try {
-      entries = parseDetailed(value, { ...config, gloveSizes: [.../* @__PURE__ */ new Set([...previousConfig.gloveSizes, ...config.gloveSizes])] });
-      parsedCurrent = true;
-    } catch {
-      throw previousError;
-    }
-  }
-  const previousIndex = parsedCurrent ? makeTypeIndex(previousConfig.gloveTypes) : [];
-  let next = value;
-  for (const entry of [...entries].reverse()) {
-    if (entry.unknown) continue;
-    let sourceCode = entry.code;
-    if (parsedCurrent && entry.code) {
-      const spelling = value.slice(entry.typeStart, entry.typeEnd);
-      const previous = previousIndex.find((type) => type.pattern.exec(spelling)?.[0].length === spelling.length);
-      if (previous && own2(renames, previous.code)) sourceCode = previous.code;
-    }
-    const code = own2(renames, sourceCode) ? renames[sourceCode] : entry.code;
-    if (code && !newCodes.has(code)) invalid(`Glove type ${entry.code} is still used by a profile. Keep it or rename it before saving.`, value, "migration");
-    if (!config.gloveSizes.includes(entry.size)) invalid(`Glove size ${entry.size} is still used by a profile. Keep it before saving.`, value, "migration");
-    if (code !== sourceCode) next = next.slice(0, entry.typeStart) + code + next.slice(entry.typeEnd);
-  }
-  parseDetailed(next, config);
-  return next;
-}
-function migrateGloveValue(value, plan) {
-  return migrateValue(value, migrationContext(plan));
-}
-function migrateGloveRegistry(registry, plan) {
-  if (!isObject(registry) || !isObject(registry.surgeons)) invalid("Invalid surgeon registry; glove migration stopped.", registry, "registry");
-  const context = migrationContext(plan), changedKeys = [];
-  const surgeons = Object.fromEntries(Object.entries(registry.surgeons).map(([key4, record]) => {
-    if (!isObject(record)) invalid(`Invalid surgeon record: ${key4}.`, record, "registry");
-    if (!own2(record, "gloves")) return [key4, record];
-    let gloves;
-    try {
-      gloves = migrateValue(record.gloves, context);
-    } catch (error) {
-      error.recordKey = key4;
-      throw error;
-    }
-    if (gloves === record.gloves) return [key4, record];
-    changedKeys.push(key4);
-    return [key4, { ...record, gloves }];
-  }));
-  return { registry: changedKeys.length ? { ...registry, surgeons } : registry, changedKeys };
-}
-function bridgeConfig(plan) {
-  const renamed = new Set(Object.keys(plan.renames));
-  const retained = new Set(plan.config.gloveTypes.map((type) => type.code));
-  return normalizeGloveConfig({
-    gloveSizes: [...plan.previousConfig.gloveSizes, ...plan.config.gloveSizes],
-    gloveTypes: [...plan.config.gloveTypes, ...plan.previousConfig.gloveTypes.filter((type) => !renamed.has(type.code) && !retained.has(type.code))]
-  });
-}
-function initializeGloveSettings(plugin) {
-  try {
-    Object.assign(plugin.settings, normalizeGloveConfig(plugin.settings));
-    plugin.gloveSettingsError = "";
-  } catch (error) {
-    plugin.gloveSettingsError = error.message;
-  }
-}
-async function persistGlovePatch(plugin, patch) {
-  if (plugin.unloading) throw new Error("CST Notes is unloading. Retry the glove update after reopening it.");
-  const before = Object.fromEntries(Object.keys(patch).map((key4) => [key4, { present: own2(plugin.settings, key4), value: plugin.settings[key4] }]));
-  Object.assign(plugin.settings, patch);
-  try {
-    await plugin.saveSettings();
-  } catch (error) {
-    for (const [key4, previous] of Object.entries(before)) {
-      if (!equal2(plugin.settings[key4], patch[key4])) continue;
-      if (previous.present) plugin.settings[key4] = previous.value;
-      else delete plugin.settings[key4];
-    }
-    throw error;
-  }
-}
-function installGloveSettingsRuntime(plugin, { refresh = async () => {
-} } = {}) {
-  if (plugin.gloveSettingsRuntimeInstalled) return;
-  plugin.gloveSettingsRuntimeInstalled = true;
-  const mutate = plugin.mutateSurgeonRegistry.bind(plugin);
-  plugin.mutateSurgeonRegistry = (mutator, options) => mutate((registry) => {
-    const previous = new Map(Object.entries(registry.surgeons).map(([key4, record]) => [key4, record?.gloves]));
-    const result = mutator(registry);
-    for (const [key4, record] of Object.entries(registry.surgeons)) {
-      if (record && record.gloves !== previous.get(key4)) {
-        const config = plugin.settings.gloveMigration?.config || plugin.settings;
-        normalizeGloves(record.gloves, config);
-      }
-    }
-    return result;
-  }, options);
-  const reload = async () => {
-    if (plugin.unloading) throw new Error("CST Notes is unloading. Retry the glove update after reopening it.");
-    const saved = await plugin.loadData();
-    if (saved && typeof saved === "object") {
-      Object.assign(plugin.settings, saved);
-      for (const key4 of ["gloveTypes", "gloveSizes", "gloveLabels", "gloveMigration"]) {
-        if (!own2(saved, key4)) delete plugin.settings[key4];
-      }
-    }
-    initializeGloveSettings(plugin);
-  };
-  const refreshAfterSave = async () => {
-    try {
-      await refresh();
-    } catch (error) {
-      plugin.gloveDisplayRefreshError = error.message || String(error);
-    }
-  };
-  const finish = async (plan) => {
-    const state = await plugin.readSurgeonRegistry({ create: false });
-    if (state.invalid) throw new Error(`Glove settings stopped: ${state.error}`);
-    if (state.missing && plugin.settings.initialized) throw new Error("The surgeon registry is missing. Wait for Sync before retrying the glove update.");
-    if (!state.missing) {
-      await plugin.mutateSurgeonRegistry((registry) => {
-        if (plugin.unloading) throw new Error("CST Notes is unloading. Retry the glove update after reopening it.");
-        if (!equal2(plugin.settings.gloveMigration, plan)) conflict2("pending update");
-        const migrated = migrateGloveRegistry(registry, plan);
-        registry.surgeons = migrated.registry.surgeons;
-        return migrated.changedKeys;
-      }, { create: false });
-    }
-    await reload();
-    if (!equal2(plugin.settings.gloveMigration, plan) || !equal2(normalizeGloveConfig(plugin.settings), bridgeConfig(plan))) conflict2("pending update");
-    await persistGlovePatch(plugin, { ...plan.config, ...resolveOrdinaryChanges(plan.ordinaryChanges, plugin.settings), gloveMigration: null });
-    initializeGloveSettings(plugin);
-    await refreshAfterSave();
-    return plugin.settings;
-  };
-  plugin.resumeGloveConfiguration = () => plugin.serializedAdminMutation(async () => {
-    await reload();
-    const plan = plugin.settings.gloveMigration;
-    if (!plan) return plugin.settings;
-    if (plan.version !== 1) throw new Error("Unsupported pending glove update. Keep the saved settings for review.");
-    migrationContext(plan);
-    return finish(plan);
-  });
-  plugin.saveGloveConfiguration = (draft, baselineSettings) => plugin.serializedAdminMutation(async () => {
-    await reload();
-    if (plugin.settings.gloveMigration) throw new Error("A glove update is pending. Use Retry glove update before making more changes.");
-    const plan = prepareGloveSettingsSave({ baselineSettings, currentSettings: plugin.settings, draft });
-    if (!plan.changed) return plugin.settings;
-    if (!plan.migrationRequired) {
-      await persistGlovePatch(plugin, plan.settingsPatch);
-      initializeGloveSettings(plugin);
-      await refreshAfterSave();
-      return plugin.settings;
-    }
-    const state = await plugin.readSurgeonRegistry({ create: false });
-    if (state.invalid) throw new Error(`Glove settings stopped: ${state.error}`);
-    if (state.missing && plugin.settings.initialized) throw new Error("The surgeon registry is missing. Wait for Sync before changing glove types or sizes.");
-    if (!state.missing) migrateGloveRegistry(state.registry, plan);
-    const journal = { version: 1, previousConfig: plan.previousConfig, config: plan.config, renames: plan.renames, ordinaryChanges: plan.ordinaryChanges };
-    await persistGlovePatch(plugin, { ...bridgeConfig(plan), gloveMigration: journal });
-    return finish(journal);
-  });
-}
-function renderGloveSettingsEditor(parent3, plugin, { rows = [] } = {}) {
-  const root = parent3.createDiv({ cls: "cst-glove-settings cst-settings-editor" });
-  let baseline, draft;
-  try {
-    baseline = { ...plugin.settings, ...normalizeGloveConfig(plugin.settings) };
-    draft = createGloveSettingsDraft(baseline, { includeOrdinarySettings: true });
-  } catch (error2) {
-    root.createEl("p", { text: `Glove settings need correction: ${error2.message}`, cls: "cst-warning" });
-    return root;
-  }
-  const controls = [];
-  const input = (parentEl, value, name) => {
-    const field = parentEl.createEl("input", { type: "text", attr: { "aria-label": name } });
-    field.value = value;
-    field.onkeydown = exitSingleLineOnEnter;
-    controls.push(field);
-    return field;
-  };
-  const table = root.createEl("table", { cls: "cst-table" });
-  const summary = (name, value) => {
-    const row = table.createEl("tr");
-    row.createEl("th", { text: name });
-    return row.createEl("td", { text: value });
-  };
-  for (const [name, value] of rows) summary(name, String(value));
-  const gown = summary("Default gown", "").createEl("select", { attr: { "aria-label": "Default gown" } });
-  for (const value of GOWNS) gown.createEl("option", { value, text: value });
-  gown.value = draft.defaultGown;
-  gown.onchange = () => {
-    draft.defaultGown = gown.value;
-  };
-  controls.push(gown);
-  let debounce;
-  if (own2(draft, "verificationDebounceSeconds")) {
-    debounce = input(summary("Verification debounce (seconds)", ""), draft.verificationDebounceSeconds, "Verification debounce (seconds)");
-    debounce.oninput = () => {
-      draft.verificationDebounceSeconds = debounce.value;
-    };
-  }
-  const sizeCell = summary("Glove sizes", "");
-  const sizes = input(sizeCell, draft.gloveSizes, "Glove sizes");
-  sizes.oninput = () => {
-    draft.gloveSizes = sizes.value;
-  };
-  const typeSummary = summary("Glove types", gloveHelpText(baseline).legend);
-  typeSummary.setAttribute("aria-readonly", "true");
-  root.createEl("p", { text: "Edit type codes and labels below. X is reserved for quantities. Unknown is always available. Changes apply only when you select Save.", cls: "cst-muted" });
-  const editor = root.createDiv({ cls: "cst-glove-type-editor" });
-  const renderTypes = () => {
-    editor.empty();
-    for (const row of draft.gloveTypes) {
-      const line = editor.createDiv({ cls: "cst-modal-grid" });
-      const code = input(line, row.code, "Glove type code");
-      code.oninput = () => {
-        row.code = code.value;
-      };
-      const label = input(line, row.label, "Glove display label");
-      label.oninput = () => {
-        row.label = label.value;
-      };
-      const remove = line.createEl("button", { text: "Remove type" });
-      controls.push(remove);
-      remove.onclick = () => {
-        draft.gloveTypes.splice(draft.gloveTypes.indexOf(row), 1);
-        renderTypes();
-      };
-    }
-  };
-  renderTypes();
-  const add = root.createEl("button", { text: "Add label" });
-  controls.push(add);
-  add.onclick = () => {
-    draft.gloveTypes.push({ originalCode: null, code: "", label: "", aliases: [] });
-    renderTypes();
-  };
-  const error = root.createEl("p", { cls: "cst-warning", attr: { role: "alert", "aria-live": "polite" } });
-  const save = root.createEl("button", { text: "Save", cls: "mod-cta" });
-  controls.push(save);
-  const retry = root.createEl("button", { text: "Retry glove update" });
-  const updatePending = () => {
-    retry.hidden = !plugin.settings.gloveMigration;
-    for (const control of controls) control.disabled = !!plugin.settings.gloveMigration;
-  };
-  updatePending();
-  if (plugin.settings.gloveMigration) error.setText("A glove update is pending. Select Retry glove update to finish before editing these settings.");
-  const persist = async (action) => {
-    if (root.gloveSaveBusy) return;
-    root.gloveSaveBusy = true;
-    for (const control of controls) control.disabled = true;
-    retry.disabled = true;
-    error.setText("");
-    try {
-      const saved = await action();
-      baseline = { ...saved, ...normalizeGloveConfig(saved) };
-      draft = createGloveSettingsDraft(baseline, { includeOrdinarySettings: true });
-      gown.value = draft.defaultGown;
-      if (debounce) debounce.value = draft.verificationDebounceSeconds ?? String((saved.verificationDebounceMs ?? 45e3) / 1e3);
-      sizes.value = draft.gloveSizes;
-      typeSummary.setText(gloveHelpText(baseline).legend);
-      renderTypes();
-      error.setText("Settings saved.");
-    } catch (failure) {
-      error.setText(`${failure.message || failure}${plugin.settings.gloveMigration ? " The compatible settings were retained. Select Retry glove update to finish." : ""}`);
-    } finally {
-      root.gloveSaveBusy = false;
-      for (const control of controls) control.disabled = false;
-      retry.disabled = false;
-      updatePending();
-    }
-  };
-  save.onclick = () => save.disabled ? void 0 : persist(() => plugin.saveGloveConfiguration(draft, baseline));
-  retry.onclick = () => retry.disabled ? void 0 : persist(() => plugin.resumeGloveConfiguration());
-  return root;
-}
-
 // src/main.js
 var {
   Plugin,
@@ -6928,7 +8699,7 @@ var {
   setIcon,
   addIcon
 } = require("obsidian");
-var PLUGIN_VERSION = "0.1.17";
+var PLUGIN_VERSION = "0.1.18";
 var Modal = class extends ObsidianModal {
   constructor(...args) {
     super(...args);
@@ -7187,16 +8958,16 @@ function vaultPathsOverlap(first, second) {
   return !!a && !!b && (a === b || a.startsWith(b + "/") || b.startsWith(a + "/"));
 }
 var controlSequence = 0;
-function associatePreviousLabel(parent3, control) {
-  const previous = control?.previousElementSibling || parent3?.lastElementChild;
+function associatePreviousLabel(parent4, control) {
+  const previous = control?.previousElementSibling || parent4?.lastElementChild;
   if (previous?.tagName === "LABEL" && !previous.htmlFor) {
     if (!control.id) control.id = `cst-control-${++controlSequence}`;
     previous.htmlFor = control.id;
   }
   return control;
 }
-function makeInput(parent3, opts = {}) {
-  const input = associatePreviousLabel(parent3, parent3.createEl("input"));
+function makeInput(parent4, opts = {}) {
+  const input = associatePreviousLabel(parent4, parent4.createEl("input"));
   input.type = opts.type || "text";
   if (opts.value != null) input.value = String(opts.value);
   if (opts.placeholder) input.placeholder = String(opts.placeholder);
@@ -7213,8 +8984,8 @@ function blurOnEnter(input) {
   });
   return input;
 }
-function makeSelect(parent3, ariaLabel = "") {
-  const select = associatePreviousLabel(parent3, parent3.createEl("select"));
+function makeSelect(parent4, ariaLabel = "") {
+  const select = associatePreviousLabel(parent4, parent4.createEl("select"));
   if (ariaLabel && !select.labels?.length) select.setAttribute("aria-label", ariaLabel);
   return select;
 }
@@ -7288,8 +9059,8 @@ function gloveLegend2(value, settings) {
     return "Glove value needs review";
   }
 }
-function addGloveHelp(parent3, settings) {
-  const help = parent3.createDiv({ cls: "cst-field-help cst-glove-help" });
+function addGloveHelp(parent4, settings) {
+  const help = parent4.createDiv({ cls: "cst-field-help cst-glove-help" });
   try {
     const guidance = glove_settings_exports.gloveHelpText(settings);
     help.createDiv({ text: guidance.inputLegend });
@@ -7512,7 +9283,7 @@ var CSTNotesPlugin = class extends Plugin {
       copyText,
       defaultSpecialties: DEFAULT_SPECIALTIES
     });
-    this.registerView(VIEW_TYPE_CST_SIDEBAR, (leaf2) => new CSTSidebarView(leaf2, this));
+    this.registerView(VIEW_TYPE_CST_SIDEBAR, (leaf3) => new CSTSidebarView(leaf3, this));
     addIcon?.("cst-open-kelly", KELLY_ICON);
     this.addRibbonIcon("plus-circle", "CST: New Case", () => this.openNewCase());
     this.addRibbonIcon("cst-open-kelly", "CST: Open App", () => this.navigateFromUI("Open CST app", () => this.activateSidebar()));
@@ -7709,8 +9480,8 @@ var CSTNotesPlugin = class extends Plugin {
     this.refreshOnboarding();
     if (this.settings.initialized && !this.featureMutationActive && !this.onboardingStartupPending) await this.startResourceCollection?.();
     const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE_CST_SIDEBAR);
-    for (const leaf2 of leaves) {
-      if (leaf2.view instanceof CSTSidebarView) leaf2.view.queueRender();
+    for (const leaf3 of leaves) {
+      if (leaf3.view instanceof CSTSidebarView) leaf3.view.queueRender();
     }
   }
   async saveSettings() {
@@ -8102,8 +9873,8 @@ var CSTNotesPlugin = class extends Plugin {
     const documents = /* @__PURE__ */ new Set();
     if (typeof document !== "undefined") documents.add(document);
     try {
-      this.app.workspace.iterateAllLeaves((leaf2) => {
-        const doc = leaf2?.view?.containerEl?.ownerDocument || leaf2?.containerEl?.ownerDocument;
+      this.app.workspace.iterateAllLeaves((leaf3) => {
+        const doc = leaf3?.view?.containerEl?.ownerDocument || leaf3?.containerEl?.ownerDocument;
         if (doc) documents.add(doc);
       });
     } catch (_) {
@@ -8122,10 +9893,10 @@ var CSTNotesPlugin = class extends Plugin {
       doc.querySelectorAll?.(".cst-managed-leaf").forEach((el) => el.classList.remove("cst-managed-leaf"));
     }
     try {
-      this.app.workspace.iterateAllLeaves((leaf2) => {
-        const doc = leaf2?.view?.containerEl?.ownerDocument || leaf2?.containerEl?.ownerDocument;
-        const path = leaf2?.view?.file?.path || "";
-        const source = leaf2?.view?.containerEl || leaf2?.containerEl;
+      this.app.workspace.iterateAllLeaves((leaf3) => {
+        const doc = leaf3?.view?.containerEl?.ownerDocument || leaf3?.containerEl?.ownerDocument;
+        const path = leaf3?.view?.file?.path || "";
+        const source = leaf3?.view?.containerEl || leaf3?.containerEl;
         const container = source?.closest?.(".workspace-leaf") || (source?.matches?.(".workspace-leaf") ? source : null);
         if (doc && container && this.isCSTInterfacePath(path)) container.classList.add("cst-managed-leaf");
       });
@@ -8922,11 +10693,11 @@ ${marker}
       return { file, n: Number(/^v(\d+)\.md$/.exec(file.name)[1]) };
     }).filter((x) => Number.isSafeInteger(x.n) && x.n > 0).sort((a, b) => a.n - b.n);
   }
-  async pruneTemplateVersions(file, version, text) {
+  async pruneTemplateVersions(file, version2, text) {
     const path = file.path;
     const { pruneTemplateRevisions: pruneTemplateRevisions2 } = await Promise.resolve().then(() => (init_template_lifecycle(), template_lifecycle_exports));
     this.assertVaultFilePath(file, path, "Template moved before revision cleanup.");
-    return pruneTemplateRevisions2(this, file, version, text);
+    return pruneTemplateRevisions2(this, file, version2, text);
   }
   async caseTemplateProvenance(file) {
     const { describeTemplateProvenance: describeTemplateProvenance2 } = await Promise.resolve().then(() => (init_template_lifecycle(), template_lifecycle_exports));
@@ -8958,11 +10729,11 @@ ${marker}
     assertTemplate();
     const current = await this.app.vault.read(file);
     assertTemplate();
-    const finish = async (version) => {
+    const finish = async (version2) => {
       assertTemplate();
-      await this.pruneTemplateVersions(file, version, current);
+      await this.pruneTemplateVersions(file, version2, current);
       assertTemplate();
-      return version;
+      return version2;
     };
     const root = this.templateVersionRoot(path);
     await this.ensureFolder(root);
@@ -11546,17 +13317,17 @@ Diagnostic persistence also failed: ${diagnosticError?.stack || diagnosticError}
   async openFile(file) {
     const active = this.app.workspace.activeLeaf;
     const inCSTApp = active?.view?.getViewType?.() === VIEW_TYPE_CST_SIDEBAR;
-    const leaf2 = inCSTApp ? this.app.workspace.getLeaf("tab") : this.app.workspace.getLeaf(false);
-    await leaf2.openFile(file);
-    await this.app.workspace.revealLeaf?.(leaf2);
+    const leaf3 = inCSTApp ? this.app.workspace.getLeaf("tab") : this.app.workspace.getLeaf(false);
+    await leaf3.openFile(file);
+    await this.app.workspace.revealLeaf?.(leaf3);
   }
   async clearCSTTabs() {
     const workspace = this.app.workspace;
     let kept = 0;
-    for (const leaf2 of [...workspace.getLeavesOfType("markdown")]) {
-      const view = leaf2.view, file = view?.file;
+    for (const leaf3 of [...workspace.getLeavesOfType("markdown")]) {
+      const view = leaf3.view, file = view?.file;
       if (!file || !(this.isCasePath(file.path) || file.path.startsWith(this.p() + "/") || file.path === this.settings.launcherPath)) continue;
-      if (leaf2.getViewState?.().pinned) {
+      if (leaf3.getViewState?.().pinned) {
         kept++;
         continue;
       }
@@ -11574,14 +13345,14 @@ Diagnostic persistence also failed: ${diagnosticError?.stack || diagnosticError}
           continue;
         }
       }
-      if (leaf2.view !== view || view.file !== file || file.path !== path || leaf2.getViewState?.().pinned) {
+      if (leaf3.view !== view || view.file !== file || file.path !== path || leaf3.getViewState?.().pinned) {
         kept++;
         continue;
       }
-      leaf2.detach();
+      leaf3.detach();
     }
     const apps = [...workspace.getLeavesOfType(VIEW_TYPE_CST_SIDEBAR)];
-    for (const leaf2 of apps.slice(1)) if (!leaf2.getViewState?.().pinned) leaf2.detach();
+    for (const leaf3 of apps.slice(1)) if (!leaf3.getViewState?.().pinned) leaf3.detach();
     await this.activateSidebar({ specialty: "", surgeon: "", query: "" });
     if (kept) new Notice(`${kept} pinned or unsaved CST Notes tab${kept === 1 ? " was" : "s were"} kept open.`);
   }
@@ -12040,19 +13811,19 @@ Diagnostic persistence also failed: ${diagnosticError?.stack || diagnosticError}
     if (targetRoute) this.sidebarActivationTargetRevision = (this.sidebarActivationTargetRevision || 0) + 1;
     if (this.sidebarActivationPromise) return await this.sidebarActivationPromise;
     const activation = (async () => {
-      let leaf2 = this.app.workspace.getLeavesOfType(VIEW_TYPE_CST_SIDEBAR)[0];
-      if (!leaf2) {
-        if (Platform.isMobile) leaf2 = this.app.workspace.getLeaf("tab");
-        else leaf2 = this.app.workspace.getRightLeaf(false) || this.app.workspace.getLeaf("tab");
+      let leaf3 = this.app.workspace.getLeavesOfType(VIEW_TYPE_CST_SIDEBAR)[0];
+      if (!leaf3) {
+        if (Platform.isMobile) leaf3 = this.app.workspace.getLeaf("tab");
+        else leaf3 = this.app.workspace.getRightLeaf(false) || this.app.workspace.getLeaf("tab");
         const initialRoute = this.sidebarActivationTarget;
-        if (initialRoute) this.pendingSidebarRoutes.set(leaf2, initialRoute);
+        if (initialRoute) this.pendingSidebarRoutes.set(leaf3, initialRoute);
         try {
-          await leaf2.setViewState({ type: VIEW_TYPE_CST_SIDEBAR, active: true });
+          await leaf3.setViewState({ type: VIEW_TYPE_CST_SIDEBAR, active: true });
         } finally {
-          this.pendingSidebarRoutes.delete(leaf2);
+          this.pendingSidebarRoutes.delete(leaf3);
         }
       }
-      const view = leaf2?.view;
+      const view = leaf3?.view;
       if (view instanceof CSTSidebarView) {
         let appliedRevision = -1;
         const applyLatestRoute = async (force = false) => {
@@ -12066,12 +13837,12 @@ Diagnostic persistence also failed: ${diagnosticError?.stack || diagnosticError}
           }
         };
         await applyLatestRoute(true);
-        await this.app.workspace.revealLeaf(leaf2);
+        await this.app.workspace.revealLeaf(leaf3);
         await applyLatestRoute();
       } else {
-        await this.app.workspace.revealLeaf(leaf2);
+        await this.app.workspace.revealLeaf(leaf3);
       }
-      return leaf2;
+      return leaf3;
     })();
     this.sidebarActivationPromise = activation;
     try {
@@ -12558,10 +14329,10 @@ Diagnostic persistence also failed: ${diagnosticError?.stack || diagnosticError}
     const hr = table.createEl("tr");
     ["Template", "Current version", "Action"].forEach((x) => hr.createEl("th", { text: x }));
     for (const f of files) {
-      const version = await this.ensureTemplateVersion(f, false);
+      const version2 = await this.ensureTemplateVersion(f, false);
       const tr = table.createEl("tr");
       tr.createEl("td", { text: f.path === examplePath ? "Example template" : f.path === defaultPath ? "Default" : f.path.slice(prefix.length).replace(/\.md$/, "") });
-      tr.createEl("td", { text: `v${version || 1}` });
+      tr.createEl("td", { text: `v${version2 || 1}` });
       const td = tr.createEl("td");
       const b = td.createEl("button", { text: "Open" });
       b.onclick = () => this.navigateFromUI(`Open ${f.basename}`, () => this.openFile(f));
@@ -12738,8 +14509,8 @@ Diagnostic persistence also failed: ${diagnosticError?.stack || diagnosticError}
         if (lines[1]) lines[1].textContent = guidance.examples;
       });
       const visible = /* @__PURE__ */ new Map();
-      doc.querySelectorAll(".cst-live-header").forEach((header) => {
-        const specialty = header.dataset.cstSpecialty, surgeon = header.dataset.cstSurgeon;
+      doc.querySelectorAll(".cst-live-header").forEach((header2) => {
+        const specialty = header2.dataset.cstSpecialty, surgeon = header2.dataset.cstSurgeon;
         if (specialty && surgeon) visible.set(`${specialty}\0${surgeon}`, { specialty, surgeon });
       });
       for (const { specialty, surgeon } of visible.values()) {
@@ -13791,8 +15562,8 @@ ${body}`;
     if (!path.startsWith(undoRoot + "/")) {
       throw new Error(`${label} is outside this migration session's managed Undo folder.`);
     }
-    const leaf2 = path.slice(undoRoot.length + 1);
-    if (leaf2.includes("/") || !/^(?:preimage|pre)-[A-Za-z0-9-]{8,80}\.[A-Za-z0-9]{1,12}$/i.test(leaf2)) {
+    const leaf3 = path.slice(undoRoot.length + 1);
+    if (leaf3.includes("/") || !/^(?:preimage|pre)-[A-Za-z0-9-]{8,80}\.[A-Za-z0-9]{1,12}$/i.test(leaf3)) {
       throw new Error(`${label} is not a managed migration snapshot.`);
     }
     return path;
@@ -14855,10 +16626,10 @@ var OnboardingHideModal = class extends Modal {
   }
 };
 var CSTSidebarView = class extends ItemView {
-  constructor(leaf2, plugin) {
-    super(leaf2);
+  constructor(leaf3, plugin) {
+    super(leaf3);
     this.plugin = plugin;
-    const initialRoute = plugin.pendingSidebarRoutes?.get(leaf2) || {};
+    const initialRoute = plugin.pendingSidebarRoutes?.get(leaf3) || {};
     this.query = String(initialRoute.query || "");
     this.specialty = String(initialRoute.specialty || "");
     this.surgeon = String(initialRoute.surgeon || "");
@@ -14936,8 +16707,8 @@ var CSTSidebarView = class extends ItemView {
     this.contentEl.empty();
     this.shellReady = false;
   }
-  makeAction(parent3, text, fn, primary = false) {
-    const b = parent3.createEl("button", { text });
+  makeAction(parent4, text, fn, primary = false) {
+    const b = parent4.createEl("button", { text });
     if (primary) b.addClass("mod-cta");
     b.onclick = fn;
     return b;
@@ -14970,10 +16741,10 @@ var CSTSidebarView = class extends ItemView {
     };
     this.chipsEl = el.createDiv({ cls: "cst-specialty-chips" });
     this.bodyEl = el.createDiv({ cls: "cst-app-body" });
-    const footer = el.createDiv({ cls: "cst-app-footer" });
-    const admin = footer.createEl("button", { text: "Admin" });
+    const footer2 = el.createDiv({ cls: "cst-app-footer" });
+    const admin = footer2.createEl("button", { text: "Admin" });
     admin.onclick = () => this.plugin.navigateFromUI("Open CST Admin", () => this.plugin.openAdmin());
-    footer.createSpan({ text: `v${PLUGIN_VERSION}`, cls: "cst-muted" });
+    footer2.createSpan({ text: `v${PLUGIN_VERSION}`, cls: "cst-muted" });
     this.shellReady = true;
     this.renderChips();
   }
@@ -15107,10 +16878,10 @@ var CSTSidebarView = class extends ItemView {
     }
   }
   async renderSpecialty(el, specialty) {
-    const header = el.createDiv({ cls: "cst-app-section-head" });
-    const left = header.createDiv();
+    const header2 = el.createDiv({ cls: "cst-app-section-head" });
+    const left = header2.createDiv();
     left.createEl("h3", { text: specialty });
-    const add = header.createEl("button", { text: "+ Case" });
+    const add = header2.createEl("button", { text: "+ Case" });
     add.onclick = () => this.plugin.openNewCase(specialty, "");
     const surgeons = this.plugin.getSurgeons(specialty);
     const cases = (await this.plugin.caseEntries()).filter((entry) => entry.usable && entry.context.specialty === specialty).map((entry) => entry.file);
@@ -15546,9 +17317,9 @@ var NewCaseModal = class extends Modal {
       const titleText = this.title;
       const variantName = this.variant;
       const n = safeFileName(titleText || "Case name");
-      const header = surgeonName ? await this.plugin.getSurgeonData(specialty, surgeonName, { createIfMissing: false }) : null;
+      const header2 = surgeonName ? await this.plugin.getSurgeonData(specialty, surgeonName, { createIfMissing: false }) : null;
       if (nonce !== this.previewNonce || preview.isConnected === false) return;
-      const h = header ? `${surgeonName} · ${formatGloves(header.gloves)} · ${header.gown}` : "Select a surgeon";
+      const h = header2 ? `${surgeonName} · ${formatGloves(header2.gloves)} · ${header2.gown}` : "Select a surgeon";
       const template = specialty.toLowerCase() === "spine" ? `Spine / ${variantName}` : specialty;
       preview.setText(`${h}
 Template: ${template}

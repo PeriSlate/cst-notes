@@ -1068,6 +1068,28 @@ body .cst-admin-action-grid {
   gap: 8px;
   margin-block: 12px;
 }
+
+.cst-library-portability {
+  overflow-wrap: anywhere;
+}
+
+.cst-library-portability > label {
+  display: block;
+  margin-block: 0.75em;
+}
+
+.cst-library-export-entry {
+  margin-block: 0.5em;
+}
+
+.cst-library-export-entry > button {
+  width: 100%;
+}
+
+.cst-library-portability details {
+  margin-block: 0.75em;
+  overflow-wrap: anywhere;
+}
 body .cst-admin-action-grid > button {
   width: 100%;
   min-width: 0;

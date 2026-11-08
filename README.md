@@ -32,9 +32,9 @@ GitHub releases attach these files:
 
 `versions.json` is tracked in the repository for version compatibility metadata. This repository intentionally does not contain user vault data, local settings, source code, or build tooling.
 
-## New in 0.1.14
+## New in 0.1.18
 
-The device share sheet now receives only the case-named `.cstcase` file, allowing its Copy action to copy the case instead of generic share text. **Paste case** accepts a copied `.cstcase` file, raw JSON or complete `.cstcase` text. **Open surgeon** is highlighted in the case header while **Share case** is secondary. See [release notes](RELEASE-NOTES.md) for host-device limits and fallback options.
+**Admin → Export / Data Portability** prepares a single offline `.cstpack` for PeriSlate Cards. It includes original notes, surgeon profiles, templates, references, and supported images. Review the scope and warnings before preparing the package. Packages are unencrypted and can contain sensitive information. See the [release notes](RELEASE-NOTES.md) and [CSTPACK format specification](docs/CSTPACK-1.md).
 
 ## Support
 

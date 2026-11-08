@@ -1,5 +1,10 @@
 # CST Notes changelog
 
+## 0.1.18
+
+- Add offline library export for PeriSlate Cards in **Admin → Export / Data Portability**.
+- Preserve source notes and supported assets with stable identities, checksums, and a review report.
+
 ## 0.1.14
 
 - Make the device share sheet receive only the case-named `.cstcase` file so its Copy action copies the case instead of generic share text.

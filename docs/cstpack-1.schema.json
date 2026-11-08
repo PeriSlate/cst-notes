@@ -1,0 +1,356 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CSTPACK-1 archive JSON members",
+  "description": "Structural schema for emitted CST Notes library JSON. Select a definition for each archive member. ZIP, canonical JSON, hash and cross-member checks are separate.",
+  "$ref": "#/$defs/manifest",
+  "$defs": {
+    "id": { "type": "string", "minLength": 1, "maxLength": 256, "pattern": "^[^\\u0000-\\u001f\\u007f]+$" },
+    "sourceId": { "type": "string", "maxLength": 512, "pattern": "^[^\\u0000-\\u001f\\u007f]*$" },
+    "sha256": { "type": "string", "minLength": 64, "maxLength": 64, "pattern": "^[0-9a-f]{64}$" },
+    "contentPath": { "type": "string", "pattern": "^content/[A-Za-z0-9][A-Za-z0-9_-]{0,127}\\.md(?![\\s\\S])" },
+    "assetPath": { "type": "string", "pattern": "^assets/[0-9a-f]{64}\\.(png|jpg|jpeg|gif|webp)(?![\\s\\S])" },
+    "byteSize": { "type": "integer", "minimum": 0, "maximum": 12582912 },
+    "offset": { "type": "integer", "minimum": 0, "maximum": 12582912 },
+    "count": { "type": "integer", "minimum": 0 },
+    "strings": { "type": "array", "items": { "type": "string" } },
+    "source": {
+      "type": "object",
+      "properties": {
+        "application": { "type": "string" },
+        "version": { "type": "string" },
+        "schemaVersion": { "type": "integer" }
+      }
+    },
+    "counts": {
+      "type": "object",
+      "required": ["assets", "cases", "documents", "references", "resources", "specialties", "surgeons", "templates"],
+      "properties": {
+        "assets": { "$ref": "#/$defs/count" },
+        "cases": { "$ref": "#/$defs/count" },
+        "documents": { "$ref": "#/$defs/count" },
+        "references": { "$ref": "#/$defs/count" },
+        "resources": { "$ref": "#/$defs/count" },
+        "specialties": { "$ref": "#/$defs/count" },
+        "surgeons": { "$ref": "#/$defs/count" },
+        "templates": { "$ref": "#/$defs/count" }
+      },
+      "additionalProperties": false
+    },
+    "inventoryEntry": {
+      "type": "object",
+      "required": ["path", "size", "sha256"],
+      "properties": {
+        "path": {
+          "anyOf": [
+            { "$ref": "#/$defs/contentPath" },
+            { "$ref": "#/$defs/assetPath" },
+            { "enum": [
+              "records/assets.json", "records/cases.json", "records/documents.json", "records/references.json",
+              "records/resources.json", "records/specialties.json", "records/surgeons.json", "records/templates.json",
+              "report.json"
+            ] }
+          ]
+        },
+        "size": { "$ref": "#/$defs/byteSize" },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      },
+      "additionalProperties": false
+    },
+    "gloveType": {
+      "type": "object",
+      "required": ["code", "label", "aliases"],
+      "properties": {
+        "code": { "type": "string" },
+        "label": { "type": "string" },
+        "aliases": { "$ref": "#/$defs/strings" }
+      }
+    },
+    "gloveConfig": {
+      "type": "object",
+      "properties": {
+        "gloveSizes": { "$ref": "#/$defs/strings" },
+        "gloveTypes": { "type": "array", "items": { "$ref": "#/$defs/gloveType" } }
+      }
+    },
+    "resourceKind": {
+      "enum": ["resource", "clamp", "scissors", "forceps", "retractor", "needle-holder", "suture", "dressing", "fluid"]
+    },
+    "resourceSection": { "enum": ["Mayo", "Basin", "Sutures", "Dressings"] },
+    "resourceSuggestion": {
+      "type": "object",
+      "required": ["label", "quantity"],
+      "properties": {
+        "label": { "type": "string" },
+        "quantity": { "type": ["integer", "null"], "minimum": 1, "maximum": 10000 },
+        "size": { "type": ["string", "null"] },
+        "material": { "type": ["string", "null"] },
+        "needle": { "type": ["string", "null"] },
+        "catalogRef": { "type": ["string", "null"] }
+      }
+    },
+    "resourceAlias": {
+      "type": "object",
+      "required": ["raw", "section", "kind", "approved", "identityKey", "suggestion"],
+      "properties": {
+        "raw": { "type": "string", "minLength": 1, "maxLength": 1000 },
+        "section": { "$ref": "#/$defs/resourceSection" },
+        "kind": { "$ref": "#/$defs/resourceKind" },
+        "approved": { "const": true },
+        "identityKey": { "type": ["string", "null"] },
+        "suggestion": { "$ref": "#/$defs/resourceSuggestion" }
+      }
+    },
+    "manifest": {
+      "type": "object",
+      "required": [
+        "format", "schemaVersion", "kind", "absencePolicy", "scope", "reportPath",
+        "packageId", "libraryId", "createdAt", "source", "gloveConfig", "resourceAliases",
+        "requiredFeatures", "counts", "files", "snapshotHash"
+      ],
+      "properties": {
+        "format": { "const": "perislate-library" },
+        "schemaVersion": { "const": "1.0.0" },
+        "kind": { "const": "library-snapshot" },
+        "absencePolicy": { "const": "no-deletion" },
+        "scope": { "const": "active-library" },
+        "reportPath": { "const": "report.json" },
+        "packageId": { "$ref": "#/$defs/id" },
+        "libraryId": { "$ref": "#/$defs/id" },
+        "createdAt": {
+          "type": "string", "format": "date-time",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{3})?Z(?![\\s\\S])"
+        },
+        "source": { "$ref": "#/$defs/source" },
+        "gloveConfig": { "$ref": "#/$defs/gloveConfig" },
+        "resourceAliases": { "type": "array", "items": { "$ref": "#/$defs/resourceAlias" } },
+        "requiredFeatures": { "const": [] },
+        "counts": { "$ref": "#/$defs/counts" },
+        "files": { "type": "array", "minItems": 9, "maxItems": 9998, "items": { "$ref": "#/$defs/inventoryEntry" } },
+        "snapshotHash": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "record": {
+      "type": "object",
+      "required": ["id", "fingerprint"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "sourceId": { "$ref": "#/$defs/sourceId" },
+        "fingerprint": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "specialty": {
+      "$ref": "#/$defs/record",
+      "required": ["name", "documentIds"],
+      "properties": {
+        "name": { "type": "string" },
+        "documentIds": { "type": "array", "items": { "$ref": "#/$defs/id" } }
+      }
+    },
+    "gloveEntry": {
+      "type": "object",
+      "oneOf": [
+        { "required": ["unknown"], "properties": { "unknown": { "const": true } } },
+        {
+          "required": ["size", "code", "quantity"],
+          "properties": {
+            "unknown": { "const": false },
+            "size": { "type": "string" },
+            "code": { "type": "string" },
+            "quantity": { "type": "integer", "minimum": 1 }
+          }
+        }
+      ]
+    },
+    "profile": {
+      "type": "object",
+      "required": ["gloves", "glovesRaw", "gloveParseStatus", "gown", "music"],
+      "properties": {
+        "gloves": { "type": ["array", "null"], "items": { "$ref": "#/$defs/gloveEntry" } },
+        "glovesRaw": { "type": "string" },
+        "gloveParseStatus": { "enum": ["parsed", "unknown", "unsupported"] },
+        "gown": { "type": "string" },
+        "music": { "type": "string" }
+      }
+    },
+    "surgeonAssociation": {
+      "type": "object",
+      "required": ["specialtyId", "name", "aliases", "profile"],
+      "properties": {
+        "specialtyId": { "$ref": "#/$defs/id" },
+        "name": { "type": "string" },
+        "aliases": { "$ref": "#/$defs/strings" },
+        "profile": { "$ref": "#/$defs/profile" }
+      }
+    },
+    "surgeon": {
+      "$ref": "#/$defs/record",
+      "required": ["name", "sourceId", "associations"],
+      "properties": {
+        "name": { "type": "string" },
+        "associations": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/surgeonAssociation" } },
+        "specialtyId": { "$ref": "#/$defs/id" },
+        "aliases": { "$ref": "#/$defs/strings" },
+        "profile": { "$ref": "#/$defs/profile" }
+      }
+    },
+    "createdTemplate": {
+      "type": ["object", "null"],
+      "required": ["name", "version"],
+      "properties": { "name": { "type": "string" }, "version": { "type": "string" } }
+    },
+    "currentTemplate": {
+      "type": ["object", "null"],
+      "required": ["name", "version", "templateId", "recordedVersion"],
+      "properties": {
+        "name": { "type": "string" },
+        "version": { "type": ["string", "null"] },
+        "templateId": { "anyOf": [{ "$ref": "#/$defs/id" }, { "type": "null" }] },
+        "recordedVersion": { "type": "string" }
+      }
+    },
+    "case": {
+      "$ref": "#/$defs/record",
+      "required": ["sourceId", "title", "specialtyId", "surgeonId", "documentId", "createdTemplate", "currentTemplate"],
+      "properties": {
+        "title": { "type": "string" },
+        "specialtyId": { "$ref": "#/$defs/id" },
+        "surgeonId": { "$ref": "#/$defs/id" },
+        "documentId": { "$ref": "#/$defs/id" },
+        "createdTemplate": { "$ref": "#/$defs/createdTemplate" },
+        "currentTemplate": { "$ref": "#/$defs/currentTemplate" }
+      }
+    },
+    "templateRevision": {
+      "type": "object",
+      "required": ["version", "documentId"],
+      "properties": { "version": { "type": "string" }, "documentId": { "$ref": "#/$defs/id" } }
+    },
+    "template": {
+      "$ref": "#/$defs/record",
+      "required": ["sourceId", "title", "documentId", "currentVersion", "revisions"],
+      "properties": {
+        "title": { "type": "string" },
+        "documentId": { "$ref": "#/$defs/id" },
+        "currentVersion": { "type": ["string", "null"] },
+        "revisions": { "type": "array", "items": { "$ref": "#/$defs/templateRevision" } }
+      }
+    },
+    "reference": {
+      "$ref": "#/$defs/record",
+      "required": ["sourceId", "title", "category", "aliases", "documentId"],
+      "properties": {
+        "title": { "type": "string" },
+        "category": { "type": "string" },
+        "aliases": { "$ref": "#/$defs/strings" },
+        "documentId": { "$ref": "#/$defs/id" }
+      }
+    },
+    "resourceSource": {
+      "type": "object",
+      "required": ["caseId", "section", "raw", "quantity"],
+      "properties": {
+        "caseId": { "$ref": "#/$defs/id" },
+        "section": { "$ref": "#/$defs/resourceSection" },
+        "raw": { "type": "string" },
+        "quantity": { "type": ["integer", "null"] }
+      }
+    },
+    "resource": {
+      "$ref": "#/$defs/record",
+      "required": ["sourceId", "key", "kind", "label", "section", "hidden", "sources"],
+      "properties": {
+        "key": { "type": "string" },
+        "kind": { "$ref": "#/$defs/resourceKind" },
+        "label": { "type": "string" },
+        "section": { "$ref": "#/$defs/resourceSection" },
+        "hidden": { "type": "boolean" },
+        "sources": { "type": "array", "items": { "$ref": "#/$defs/resourceSource" } }
+      }
+    },
+    "span": {
+      "type": "object",
+      "required": ["start", "end"],
+      "properties": { "start": { "$ref": "#/$defs/offset" }, "end": { "$ref": "#/$defs/offset" } }
+    },
+    "section": {
+      "$ref": "#/$defs/span",
+      "required": ["level", "heading", "bodyStart"],
+      "properties": {
+        "level": { "type": "integer", "minimum": 1, "maximum": 6 },
+        "heading": { "type": "string" },
+        "bodyStart": { "$ref": "#/$defs/offset" }
+      }
+    },
+    "fence": {
+      "$ref": "#/$defs/span",
+      "required": ["info"],
+      "properties": { "info": { "type": "string" } }
+    },
+    "attachment": {
+      "$ref": "#/$defs/span",
+      "required": ["target", "syntax", "embedded", "status", "assetId"],
+      "properties": {
+        "target": { "type": "string" },
+        "syntax": { "enum": ["wiki", "markdown", "html"] },
+        "embedded": { "type": "boolean" },
+        "status": { "const": "resolved" },
+        "assetId": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "document": {
+      "$ref": "#/$defs/record",
+      "required": ["path", "title", "sourcePath", "kind", "sha256", "offsetUnit", "preamble", "sections", "fences", "attachments"],
+      "properties": {
+        "path": { "$ref": "#/$defs/contentPath" },
+        "title": { "type": "string" },
+        "sourcePath": { "type": "string" },
+        "kind": { "enum": ["case", "reference", "specialty-note", "supplemental", "template", "version"] },
+        "reviewStatus": { "enum": ["remaining", "needs-review"] },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "offsetUnit": { "const": "utf16" },
+        "preamble": { "$ref": "#/$defs/span" },
+        "sections": { "type": "array", "items": { "$ref": "#/$defs/section" } },
+        "fences": { "type": "array", "items": { "$ref": "#/$defs/fence" } },
+        "attachments": { "type": "array", "items": { "$ref": "#/$defs/attachment" } }
+      }
+    },
+    "asset": {
+      "type": "object",
+      "required": ["id", "path", "size", "originalFilenames", "mediaType"],
+      "properties": {
+        "id": { "$ref": "#/$defs/sha256" },
+        "path": { "$ref": "#/$defs/assetPath" },
+        "fingerprint": { "$ref": "#/$defs/sha256" },
+        "size": { "$ref": "#/$defs/byteSize" },
+        "originalFilenames": { "$ref": "#/$defs/strings" },
+        "mediaType": { "enum": ["image/png", "image/jpeg", "image/gif", "image/webp"] }
+      }
+    },
+    "reportEntry": {
+      "type": "object",
+      "required": ["path", "message"],
+      "properties": {
+        "path": { "type": "string" },
+        "message": { "type": "string" },
+        "code": { "type": "string" }
+      }
+    },
+    "report": {
+      "type": "object",
+      "required": ["warnings", "errors", "exclusions"],
+      "properties": {
+        "warnings": { "type": "array", "items": { "$ref": "#/$defs/reportEntry" } },
+        "errors": { "type": "array", "items": { "$ref": "#/$defs/reportEntry" } },
+        "exclusions": { "type": "array", "items": { "$ref": "#/$defs/reportEntry" } }
+      }
+    },
+    "assets": { "type": "array", "items": { "$ref": "#/$defs/asset" } },
+    "cases": { "type": "array", "items": { "$ref": "#/$defs/case" } },
+    "documents": { "type": "array", "items": { "$ref": "#/$defs/document" } },
+    "references": { "type": "array", "items": { "$ref": "#/$defs/reference" } },
+    "resources": { "type": "array", "items": { "$ref": "#/$defs/resource" } },
+    "specialties": { "type": "array", "items": { "$ref": "#/$defs/specialty" } },
+    "surgeons": { "type": "array", "items": { "$ref": "#/$defs/surgeon" } },
+    "templates": { "type": "array", "items": { "$ref": "#/$defs/template" } }
+  }
+}
