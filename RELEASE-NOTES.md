@@ -1,8 +1,7 @@
-# CST Notes 0.1.18
+# CST Notes 0.1.19
 
-- Export your active CST Notes library for PeriSlate Cards from **Admin → Export / Data Portability**. The offline package preserves case notes, surgeon preferences, templates, references, and supported attachments.
-- Review what will be included and resolve missing files before preparing the package. Repeat exports preserve library identities to support comparison during a future import.
-
-The library export supports PNG, JPEG, GIF, and WebP. Review packages before sharing because they are unencrypted.
+- Recover a damaged resource index from a verified backup through **Admin → Export / Data Portability**, or rebuild from current cases when recovery can verify the index format and no backup is available.
+- Find supported images stored elsewhere in the vault and flag conflicting matches for review.
+- Select **Create recovery note and continue export** when images are unavailable. The note links to the affected cases, and the export identifies the images it omits.
 
 See the [CSTPACK format specification](docs/CSTPACK-1.md).

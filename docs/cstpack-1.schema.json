@@ -123,11 +123,15 @@
         "source": { "$ref": "#/$defs/source" },
         "gloveConfig": { "$ref": "#/$defs/gloveConfig" },
         "resourceAliases": { "type": "array", "items": { "$ref": "#/$defs/resourceAlias" } },
-        "requiredFeatures": { "const": [] },
+        "requiredFeatures": { "enum": [[], ["attachment-omissions-v1"]] },
+        "attachmentOmissionCount": { "type": "integer", "minimum": 1 },
         "counts": { "$ref": "#/$defs/counts" },
         "files": { "type": "array", "minItems": 9, "maxItems": 9998, "items": { "$ref": "#/$defs/inventoryEntry" } },
         "snapshotHash": { "$ref": "#/$defs/sha256" }
-      }
+      },
+      "if": { "properties": { "requiredFeatures": { "const": ["attachment-omissions-v1"] } } },
+      "then": { "required": ["attachmentOmissionCount"] },
+      "else": { "not": { "required": ["attachmentOmissionCount"] } }
     },
     "record": {
       "type": "object",
@@ -293,9 +297,11 @@
         "target": { "type": "string" },
         "syntax": { "enum": ["wiki", "markdown", "html"] },
         "embedded": { "type": "boolean" },
-        "status": { "const": "resolved" },
-        "assetId": { "$ref": "#/$defs/sha256" }
-      }
+        "status": { "enum": ["resolved", "omitted"] }
+      },
+      "if": { "properties": { "status": { "const": "omitted" } } },
+      "then": { "properties": { "assetId": { "type": "null" }, "target": { "maxLength": 1024 } } },
+      "else": { "properties": { "assetId": { "$ref": "#/$defs/sha256" } } }
     },
     "document": {
       "$ref": "#/$defs/record",
@@ -335,13 +341,29 @@
         "code": { "type": "string" }
       }
     },
+    "attachmentOmission": {
+      "$ref": "#/$defs/span",
+      "required": ["sourcePath", "target", "reason", "message"],
+      "properties": {
+        "sourcePath": { "type": "string", "minLength": 1 },
+        "target": { "type": "string", "maxLength": 1024 },
+        "reason": { "enum": ["missing", "ambiguous", "unsupported", "too-large"] },
+        "message": { "type": "string" },
+        "caseTitle": { "type": "string" },
+        "specialty": { "type": "string" },
+        "surgeon": { "type": "string" },
+        "assetPath": { "type": "string" },
+        "candidates": { "$ref": "#/$defs/strings" }
+      }
+    },
     "report": {
       "type": "object",
       "required": ["warnings", "errors", "exclusions"],
       "properties": {
         "warnings": { "type": "array", "items": { "$ref": "#/$defs/reportEntry" } },
         "errors": { "type": "array", "items": { "$ref": "#/$defs/reportEntry" } },
-        "exclusions": { "type": "array", "items": { "$ref": "#/$defs/reportEntry" } }
+        "exclusions": { "type": "array", "items": { "$ref": "#/$defs/reportEntry" } },
+        "omittedAttachments": { "type": "array", "items": { "$ref": "#/$defs/attachmentOmission" } }
       }
     },
     "assets": { "type": "array", "items": { "$ref": "#/$defs/asset" } },

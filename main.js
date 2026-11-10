@@ -39,12 +39,12 @@ function identifier(value) {
   if (typeof value !== "string" || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(value)) fail("Invalid transfer or case ID.");
   return value;
 }
-function stripReservedTransferComments(text) {
-  return text.replace(/<!--\s*cst-(?:resource-grabbed|example-template):[\s\S]*?-->/g, "");
+function stripReservedTransferComments(text2) {
+  return text2.replace(/<!--\s*cst-(?:resource-grabbed|example-template):[\s\S]*?-->/g, "");
 }
-function portableMarkdown(text) {
-  string(text, "Markdown");
-  return stripReservedTransferComments(text).replace(/^\uFEFF/, "").replace(/^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/, "").replace(/^([ \t]*)(`{3,}|~{3,})cst-[^\r\n]*\r?\n[\s\S]*?^\1\2[ \t]*$/gm, "").replace(/(`{3,}|~{3,})[^\r\n]*/g, "$1").replace(/`([ \t]*)(?=[=$])/g, "`$1\\").replace(/!\[(?!\[)([^\]\r\n]*)\](?![([])/g, "[$1]").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/&lt;!--([\s\S]*?)--&gt;/g, "<!--$1-->").replace(/\]\(\s*(?:javascript|data|vbscript|file|obsidian):[^)]*\)/gi, "](blocked-link)");
+function portableMarkdown(text2) {
+  string(text2, "Markdown");
+  return stripReservedTransferComments(text2).replace(/^\uFEFF/, "").replace(/^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/, "").replace(/^([ \t]*)(`{3,}|~{3,})cst-[^\r\n]*\r?\n[\s\S]*?^\1\2[ \t]*$/gm, "").replace(/(`{3,}|~{3,})[^\r\n]*/g, "$1").replace(/`([ \t]*)(?=[=$])/g, "`$1\\").replace(/!\[(?!\[)([^\]\r\n]*)\](?![([])/g, "[$1]").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/&lt;!--([\s\S]*?)--&gt;/g, "<!--$1-->").replace(/\]\(\s*(?:javascript|data|vbscript|file|obsidian):[^)]*\)/gi, "](blocked-link)");
 }
 function imageReferences(markdown) {
   const refs = [], definitions = /* @__PURE__ */ new Map();
@@ -267,9 +267,9 @@ function createTransferService(plugin, deps) {
     if (file.stat?.size > TRANSFER_LIMITS.bytes) fail("Source file exceeds 24 MiB.");
     const expected = file.path;
     same(file, expected);
-    const text = await vault.read(file);
+    const text2 = await vault.read(file);
     same(file, expected);
-    return { file, path: expected, text };
+    return { file, path: expected, text: text2 };
   }
   async function check(state) {
     same(state.file, state.path);
@@ -336,9 +336,9 @@ function createTransferService(plugin, deps) {
   function collector() {
     const attachments = [], imageStates = [], warnings = [], known = /* @__PURE__ */ new Map();
     let encodedBytes = 0;
-    async function portable(text, sourcePath) {
-      string(text, "case or template Markdown");
-      let result = stripReservedTransferComments(text).replace(/^\uFEFF/, "").replace(/^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/, "");
+    async function portable(text2, sourcePath) {
+      string(text2, "case or template Markdown");
+      let result = stripReservedTransferComments(text2).replace(/^\uFEFF/, "").replace(/^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/, "");
       for (const ref of imageReferences(result).reverse()) {
         const refKey = sourcePath + "\0" + ref.target;
         let name = known.get(refKey), state = null, encoded;
@@ -716,22 +716,22 @@ async function pruneTemplateRevisions(plugin, file, currentVersion, expectedText
   const root = vault.getAbstractFileByPath(rootPath);
   const versions = plugin.templateVersionFilesReadOnly(path);
   const latest = versions.at(-1);
-  const stale = versions.filter((entry) => entry.n <= currentVersion - TEMPLATE_REVISIONS_TO_KEEP);
-  if (!stale.length) return 0;
+  const stale2 = versions.filter((entry) => entry.n <= currentVersion - TEMPLATE_REVISIONS_TO_KEEP);
+  if (!stale2.length) return 0;
   if (typeof vault.trash !== "function") throw new Error("Template cleanup paused: the vault trash service is unavailable.");
   const conflict3 = () => new Error("Template cleanup paused because the template or revision history changed. Wait for Sync, then retry.");
   const remaining = new Set(versions.map((entry) => entry.file));
-  const stamp = (item) => [item.stat?.mtime, item.stat?.ctime, item.stat?.size].join(":");
-  const states = new Map(versions.map((entry) => [entry.file, { path: entry.file.path, stamp: stamp(entry.file), n: entry.n }]));
-  const templateStamp = stamp(file);
+  const stamp2 = (item) => [item.stat?.mtime, item.stat?.ctime, item.stat?.size].join(":");
+  const states = new Map(versions.map((entry) => [entry.file, { path: entry.file.path, stamp: stamp2(entry.file), n: entry.n }]));
+  const templateStamp = stamp2(file);
   const assertState = () => {
     plugin.assertVaultFilePath(file, path, "Template moved or was replaced during revision cleanup.");
     if (plugin.templateVersionRoot(path) !== rootPath || vault.getAbstractFileByPath(rootPath) !== root || root?.path !== rootPath) throw conflict3();
-    if (plugin.unloading || plugin.settings?.resetNeedsReview || stamp(file) !== templateStamp) throw conflict3();
+    if (plugin.unloading || plugin.settings?.resetNeedsReview || stamp2(file) !== templateStamp) throw conflict3();
     const live = plugin.templateVersionFilesReadOnly(path);
     if (live.length !== remaining.size || live.some((entry) => {
       const state = states.get(entry.file);
-      return !remaining.has(entry.file) || !state || state.n !== entry.n || state.path !== entry.file.path || state.stamp !== stamp(entry.file);
+      return !remaining.has(entry.file) || !state || state.n !== entry.n || state.path !== entry.file.path || state.stamp !== stamp2(entry.file);
     })) throw conflict3();
     if (!latest || latest.n !== currentVersion || live.at(-1)?.file !== latest.file) throw conflict3();
   };
@@ -745,22 +745,22 @@ async function pruneTemplateRevisions(plugin, file, currentVersion, expectedText
   };
   await verifyCurrent();
   const plans = [];
-  for (const entry of stale) {
+  for (const entry of stale2) {
     const revisionPath = `${rootPath}/v${entry.n}.md`;
     plugin.assertVaultFilePath(entry.file, revisionPath, "Template revision moved or was replaced before cleanup.");
-    const text = await vault.read(entry.file);
+    const text2 = await vault.read(entry.file);
     assertState();
     plugin.assertVaultFilePath(entry.file, revisionPath, "Template revision moved or was replaced while preparing cleanup.");
-    plans.push({ ...entry, path: revisionPath, text });
+    plans.push({ ...entry, path: revisionPath, text: text2 });
   }
   let removed = 0;
   for (const plan of plans) {
     await verifyCurrent();
     plugin.assertVaultFilePath(plan.file, plan.path, "Template revision moved or was replaced before cleanup.");
-    const text = await vault.read(plan.file);
+    const text2 = await vault.read(plan.file);
     assertState();
     plugin.assertVaultFilePath(plan.file, plan.path, "Template revision moved or was replaced during cleanup.");
-    if (text !== plan.text) throw conflict3();
+    if (text2 !== plan.text) throw conflict3();
     const nonce = globalThis.crypto?.randomUUID?.() || `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
     const stagedName = "r" + nonce.replace(/-/g, "").slice(0, Math.min(15, plan.file.name.length - 1));
     const stagedPath = `${rootPath}/${stagedName}`;
@@ -770,11 +770,11 @@ async function pruneTemplateRevisions(plugin, file, currentVersion, expectedText
       remaining.delete(plan.file);
       await verifyCurrent();
       plugin.assertVaultFilePath(plan.file, stagedPath, "Template revision moved during retirement.");
-      const stagedStamp = stamp(plan.file);
+      const stagedStamp = stamp2(plan.file);
       const stagedText = await vault.read(plan.file);
       assertState();
       plugin.assertVaultFilePath(plan.file, stagedPath, "Template revision moved during retirement.");
-      if (stagedText !== plan.text || stamp(plan.file) !== stagedStamp) throw conflict3();
+      if (stagedText !== plan.text || stamp2(plan.file) !== stagedStamp) throw conflict3();
       await vault.trash(plan.file, false);
       if (vault.getAbstractFileByPath(stagedPath)) throw conflict3();
       removed++;
@@ -812,7 +812,7 @@ function installTransferFeatures(plugin, deps) {
   const service = createTransferService(plugin, deps);
   plugin.collectLegacyTransferLeftovers = (source, destination, template, working) => collectLegacyTransferLeftovers(plugin, source, destination, template, working);
   const vault = plugin.app.vault;
-  const notice = (text) => new deps.Notice(text);
+  const notice = (text2) => new deps.Notice(text2);
   const activeModals = /* @__PURE__ */ new Set();
   function modal(title, render) {
     class TransferModal extends deps.Modal {
@@ -837,8 +837,8 @@ function installTransferFeatures(plugin, deps) {
     view.open();
     return view;
   }
-  function button(el, text, action, cls = "") {
-    const control = el.createEl("button", { text, cls, attr: { type: "button" } });
+  function button(el, text2, action, cls = "") {
+    const control = el.createEl("button", { text: text2, cls, attr: { type: "button" } });
     control.onclick = async () => {
       if (control.disabled || !control.isConnected) return;
       control.disabled = true;
@@ -863,14 +863,14 @@ function installTransferFeatures(plugin, deps) {
     const wrap = el.createEl("label");
     wrap.createSpan({ text: label });
     const field = wrap.createEl("select", { attr: { "aria-label": label } });
-    for (const [key4, text] of values) field.createEl("option", { value: key4, text });
+    for (const [key4, text2] of values) field.createEl("option", { value: key4, text: text2 });
     field.value = value;
     return field;
   }
-  function check(el, text) {
+  function check(el, text2) {
     const wrap = el.createEl("label");
     const field = wrap.createEl("input", { type: "checkbox" });
-    wrap.createSpan({ text });
+    wrap.createSpan({ text: text2 });
     return field;
   }
   let profileChoiceSerial = 0;
@@ -891,19 +891,19 @@ function installTransferFeatures(plugin, deps) {
     senderLabel.createSpan({ text: "Use sender" });
     return () => useSender.checked ? sender : recipient;
   }
-  function previewText(el, label, text) {
+  function previewText(el, label, text2) {
     const detail = el.createEl("details");
     detail.createEl("summary", { text: label });
     const area = detail.createEl("textarea", { attr: { "aria-label": label, rows: "12", readonly: "" } });
-    area.value = text;
+    area.value = text2;
   }
-  async function shareFile(plan, text) {
+  async function shareFile(plan, text2) {
     const name = plan.exportPath.split("/").pop();
     try {
-      if (typeof deps.shareFile === "function") return await deps.shareFile({ name, type: "application/json", text });
+      if (typeof deps.shareFile === "function") return await deps.shareFile({ name, type: "application/json", text: text2 });
       const navigator = globalThis.navigator, File = globalThis.File;
       if (typeof navigator?.share !== "function" || typeof File !== "function") return null;
-      const file = new File([text], name, { type: "application/json" });
+      const file = new File([text2], name, { type: "application/json" });
       if (typeof navigator.canShare === "function" && !navigator.canShare({ files: [file] })) return null;
       await navigator.share({ files: [file] });
       return true;
@@ -912,13 +912,13 @@ function installTransferFeatures(plugin, deps) {
       return null;
     }
   }
-  async function copyTransferText(text) {
-    if (typeof deps.copyText === "function") return await deps.copyText(text);
+  async function copyTransferText(text2) {
+    if (typeof deps.copyText === "function") return await deps.copyText(text2);
     try {
       const clipboard = globalThis.navigator?.clipboard;
       const writeText = clipboard?.writeText;
       if (typeof writeText !== "function") return false;
-      await writeText.call(clipboard, text);
+      await writeText.call(clipboard, text2);
       return true;
     } catch {
       return false;
@@ -1184,8 +1184,8 @@ function installTransferFeatures(plugin, deps) {
     return { plan, text: await service.exportJSON(plan) };
   }
   plugin.openCSTExport = async (file) => {
-    const { plan, text } = await exportPlan(file);
-    const shared = await shareFile(plan, text);
+    const { plan, text: text2 } = await exportPlan(file);
+    const shared = await shareFile(plan, text2);
     if (shared === true) {
       notice("CST share card sent to your device’s share sheet.");
       return { mode: "shared", plan };
@@ -1196,12 +1196,12 @@ function installTransferFeatures(plugin, deps) {
     return { mode: "saved", plan, file: saved };
   };
   plugin.openCSTShare = async (file) => {
-    const { plan, text } = await exportPlan(file);
+    const { plan, text: text2 } = await exportPlan(file);
     return modal("Share case", (el, view) => {
       el.createEl("p", { text: "Share the complete case file through Messages. Copy text only is a fallback with the same case, profile and images in a longer message." });
       const actions = el.createDiv({ cls: "cst-transfer-actions cst-transfer-share-actions" });
       button(actions, "Share case file", async () => {
-        const shared = await shareFile(plan, text);
+        const shared = await shareFile(plan, text2);
         if (shared === false) return;
         if (shared === true) notice("CST case sent to your device’s share sheet.");
         else {
@@ -1211,7 +1211,7 @@ function installTransferFeatures(plugin, deps) {
         view.close();
       }, "mod-cta");
       button(actions, "Copy text only", async () => {
-        if (!await copyTransferText(text)) throw new Error("Clipboard copying is unavailable. Share the case file instead.");
+        if (!await copyTransferText(text2)) throw new Error("Clipboard copying is unavailable. Share the case file instead.");
         notice("Complete case text copied, including images. Paste it into Messages unchanged.");
         view.close();
       });
@@ -1225,8 +1225,8 @@ function installTransferFeatures(plugin, deps) {
     return saved;
   };
   plugin.copyCSTExport = async (file) => {
-    const { plan, text } = await exportPlan(file);
-    if (!await copyTransferText(text)) throw new Error("Clipboard copying is unavailable. Use Share case or Save share card.");
+    const { plan, text: text2 } = await exportPlan(file);
+    if (!await copyTransferText(text2)) throw new Error("Clipboard copying is unavailable. Use Share case or Save share card.");
     notice("Complete case text copied, including images. Send it unchanged.");
     return plan;
   };
@@ -1367,8 +1367,8 @@ function installTransferFeatures(plugin, deps) {
       }
       const file = files2[0];
       if (!file) {
-        const text = typeof data?.getData === "function" ? data.getData("text/plain") : "";
-        if (!copiedFileReference(text)) return;
+        const text2 = typeof data?.getData === "function" ? data.getData("text/plain") : "";
+        if (!copiedFileReference(text2)) return;
         event.preventDefault?.();
         event.stopPropagation?.();
         pasted.value = "";
@@ -1562,7 +1562,7 @@ function installTransferFeatures(plugin, deps) {
 }
 
 // src/resource-normalization.mjs
-var key = (text) => String(text).normalize("NFC").trim().replace(/\s+/g, " ").toLowerCase();
+var key = (text2) => String(text2).normalize("NFC").trim().replace(/\s+/g, " ").toLowerCase();
 var optionalString = (value) => value === void 0 || value === null ? null : typeof value === "string" && value.trim() && value.length <= 160 && !/[\u0000-\u001f\u007f]/.test(value) ? value.trim() : void 0;
 function validateResourceSuggestion(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Invalid resource suggestion");
@@ -1581,24 +1581,24 @@ function validateResourceSuggestion(value) {
 }
 var needles = /* @__PURE__ */ new Set(["CT", "CT-1", "CT-2", "CT-3", "CTX", "CTX-1", "SH", "SH-1", "SH-2", "SH-3", "SH-4", "SH-5", "RB", "RB-1", "RB-2", "RB-3", "RB-4", "RB-5", "RB-6", "FS", "FS-1", "FS-2", "FS-3", "FS-4", "PS", "PS-1", "PS-2", "PS-3", "PS-4", "PS-5", "PS-6", "P-1", "P-2", "P-3", "P-4", "P-6", "PC-1", "PC-3", "CP-1", "CP-2", "TP-1", "BV-1", "BV-2", "CV-1", "CV-2", "CV-3", "V-20", "V-26", "KS"]);
 var materials = /* @__PURE__ */ new Map([["vic", "Vicryl"], ["vicryl", "Vicryl"], ["monocryl", "Monocryl"], ["mono", "Monocryl"], ["pds", "PDS"], ["prolene", "Prolene"], ["nylon", "Nylon"], ["ethilon", "Ethilon"], ["silk", "Silk"], ["ethibond", "Ethibond"], ["chromic", "Chromic"], ["gut", "Gut"], ["biosyn", "Biosyn"], ["polysorb", "Polysorb"], ["maxon", "Maxon"], ["surgipro", "Surgipro"]]);
-function resourcePhraseKey(text) {
-  return key(text);
+function resourcePhraseKey(text2) {
+  return key(text2);
 }
 function normalizeResourceIdentity(raw, section = "") {
-  let text = String(raw).normalize("NFC").trim().replace(/\s+/g, " ");
-  if (!text || text.length > 1e3 || /[\r\n]/.test(String(raw))) return null;
-  text = text.replace(/^(?:\d+\s*[x×]\s*|[x×]\s*\d+\s+)/i, "").replace(/\s*[x×]\s*\d+$/i, "").trim();
+  let text2 = String(raw).normalize("NFC").trim().replace(/\s+/g, " ");
+  if (!text2 || text2.length > 1e3 || /[\r\n]/.test(String(raw))) return null;
+  text2 = text2.replace(/^(?:\d+\s*[x×]\s*|[x×]\s*\d+\s+)/i, "").replace(/\s*[x×]\s*\d+$/i, "").trim();
   let quantity = null;
   const explicitQuantity = String(raw).trim().match(/(?:[x×]\s*(\d+)$|^(\d+)\s*[x×])/i);
   if (explicitQuantity) quantity = Number(explicitQuantity[1] || explicitQuantity[2]);
-  const suture = /^sutures?$/i.test(section) || /\b(?:vic(?:ryl)?|monocryl|pds|prolene|ethilon|ethibond|chromic|biosyn|polysorb|maxon|surgipro)\b/i.test(text);
+  const suture = /^sutures?$/i.test(section) || /\b(?:vic(?:ryl)?|monocryl|pds|prolene|ethilon|ethibond|chromic|biosyn|polysorb|maxon|surgipro)\b/i.test(text2);
   if (suture) {
-    text = text.replace(/^sutures?\s+/i, "");
-    const leading = text.match(/^\d+\s+(?=\d+\s*-\s*0\b|[1-9]0\b|\d+\s+[A-Za-z])/);
+    text2 = text2.replace(/^sutures?\s+/i, "");
+    const leading = text2.match(/^\d+\s+(?=\d+\s*-\s*0\b|[1-9]0\b|\d+\s+[A-Za-z])/);
     if (leading) quantity ?? (quantity = Number(leading[0].trim()));
-    text = text.replace(/^\d+\s+(?=\d+\s*-\s*0\b|[1-9]0\b|\d+\s+[A-Za-z])/, "");
-    text = text.replace(/^(\d+)\s*-\s*0\b/, "$1-0").replace(/^([1-9])0\b/, "$1-0");
-    const tokens = text.split(" ");
+    text2 = text2.replace(/^\d+\s+(?=\d+\s*-\s*0\b|[1-9]0\b|\d+\s+[A-Za-z])/, "");
+    text2 = text2.replace(/^(\d+)\s*-\s*0\b/, "$1-0").replace(/^([1-9])0\b/, "$1-0");
+    const tokens = text2.split(" ");
     if (!/^(?:[1-9]\d?-0|0{1,3}|[1-9])$/.test(tokens[0])) return null;
     const size = tokens.shift();
     const canonical = tokens.join(" ").replace(/\b([A-Za-z]{1,3})\s*-?\s*(\d{1,2})\b/g, "$1-$2").split(" ");
@@ -1613,21 +1613,21 @@ function normalizeResourceIdentity(raw, section = "") {
     return { label, normalized: key(label), kind: "suture", quantity, size, material, needle, key: JSON.stringify(["suture", key(label)]) };
   }
   const countable = /^(?:kelly|allis|hemostat|kocher|crile|mosquito|clamp|gauze|towel|scissors|forceps|retractor)(?:\b|\d)/i;
-  const barePrefix = text.match(/^(\d+)\s+(.+)$/);
+  const barePrefix = text2.match(/^(\d+)\s+(.+)$/);
   if (barePrefix && countable.test(barePrefix[2])) {
     quantity ?? (quantity = Number(barePrefix[1]));
-    text = barePrefix[2];
+    text2 = barePrefix[2];
   }
-  if (countable.test(text) && !/\b(?:size|fr|mm|cm|inch|blade)\b/i.test(text)) {
-    const suffix = text.match(/(?<=[A-Za-z])\s*(\d+)$/);
+  if (countable.test(text2) && !/\b(?:size|fr|mm|cm|inch|blade)\b/i.test(text2)) {
+    const suffix = text2.match(/(?<=[A-Za-z])\s*(\d+)$/);
     if (suffix) {
       quantity ?? (quantity = Number(suffix[1]));
-      text = text.slice(0, suffix.index).trim();
+      text2 = text2.slice(0, suffix.index).trim();
     }
   }
-  if (!text) return null;
-  const kind = /\b(?:kelly|allis|hemostat|kocher|crile|mosquito|clamp)\b/i.test(text) ? "clamp" : /\b(?:scissors|metzenbaum)\b/i.test(text) ? "scissors" : /\b(?:needle holder|needle driver)\b/i.test(text) ? "needle-holder" : /\b(?:forceps|debakey|adson)\b/i.test(text) ? "forceps" : /\b(?:retractor|richardson|army navy|weitlaner)\b/i.test(text) ? "retractor" : /\b(?:gauze|telfa|tegaderm|dressing|kerlix)\b/i.test(text) ? "dressing" : /\b(?:saline|water|irrigation)\b/i.test(text) ? "fluid" : "resource";
-  return { label: text, normalized: key(text), kind, quantity, key: JSON.stringify([kind, key(text)]) };
+  if (!text2) return null;
+  const kind = /\b(?:kelly|allis|hemostat|kocher|crile|mosquito|clamp)\b/i.test(text2) ? "clamp" : /\b(?:scissors|metzenbaum)\b/i.test(text2) ? "scissors" : /\b(?:needle holder|needle driver)\b/i.test(text2) ? "needle-holder" : /\b(?:forceps|debakey|adson)\b/i.test(text2) ? "forceps" : /\b(?:retractor|richardson|army navy|weitlaner)\b/i.test(text2) ? "retractor" : /\b(?:gauze|telfa|tegaderm|dressing|kerlix)\b/i.test(text2) ? "dressing" : /\b(?:saline|water|irrigation)\b/i.test(text2) ? "fluid" : "resource";
+  return { label: text2, normalized: key(text2), kind, quantity, key: JSON.stringify([kind, key(text2)]) };
 }
 
 // src/resource-collector.mjs
@@ -1643,19 +1643,19 @@ var sections = /* @__PURE__ */ new Map([
   ["dressing", "Dressings"],
   ["dressings", "Dressings"]
 ]);
-function stripResourceMarkers(text) {
-  return String(text).replace(/<!--[\s\S]*?(?:-->|$)/g, (comment) => /^<!-- cst-resource-grabbed:v1:[a-f0-9]{64} -->$/.test(comment) ? "" : comment);
+function stripResourceMarkers(text2) {
+  return String(text2).replace(/<!--[\s\S]*?(?:-->|$)/g, (comment) => /^<!-- cst-resource-grabbed:v1:[a-f0-9]{64} -->$/.test(comment) ? "" : comment);
 }
-function resourceBody(text) {
-  return String(text).replace(/^\uFEFF/, "").replace(/\r\n?/g, "\n").replace(/^---\n[\s\S]*?\n(?:---|\.\.\.)[ \t]*(?:\n|$)/, "").replace(/<!--[\s\S]*?(?:-->|$)/g, "");
+function resourceBody(text2) {
+  return String(text2).replace(/^\uFEFF/, "").replace(/\r\n?/g, "\n").replace(/^---\n[\s\S]*?\n(?:---|\.\.\.)[ \t]*(?:\n|$)/, "").replace(/<!--[\s\S]*?(?:-->|$)/g, "");
 }
-function comparableResourceBody(text) {
-  return resourceBody(text).split("\n").map((line) => line.trim().replace(/[ \t]+/g, " ")).filter(Boolean).join("\n");
+function comparableResourceBody(text2) {
+  return resourceBody(text2).split("\n").map((line) => line.trim().replace(/[ \t]+/g, " ")).filter(Boolean).join("\n");
 }
-function extractResourceCandidates(text, aliases = []) {
+function extractResourceCandidates(text2, aliases = []) {
   const stack = [], entries = /* @__PURE__ */ new Map();
   let fence = null;
-  for (const raw of resourceBody(text).split("\n")) {
+  for (const raw of resourceBody(text2).split("\n")) {
     const fenceMatch = raw.match(/^\s{0,3}(\x60{3,}|~{3,})/);
     if (fenceMatch) {
       const token = fenceMatch[1];
@@ -1731,19 +1731,19 @@ var ResourceCollector = class {
       this.catalog.set(entry.key, { ...entry, sources: new Map(entry.sources.map((source) => [JSON.stringify([source.noteId, source.section]), { ...source }])) });
     }
   }
-  observe({ id: id2, path, text, fingerprint }) {
+  observe({ id: id2, path, text: text2, fingerprint }) {
     if (!id2 || !path) throw new Error("A stable note identity and path are required.");
-    const body = comparableResourceBody(text);
+    const body = comparableResourceBody(text2);
     const previous = this.notes.get(id2);
     for (const resource of this.catalog.values()) {
       for (const source of resource.sources.values()) if (source.noteId === id2) source.path = path;
     }
     if (previous?.body === body && previous.fingerprint === fingerprint) {
       previous.path = path;
-      previous.text = text;
+      previous.text = text2;
       return false;
     }
-    this.notes.set(id2, { id: id2, path, body, text, fingerprint, revision: ++this.revision, grabbed: false, entries: [] });
+    this.notes.set(id2, { id: id2, path, body, text: text2, fingerprint, revision: ++this.revision, grabbed: false, entries: [] });
     this.pending.add(id2);
     return true;
   }
@@ -1819,6 +1819,7 @@ var ResourceCollector = class {
 // src/resource-runtime.mjs
 var kinds = ["resource", "clamp", "scissors", "forceps", "retractor", "needle-holder", "suture", "dressing", "fluid"];
 var sectionNames = ["Mayo", "Basin", "Sutures", "Dressings"];
+var resourceDataBlock = /^\x60{3}cst-resource-data\r?\n([\s\S]*?)\r?\n\x60{3}[ \t]*$/m;
 var emptyState = () => ({ version: 1, revision: 0, aliases: [], hidden: [], catalog: [], notes: [] });
 var conflict = () => new Error("Resource collection paused because Sync changed a file. Refresh after Sync settles.");
 var safePath = (path) => {
@@ -1847,9 +1848,9 @@ function validateResourceAlias(value) {
 function encodeResourceIndex(state) {
   return "---\ncst_type: resource-library\n---\n\n# Resource Library\n\nManaged by CST Notes. Review terminology in Resource Admin. AI disconnected.\n\n```cst-resource-data\n" + JSON.stringify(state, null, 2) + "\n```\n";
 }
-function decodeResourceIndex(text) {
-  if (typeof text !== "string" || text.length > 16e6) throw new Error("Invalid resource index.");
-  const match = /^\x60{3}cst-resource-data\r?\n([\s\S]*?)\r?\n\x60{3}[ \t]*$/m.exec(text);
+function decodeResourceIndex(text2) {
+  if (typeof text2 !== "string" || text2.length > 16e6) throw new Error("Invalid resource index.");
+  const match = resourceDataBlock.exec(text2);
   if (!match) throw new Error("Resource index data is missing.");
   const state = JSON.parse(match[1]);
   if (state.version !== 1 || !Number.isSafeInteger(state.revision) || state.revision < 0 || !["aliases", "hidden", "catalog", "notes"].every((name) => Array.isArray(state[name])) || state.catalog.length > 1e5 || state.aliases.length > 1e4) throw new Error("Unsupported resource index.");
@@ -1867,9 +1868,45 @@ function decodeResourceIndex(text) {
   state.catalog = state.catalog.map(validateResourceCatalogEntry);
   return state;
 }
-async function resourceFingerprint(text, aliases = []) {
+function inspectResourceIndex(text2) {
+  try {
+    return { status: "valid", state: decodeResourceIndex(text2) };
+  } catch (error) {
+    const unsupported = { status: "unsupported", reason: error.message };
+    if (typeof text2 !== "string" || text2.length > 16e6) return unsupported;
+    if (!/^\uFEFF?---\r?\ncst_type: resource-library\r?\n---(?:\r?\n|$)/.test(text2)) return unsupported;
+    const openers = /^\x60{3}cst-resource-data\r?\n/gm;
+    const opener = openers.exec(text2);
+    if (!opener || openers.test(text2)) return unsupported;
+    const block = resourceDataBlock.exec(text2);
+    const payload = block?.[1] ?? text2.slice(opener.index + opener[0].length);
+    let data;
+    try {
+      data = JSON.parse(payload);
+    } catch {
+      const canRebuild = /^\s*\{\s*"version"\s*:\s*1(?=\s*[,}])/.test(payload);
+      return { status: "invalid", canRebuild, reason: error.message };
+    }
+    return data?.version === 1 ? { status: "invalid", canRebuild: true, reason: error.message } : unsupported;
+  }
+}
+function resourceReviewPaths(plugin, text2) {
+  const session = text2 === null ? null : plugin.parseMigrationSessionText(text2);
+  if (session && (!session.status || typeof session.status !== "object" || Array.isArray(session.status) || Object.values(session.status).some((value) => typeof value !== "string"))) throw new Error("Invalid migration review status.");
+  return new Set(Object.entries(session?.status || {}).filter(([, status]) => /^needs[ _-]review$/i.test(status)).map(([path]) => path));
+}
+function resourceCaseIdentity(plugin, parseFrontmatterObject2, file, text2, reviewPaths) {
+  const context = plugin.caseContext(file);
+  if (!context || !plugin.isCasePath(file.path) || reviewPaths.has(file.path)) return null;
+  const relative = file.path.slice(plugin.contentRoot.length + 1).split("/");
+  if (relative.length !== 3 || relative.some((part) => /^(?:needs[ _-]review|internal|_.*)(?:\.md)?$/i.test(part))) return null;
+  const fm = parseFrontmatterObject2(text2);
+  if (fm.cst_type && fm.cst_type !== "case" || String(fm.cst_example).toLowerCase() === "true" || String(fm.cst_id || "").startsWith("cst-example-") || String(fm.cst_internal).toLowerCase() === "true" || [fm.cst_status, fm.migration_status, fm.status].some((value) => /needs[ _-]review/i.test(String(value || ""))) || fm.cst_id && (typeof fm.cst_id !== "string" || fm.cst_id.length > 200)) return null;
+  return { id: fm.cst_id ? "id:" + fm.cst_id : "path:" + file.path, context };
+}
+async function resourceFingerprint(text2, aliases = []) {
   if (!globalThis.crypto?.subtle) throw new Error("Resource hashing is unavailable on this device.");
-  const bytes2 = new TextEncoder().encode(JSON.stringify([comparableResourceBody(text), aliases]));
+  const bytes2 = new TextEncoder().encode(JSON.stringify([comparableResourceBody(text2), aliases]));
   const digest2 = await globalThis.crypto.subtle.digest("SHA-256", bytes2);
   return [...new Uint8Array(digest2)].map((n) => n.toString(16).padStart(2, "0")).join("");
 }
@@ -1916,6 +1953,7 @@ function createResourceRuntime(plugin, deps) {
     indexSuspended: /* @__PURE__ */ new Map(),
     scanDirty: false,
     discardHistoryOnResume: false,
+    preserveIndexOnResume: false,
     pathVersions: /* @__PURE__ */ new Map()
   };
   const requestedBatch = Number(deps.resourceBatchSize), requestedDelay = Number(deps.resourceDebounceMs);
@@ -1992,7 +2030,7 @@ function createResourceRuntime(plugin, deps) {
     active();
     if (!(vault.getAbstractFileByPath(path) instanceof deps.TFolder)) throw conflict();
   }
-  async function backup(path, text) {
+  async function backup(path, text2) {
     const base = roots().backups;
     await ensureFolder(base);
     const token = deps.id("resource");
@@ -2002,12 +2040,12 @@ function createResourceRuntime(plugin, deps) {
     await ensureFolder(folder);
     active();
     const originalPath = folder + "/Original.md", manifestPath = folder + "/Manifest.md";
-    const original = await vault.create(originalPath, text);
+    const original = await vault.create(originalPath, text2);
     active();
     const manifestText = "# Resource backup\n\n" + JSON.stringify({ originalPath: path, version: 1 }) + "\n";
     const manifest = await vault.create(manifestPath, manifestText);
     fileAt(original, originalPath);
-    if (await vault.read(original) !== text) throw conflict();
+    if (await vault.read(original) !== text2) throw conflict();
     fileAt(original, originalPath);
     fileAt(manifest, manifestPath);
     if (await vault.read(manifest) !== manifestText) throw conflict();
@@ -2020,14 +2058,14 @@ function createResourceRuntime(plugin, deps) {
     const generation = runtime.indexGeneration;
     const path = roots().index, file = vault.getAbstractFileByPath(path);
     if (file && !(file instanceof deps.TFile)) throw new Error("Resource index path is occupied.");
-    const text = file ? await vault.read(file) : null;
+    const text2 = file ? await vault.read(file) : null;
     if (file) {
       fileAt(file, path);
-      if (await vault.read(file) !== text) throw conflict();
+      if (await vault.read(file) !== text2) throw conflict();
       fileAt(file, path);
     } else if (vault.getAbstractFileByPath(path)) throw conflict();
     if (generation !== runtime.indexGeneration) throw conflict();
-    const state = text === null ? emptyState() : decodeResourceIndex(text);
+    const state = text2 === null ? emptyState() : decodeResourceIndex(text2);
     const local = discardHistory ? [] : runtime.collector.snapshot().catalog;
     const merged = new ResourceCollector({ catalog: state.catalog, aliases: state.aliases });
     for (const entry of local) {
@@ -2041,7 +2079,7 @@ function createResourceRuntime(plugin, deps) {
     runtime.state = state;
     runtime.collector = merged;
     runtime.indexFile = file || null;
-    runtime.indexText = text;
+    runtime.indexText = text2;
     runtime.paths.clear();
     runtime.claims.clear();
     runtime.pathVersions.clear();
@@ -2054,19 +2092,17 @@ function createResourceRuntime(plugin, deps) {
     const path = roots().session, file = vault.getAbstractFileByPath(path) || null;
     const generation = runtime.reviewGeneration;
     if (file && !(file instanceof deps.TFile)) throw new Error("Migration session path is occupied.");
-    const text = file ? await vault.read(file) : null;
+    const text2 = file ? await vault.read(file) : null;
     if (file) fileAt(file, path);
     active();
     if (generation !== runtime.reviewGeneration || (vault.getAbstractFileByPath(path) || null) !== file) throw conflict();
-    if (!force && !runtime.reviewDirty && file === runtime.reviewFile && text === runtime.reviewText) return false;
-    const session = text === null ? null : plugin.parseMigrationSessionText(text);
-    if (session && (!session.status || typeof session.status !== "object" || Array.isArray(session.status) || Object.values(session.status).some((value) => typeof value !== "string"))) throw new Error("Invalid migration review status.");
-    const excluded = new Set(Object.entries(session?.status || {}).filter(([, status]) => /^needs[ _-]review$/i.test(status)).map(([path2]) => path2));
+    if (!force && !runtime.reviewDirty && file === runtime.reviewFile && text2 === runtime.reviewText) return false;
+    const excluded = resourceReviewPaths(plugin, text2);
     if (generation !== runtime.reviewGeneration) throw conflict();
     invalidateAll();
     runtime.reviewPaths = excluded;
     runtime.reviewFile = file;
-    runtime.reviewText = text;
+    runtime.reviewText = text2;
     runtime.reviewDirty = false;
     return true;
   }
@@ -2074,9 +2110,9 @@ function createResourceRuntime(plugin, deps) {
     if (runtime.indexDirty) {
       const generation = runtime.indexGeneration;
       const path = roots().index, current = vault.getAbstractFileByPath(path) || null;
-      const text = current instanceof deps.TFile ? await vault.read(current) : null;
+      const text2 = current instanceof deps.TFile ? await vault.read(current) : null;
       active();
-      if (current !== runtime.indexFile || text !== runtime.indexText) {
+      if (current !== runtime.indexFile || text2 !== runtime.indexText) {
         await load();
         runtime.scanDirty = true;
       } else if (generation === runtime.indexGeneration) {
@@ -2139,14 +2175,8 @@ function createResourceRuntime(plugin, deps) {
     runtime.indexText = next;
     runtime.state = nextState;
   }
-  function eligible(file, text) {
-    const context = plugin.caseContext(file);
-    if (!context || !plugin.isCasePath(file.path) || runtime.reviewPaths.has(file.path) || runtime.reviewDirty) return null;
-    const relative = file.path.slice(plugin.contentRoot.length + 1).split("/");
-    if (relative.length !== 3 || relative.some((part) => /^(?:needs[ _-]review|internal|_.*)(?:\.md)?$/i.test(part))) return null;
-    const fm = deps.parseFrontmatterObject(text);
-    if (fm.cst_type && fm.cst_type !== "case" || String(fm.cst_example).toLowerCase() === "true" || String(fm.cst_id || "").startsWith("cst-example-") || String(fm.cst_internal).toLowerCase() === "true" || [fm.cst_status, fm.migration_status, fm.status].some((value) => /needs[ _-]review/i.test(String(value || ""))) || fm.cst_id && (typeof fm.cst_id !== "string" || fm.cst_id.length > 200)) return null;
-    return { id: fm.cst_id ? "id:" + fm.cst_id : "path:" + file.path, context };
+  function eligible(file, text2) {
+    return runtime.reviewDirty ? null : resourceCaseIdentity(plugin, deps.parseFrontmatterObject, file, text2, runtime.reviewPaths);
   }
   function releasePath(path) {
     const old = runtime.paths.get(path);
@@ -2191,10 +2221,10 @@ function createResourceRuntime(plugin, deps) {
       return;
     }
     const reviewGeneration = runtime.reviewGeneration, initialVersion = runtime.pathVersions.get(path) || 0;
-    const text = await vault.read(file);
+    const text2 = await vault.read(file);
     fileAt(file, path);
     if (initialVersion !== (runtime.pathVersions.get(path) || 0)) throw conflict();
-    const identity = eligible(file, text);
+    const identity = eligible(file, text2);
     if (!identity) {
       releasePath(path);
       return;
@@ -2208,14 +2238,14 @@ function createResourceRuntime(plugin, deps) {
       runtime.collector.remove(identity.id);
       return;
     }
-    const hash = await resourceFingerprint(text, runtime.state.aliases);
+    const hash = await resourceFingerprint(text2, runtime.state.aliases);
     fileAt(file, path);
     if (initialVersion !== (runtime.pathVersions.get(path) || 0) || reviewGeneration !== runtime.reviewGeneration) throw conflict();
-    runtime.collector.observe({ id: identity.id, path, text, fingerprint: hash });
+    runtime.collector.observe({ id: identity.id, path, text: text2, fingerprint: hash });
     const result = runtime.collector.prepare(identity.id);
     const current = await vault.read(file);
     fileAt(file, path);
-    if (current !== text || initialVersion !== (runtime.pathVersions.get(path) || 0) || reviewGeneration !== runtime.reviewGeneration || eligible(file, current)?.id !== identity.id) throw conflict();
+    if (current !== text2 || initialVersion !== (runtime.pathVersions.get(path) || 0) || reviewGeneration !== runtime.reviewGeneration || eligible(file, current)?.id !== identity.id) throw conflict();
     if (result && !runtime.collector.commit(result)) throw conflict();
   }
   async function cleanupLegacyMarkers() {
@@ -2232,22 +2262,22 @@ function createResourceRuntime(plugin, deps) {
       safePath(path);
       fileAt(file, path);
       const version2 = runtime.pathVersions.get(path) || 0;
-      const text = await vault.read(file);
+      const text2 = await vault.read(file);
       fileAt(file, path);
       if (version2 !== (runtime.pathVersions.get(path) || 0)) throw conflict();
-      const next = stripResourceMarkers(text);
-      if (next === text) {
+      const next = stripResourceMarkers(text2);
+      if (next === text2) {
         report.skipped++;
         continue;
       }
       if (typeof vault.process !== "function") throw new Error("Atomic vault updates are required for resource cleanup.");
-      if (await vault.read(file) !== text) throw conflict();
+      if (await vault.read(file) !== text2) throw conflict();
       fileAt(file, path);
-      const backupPath = await backup(path, text);
+      const backupPath = await backup(path, text2);
       fileAt(file, path);
       await vault.process(file, (current2) => {
         fileAt(file, path);
-        if (current2 !== text || version2 !== (runtime.pathVersions.get(path) || 0) || !plugin.isCasePath(path) || !plugin.caseContext(file)) throw conflict();
+        if (current2 !== text2 || version2 !== (runtime.pathVersions.get(path) || 0) || !plugin.isCasePath(path) || !plugin.caseContext(file)) throw conflict();
         return next;
       });
       invalidatePath(path);
@@ -2296,18 +2326,20 @@ function createResourceRuntime(plugin, deps) {
   });
   async function restart(options = {}) {
     const rootKey = JSON.stringify(roots());
-    const discardHistory = !!options.discardHistory || runtime.discardHistoryOnResume || runtime.rootKey && runtime.rootKey !== rootKey;
+    const preserveIndex = runtime.preserveIndexOnResume;
+    const discardHistory = preserveIndex || !!options.discardHistory || runtime.discardHistoryOnResume || runtime.rootKey && runtime.rootKey !== rootKey;
     runtime.rootKey = rootKey;
     runtime.error = "";
     runtime.busy = true;
     try {
       await load({ discardHistory });
       runtime.discardHistoryOnResume = false;
+      runtime.preserveIndexOnResume = false;
       await refreshReviews(true);
       if (options.cleanupLegacyMarkers === true) runtime.lastMarkerCleanup = await cleanupLegacyMarkers();
       runtime.scanDirty = false;
       scan();
-      if (!runtime.pending.size) await persist();
+      if (!runtime.pending.size && !preserveIndex) await persist();
     } catch (error) {
       fail2(error);
     } finally {
@@ -2340,6 +2372,7 @@ function createResourceRuntime(plugin, deps) {
     if (token !== void 0 && !runtime.holds.has(token)) throw new Error("Unknown resource pause token.");
     if (token === void 0 && runtime.holds.size) throw new Error("Resource collection is held by an administrative transaction.");
     runtime.discardHistoryOnResume || (runtime.discardHistoryOnResume = !!options.discardHistory);
+    runtime.preserveIndexOnResume || (runtime.preserveIndexOnResume = options.preserveIndex === true);
     if (token !== void 0) runtime.holds.delete(token);
     if (runtime.holds.size || runtime.stopped || resetPending()) {
       if (resetPending()) clearTimer();
@@ -3332,16 +3365,16 @@ function installAdminWorkspace(plugin, deps) {
       ...identity
     });
   }
-  function recoveredText(text, fields) {
-    const match = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(text);
+  function recoveredText(text2, fields) {
+    const match = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(text2);
     if (!match) throw new Error("Archived case needs a valid frontmatter block.");
-    const newline = text.includes("\r\n") ? "\r\n" : "\n";
+    const newline = text2.includes("\r\n") ? "\r\n" : "\n";
     let header2 = match[1];
     for (const [key4, value] of Object.entries(fields)) {
       header2 = header2.split(/\r?\n/).filter((line) => !new RegExp("^" + key4 + "\\s*:").test(line)).join(newline);
       header2 += newline + key4 + ": " + JSON.stringify(value);
     }
-    return "---" + newline + header2 + newline + "---" + newline + text.slice(match[0].length);
+    return "---" + newline + header2 + newline + "---" + newline + text2.slice(match[0].length);
   }
   async function prepareRecoveryIdentity(entry, entries, target) {
     const changes = /* @__PURE__ */ new Map(), restoredTexts = /* @__PURE__ */ new Map();
@@ -3848,7 +3881,7 @@ function installAdminWorkspace(plugin, deps) {
       return result || object3;
     };
     const scopedVault = new Proxy(vault, { get(target, key4) {
-      if (key4 === "create" || key4 === "createFolder") return (p, text) => write(key4, p, text);
+      if (key4 === "create" || key4 === "createFolder") return (p, text2) => write(key4, p, text2);
       if (key4 === "process" || key4 === "modify") return async (file, transform) => {
         const expected = await owned(file);
         assertSettings();
@@ -4511,9 +4544,9 @@ function installAttachmentRecovery(plugin, {
     for (const entry of manifests) {
       validateAttachmentPath(entry.path);
       if (leaf(entry.path) !== "Image Moves.json") throw new Error("Image move manifest spelling needs review.");
-      const text = await read(entry.file);
-      if (text.length > 8e6) throw new Error("Image move manifest is too large.");
-      const data = JSON.parse(text), snapshot = parent2(entry.path);
+      const text2 = await read(entry.file);
+      if (text2.length > 8e6) throw new Error("Image move manifest is too large.");
+      const data = JSON.parse(text2), snapshot = parent2(entry.path);
       if (![1, 2].includes(data.version) || !Array.isArray(data.moves) || !data.moves.length || data.moves.length > 9999 || data.version === 2 && data.type !== "cst-image-moves") throw new Error("Unsupported image move manifest: " + entry.path);
       const originals = /* @__PURE__ */ new Set(), targets = /* @__PURE__ */ new Set(), backups = /* @__PURE__ */ new Set();
       for (const move of data.moves) {
@@ -4658,22 +4691,22 @@ function installAttachmentRecovery(plugin, {
       namesForPath: (path) => history(path).nodes.map(leaf)
     };
   }
-  async function prepareRestore({ text, originalPath, targetPath = originalPath }) {
+  async function prepareRestore({ text: text2, originalPath, targetPath = originalPath }) {
     validateAttachmentPath(originalPath);
     validateAttachmentPath(targetPath);
-    if (typeof text !== "string") throw new Error("Restored image references require note text.");
-    if (!attachmentLinks2(text).some((link) => image(link.target))) {
-      return Object.freeze({ text, changedLinks: 0, references: Object.freeze([]), assertUnchanged: async () => {
+    if (typeof text2 !== "string") throw new Error("Restored image references require note text.");
+    if (!attachmentLinks2(text2).some((link) => image(link.target))) {
+      return Object.freeze({ text: text2, changedLinks: 0, references: Object.freeze([]), assertUnchanged: async () => {
       } });
     }
-    return prepareWithState(await catalog(), { text, originalPath, targetPath }, true);
+    return prepareWithState(await catalog(), { text: text2, originalPath, targetPath }, true);
   }
-  async function prepareWithState(state, { text, originalPath, targetPath = originalPath }, historicalOnly = false) {
+  async function prepareWithState(state, { text: text2, originalPath, targetPath = originalPath }, historicalOnly = false) {
     validateAttachmentPath(originalPath);
     validateAttachmentPath(targetPath);
-    if (typeof text !== "string") throw new Error("Restored image references require note text.");
+    if (typeof text2 !== "string") throw new Error("Restored image references require note text.");
     const changes = [], references = [];
-    for (const link of attachmentLinks2(text).filter((link2) => image(link2.target))) {
+    for (const link of attachmentLinks2(text2).filter((link2) => image(link2.target))) {
       const resolution = await state.resolveLink(link, originalPath, historicalOnly);
       if (!resolution?.path) continue;
       const resolved = resolution.path;
@@ -4684,7 +4717,7 @@ function installAttachmentRecovery(plugin, {
     }
     await state.assertUnchanged();
     return Object.freeze({
-      text: replaceAttachmentLinks2(text, changes),
+      text: replaceAttachmentLinks2(text2, changes),
       changedLinks: changes.length,
       references: Object.freeze(references),
       assertUnchanged: state.assertUnchanged
@@ -4708,10 +4741,10 @@ function installAttachmentRecovery(plugin, {
     };
     const archivedDocuments = documents.filter((document2) => archived(document2.path)).sort((a, b) => Number(leaf(b.path) === "Reset Manifest.json") - Number(leaf(a.path) === "Reset Manifest.json"));
     for (const document2 of archivedDocuments) {
-      const { path, original: text } = document2;
+      const { path, original: text2 } = document2;
       try {
         if (leaf(path) === "Manifest.md") {
-          const blocks = [...text.matchAll(/```json\s*\n([\s\S]*?)\n```/g)];
+          const blocks = [...text2.matchAll(/```json\s*\n([\s\S]*?)\n```/g)];
           if (blocks.length !== 1) throw new Error("Invalid snapshot mapping.");
           const data = JSON.parse(blocks[0][1]), staged = [], seen = /* @__PURE__ */ new Set();
           if (data.version !== 1 || !Array.isArray(data.files)) throw new Error("Invalid snapshot mapping.");
@@ -4724,12 +4757,12 @@ function installAttachmentRecovery(plugin, {
             staged.push([source, original]);
           }
           for (const pair of staged) mapped(...pair);
-          metadata.set(path, text.replace(blocks[0][0], JSON.stringify({
+          metadata.set(path, text2.replace(blocks[0][0], JSON.stringify({
             ...data,
             files: data.files.map(({ original_path, backup_file, ...rest }) => rest)
           })));
         } else if (leaf(path) === "Reset Manifest.json") {
-          const data = JSON.parse(text);
+          const data = JSON.parse(text2);
           if (data.version !== 1 || data.type !== "cst-workspace-reset" || !Array.isArray(data.entries) || !Array.isArray(data.roots) || data.roots.length !== 2) throw new Error("Invalid reset mapping.");
           const content = validateAttachmentPath(data.content_root), backend = validateAttachmentPath(data.backend_root);
           const expected = [
@@ -4753,14 +4786,14 @@ function installAttachmentRecovery(plugin, {
             entries: data.entries.map(({ original_path, ...rest }) => rest)
           }));
         } else if (leaf(path) === "Surgeon Manifest.json") {
-          const data = JSON.parse(text);
+          const data = JSON.parse(text2);
           if (data.state === "prepared") continue;
           const mapping = surgeonArchiveMapping(data, { content: plugin.contentRoot, backend: plugin.p(), manifestPath: path, validatePath: validateAttachmentPath });
           for (const item of mapping.entries) if (item.kind === "file" && /\.md$/i.test(item.original)) mapped(item.source, item.original);
           const { original_path, archive_path, ...rest } = data;
           metadata.set(path, JSON.stringify({ ...rest, entries: data.entries.map(({ original_path: original_path2, ...entry }) => entry) }));
         } else if (/\/Deleted Cases\/[^/]+\.json$/.test(path)) {
-          const data = JSON.parse(text);
+          const data = JSON.parse(text2);
           const relocation = relocations.find((root) => within2(path, root.archive_path) && typeof data.archive_path === "string" && within2(data.archive_path, root.original_path));
           const source = relocation ? relocation.archive_path + data.archive_path.slice(relocation.original_path.length) : data.archive_path;
           if (data.version !== 1 || !["archived", "restored"].includes(data.state) || source !== path.replace(/\.json$/, ".md")) throw new Error("Invalid deleted-case mapping.");
@@ -4830,9 +4863,9 @@ var below = (path, root) => key3(path) === key3(root) || key3(path).startsWith(k
 function imagePath(path) {
   return IMAGE.test(path);
 }
-function maskCode(text) {
+function maskCode(text2) {
   let fence = null;
-  return (String(text).match(/[^\n]*\n|[^\n]+$/g) || []).map((line) => {
+  return (String(text2).match(/[^\n]*\n|[^\n]+$/g) || []).map((line) => {
     const mark = /^ {0,3}(\x60{3,}|~{3,})(.*)/.exec(line);
     if (fence) {
       if (mark && mark[1][0] === fence[0] && mark[1].length >= fence.length && !mark[2].trim()) fence = null;
@@ -4845,8 +4878,8 @@ function maskCode(text) {
     return line.replace(/(\x60+)([^\n]*?)\1(?!\x60)/g, (value) => " ".repeat(value.length));
   }).join("");
 }
-function attachmentLinks(text) {
-  const links = [], masked = maskCode(text);
+function attachmentLinks(text2) {
+  const links = [], masked = maskCode(text2);
   const pattern = /!?\[\[([^\]\n]+)\]\]|!?\[[^\]\n]*\]\((<[^>\n]+>|[^\s()]+)(?:\s+["'][^\n]*?["'])?\)/g;
   for (const match of masked.matchAll(pattern)) {
     let escapes = 0;
@@ -4874,8 +4907,8 @@ function attachmentLinks(text) {
   }
   return links;
 }
-function replaceAttachmentLinks(text, changes) {
-  let next = text;
+function replaceAttachmentLinks(text2, changes) {
+  let next = text2;
   for (const change of [...changes].sort((a, b) => b.start - a.start)) {
     const path = change.wiki ? change.path : encodeURI(change.path).replace(/#/g, "%23").replace(/&/g, "%26").replace(/\?/g, "%3F").replace(/\(/g, "%28").replace(/\)/g, "%29");
     next = next.slice(0, change.start) + path + next.slice(change.end);
@@ -4890,8 +4923,8 @@ function relativeTarget(note, target) {
   }
   return "../".repeat(source.length) + dest.join("/");
 }
-function referenceText(text) {
-  let result = String(text);
+function referenceText(text2) {
+  let result = String(text2);
   for (let i = 0; i < 3; i++) {
     result = result.replace(/(?:%[a-f0-9]{2})+/gi, (part) => {
       try {
@@ -4964,9 +4997,9 @@ function installAttachmentFeatures(plugin, { TFile: TFile2, Modal: Modal2, Notic
   const assertFile = (file, path) => plugin.assertVaultFilePath(file, path, "Image organization stopped: file changed, moved or was replaced. Preview again.");
   const readText = async (file, path) => {
     assertFile(file, path);
-    const text = await vault.read(file);
+    const text2 = await vault.read(file);
     assertFile(file, path);
-    return text;
+    return text2;
   };
   const assertImage = (candidate) => {
     assertFile(candidate.file, candidate.path);
@@ -5119,7 +5152,7 @@ function installAttachmentFeatures(plugin, { TFile: TFile2, Modal: Modal2, Notic
       expected.set(candidate.target, candidate.file);
     }
     const logPath = plugin.p("Admin/Logs/Automation.md");
-    const logSafe = (text) => !plan.candidates.some((candidate) => referenceText(text).includes(key3(candidate.path.split("/").at(-1))));
+    const logSafe = (text2) => !plan.candidates.some((candidate) => referenceText(text2).includes(key3(candidate.path.split("/").at(-1))));
     const current = files();
     for (const file of current) {
       if (owned.get(file.path) === file) continue;
@@ -5128,9 +5161,9 @@ function installAttachmentFeatures(plugin, { TFile: TFile2, Modal: Modal2, Notic
     }
     for (const [path, file] of expected) assertFile(file, path);
     for (const document2 of plan.documents) {
-      const text = await readText(document2.file, document2.path);
+      const text2 = await readText(document2.file, document2.path);
       const next = written ? plan.plans.find((entry) => entry.file === document2.file)?.next : void 0;
-      if (text !== (next ?? document2.original) && !(snapshot && document2.path === logPath && text.startsWith(document2.original) && logSafe(text))) {
+      if (text2 !== (next ?? document2.original) && !(snapshot && document2.path === logPath && text2.startsWith(document2.original) && logSafe(text2))) {
         throw new Error("A referring or previously unlinked note changed; preview again.");
       }
     }
@@ -5663,14 +5696,14 @@ function ordinaryChanges(baseline, current, draft) {
   };
   if (own2(draft, "defaultGown")) set("defaultGown", draft.defaultGown);
   if (own2(draft, "verificationDebounceSeconds")) {
-    const text = String(draft.verificationDebounceSeconds).trim();
-    if (!/^(?:\d+(?:\.\d+)?|\.\d+)$/.test(text)) invalid("Enter a valid verification debounce in seconds.", draft.verificationDebounceSeconds, "verificationDebounceMs");
-    const [seconds, rawFraction = ""] = text.split(".");
+    const text2 = String(draft.verificationDebounceSeconds).trim();
+    if (!/^(?:\d+(?:\.\d+)?|\.\d+)$/.test(text2)) invalid("Enter a valid verification debounce in seconds.", draft.verificationDebounceSeconds, "verificationDebounceMs");
+    const [seconds, rawFraction = ""] = text2.split(".");
     const fraction = rawFraction.replace(/0+$/, "");
     if (fraction.length > 3) invalid("Verification debounce supports millisecond precision (three decimal places).", draft.verificationDebounceSeconds, "verificationDebounceMs");
     const value = Number(seconds || "0") * 1e3 + Number(fraction.padEnd(3, "0"));
     if (current?.developerMode !== true && value !== ordinaryValue(baseline, "verificationDebounceMs")) {
-      invalid("Developer mode is required to change verification debounce.", text, "verificationDebounceMs");
+      invalid("Developer mode is required to change verification debounce.", text2, "verificationDebounceMs");
     }
     set("verificationDebounceMs", value);
   }
@@ -6066,7 +6099,7 @@ var CENTRAL_SIZE = 46;
 var END_SIZE = 22;
 var encoder;
 var decoder;
-var encode = (text) => (encoder ?? (encoder = new TextEncoder())).encode(text);
+var encode = (text2) => (encoder ?? (encoder = new TextEncoder())).encode(text2);
 var decode = (bytes2) => (decoder ?? (decoder = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }))).decode(bytes2);
 var crcTable = Uint32Array.from({ length: 256 }, (_, index) => {
   let crc = index;
@@ -6266,6 +6299,8 @@ var ASSET_PATH = /^assets\/([0-9a-f]{64})\.(?:png|jpe?g|gif|webp)$/;
 var RESERVED_WINDOWS_NAME = /^(?:con|prn|aux|nul|com[0-9]|lpt[0-9])$/i;
 var MANIFEST_PATH = "manifest.json";
 var MANIFEST_HASH_PATH = "manifest.sha256";
+var ATTACHMENT_OMISSIONS_FEATURE = "attachment-omissions-v1";
+var omissionReasons = /* @__PURE__ */ new Set(["missing", "unsupported", "ambiguous", "too-large"]);
 var MANIFEST_PROFILE = {
   format: "perislate-library",
   schemaVersion: "1.0.0",
@@ -6313,15 +6348,15 @@ function jsonBytes(value) {
   return encode(canonicalJson(value));
 }
 function readJson(bytes2, path) {
-  let text;
+  let text2;
   let value;
   try {
-    text = decode(bytes2);
-    value = JSON.parse(text);
+    text2 = decode(bytes2);
+    value = JSON.parse(text2);
   } catch {
     throw new Error(`Invalid library package: invalid UTF-8 JSON in ${path}`);
   }
-  requirePackage(canonicalJson(value) === text, `noncanonical JSON in ${path}`);
+  requirePackage(canonicalJson(value) === text2, `noncanonical JSON in ${path}`);
   return value;
 }
 function isHash(value) {
@@ -6433,6 +6468,32 @@ function checkRecords(records, files) {
   );
   return fingerprints;
 }
+function checkOmissions(records, files) {
+  const rows = records.report.omittedAttachments ?? [];
+  requirePackage(Array.isArray(rows), "invalid attachment omission report");
+  const omitted = /* @__PURE__ */ new Set();
+  const key4 = (sourcePath, link) => canonicalJson([sourcePath, link.start, link.end, link.target]);
+  for (const document2 of records.documents) {
+    const links = (document2.attachments ?? []).filter((link) => link.status === "omitted");
+    if (!links.length) continue;
+    const originalLength = decode(files.get(document2.path)).length;
+    for (const link of links) {
+      requirePackage(typeof document2.sourcePath === "string" && !!document2.sourcePath && Number.isSafeInteger(link.start) && Number.isSafeInteger(link.end) && link.start >= 0 && link.end > link.start && link.end <= originalLength && typeof link.target === "string" && link.target.length <= 1024 && link.assetId === null, "invalid omitted attachment reference");
+      const id2 = key4(document2.sourcePath, link);
+      requirePackage(!omitted.has(id2), "duplicate omitted attachment reference");
+      omitted.add(id2);
+    }
+  }
+  for (const row of rows) {
+    requirePackage(
+      plainObject(row) && typeof row.sourcePath === "string" && omissionReasons.has(row.reason) && typeof row.message === "string",
+      "invalid attachment omission"
+    );
+    requirePackage(omitted.delete(key4(row.sourcePath, row)), "unmatched or duplicate attachment omission");
+  }
+  requirePackage(omitted.size === 0, "omitted attachment missing from export report");
+  return rows;
+}
 function recordCounts(records) {
   return Object.fromEntries(RECORD_KINDS.map((kind) => [kind, records[kind].length]));
 }
@@ -6445,11 +6506,14 @@ function checkMetadata({ packageId, createdAt, source, libraryId, gloveConfig, r
   requirePackage(plainObject(source), "expected source metadata");
   requirePackage(plainObject(gloveConfig) && Array.isArray(resourceAliases), "invalid library configuration");
 }
-async function hashSnapshot(fingerprints, { gloveConfig, resourceAliases }) {
+async function hashSnapshot(fingerprints, { gloveConfig, resourceAliases }, omissions) {
   const configuration = [
     ["configuration", "gloveConfig", await sha256(jsonBytes(gloveConfig))],
     ["configuration", "resourceAliases", await sha256(jsonBytes(resourceAliases))]
   ];
+  if (omissions.length) {
+    configuration.push(["report", "omittedAttachments", await sha256(jsonBytes(omissions))]);
+  }
   const tuples = [...fingerprints, ...configuration].sort((left, right) => compareStrings(left[0], right[0]) || compareStrings(left[1], right[1]));
   return sha256(jsonBytes(tuples));
 }
@@ -6512,13 +6576,15 @@ async function writeLibraryPackage(snapshot, {
     records[kind] = JSON.parse(decode(bytes2));
   }
   const fingerprints = checkRecords(records, files);
+  const omissions = checkOmissions(records, files);
   const inventory = await inventoryFor(archive, signal);
   checkPayloadMetadata(records, inventory);
-  const snapshotHash = await hashSnapshot(fingerprints, ownedMetadata);
+  const snapshotHash = await hashSnapshot(fingerprints, ownedMetadata, omissions);
   const manifest = {
     ...MANIFEST_PROFILE,
     ...ownedMetadata,
-    requiredFeatures: [],
+    requiredFeatures: omissions.length ? [ATTACHMENT_OMISSIONS_FEATURE] : [],
+    ...omissions.length ? { attachmentOmissionCount: omissions.length } : {},
     counts: recordCounts(records),
     files: inventory,
     snapshotHash
@@ -6542,7 +6608,8 @@ async function validateLibraryPackage(bytes2) {
     plainObject(manifest) && Object.entries(MANIFEST_PROFILE).every(([key4, value]) => manifest[key4] === value),
     "unsupported manifest format, version, or policy"
   );
-  requirePackage(Array.isArray(manifest.requiredFeatures) && manifest.requiredFeatures.length === 0, "unsupported required features");
+  const features = manifest.requiredFeatures;
+  requirePackage(Array.isArray(features) && (features.length === 0 || features.length === 1 && features[0] === ATTACHMENT_OMISSIONS_FEATURE), "unsupported required features");
   checkMetadata(manifest);
   requirePackage(isHash(manifest.snapshotHash), "invalid snapshot hash");
   archive.delete(MANIFEST_PATH);
@@ -6555,9 +6622,14 @@ async function validateLibraryPackage(bytes2) {
     archive.delete(path);
   }
   const fingerprints = checkRecords(records, archive);
+  const omissions = checkOmissions(records, archive);
+  requirePackage(
+    omissions.length ? features.length === 1 && manifest.attachmentOmissionCount === omissions.length : features.length === 0 && manifest.attachmentOmissionCount === void 0,
+    "attachment omission metadata mismatch"
+  );
   checkPayloadMetadata(records, inventory);
   requirePackage(canonicalJson(manifest.counts) === canonicalJson(recordCounts(records)), "manifest record counts mismatch");
-  requirePackage(await hashSnapshot(fingerprints, manifest) === manifest.snapshotHash, "snapshot hash mismatch");
+  requirePackage(await hashSnapshot(fingerprints, manifest, omissions) === manifest.snapshotHash, "snapshot hash mismatch");
   return { manifest, records, files: archive };
 }
 
@@ -6569,7 +6641,7 @@ var MAX_ENTRY = 12 * MiB;
 var MAX_ENTRIES2 = 1e4;
 var encoder2;
 var decoder2;
-var encode2 = (text) => (encoder2 ?? (encoder2 = new TextEncoder())).encode(text);
+var encode2 = (text2) => (encoder2 ?? (encoder2 = new TextEncoder())).encode(text2);
 var safeId = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$/;
 var windowsDevice = /^(con|prn|aux|nul|com[0-9¹²³]|lpt[0-9¹²³])(?:\.|$)/i;
 var supportedImage = /\.(png|jpe?g|gif|webp)$/i;
@@ -6614,14 +6686,14 @@ function semanticMetadata(frontmatter) {
   }
   return copy(Object.fromEntries(Object.entries(frontmatter).filter(([key4]) => !ignored.test(key4))), 0);
 }
-function scanMarkdown(text, countSpan) {
-  const fm = /^\uFEFF?---[ \t]*(?:\r\n|\n|\r)(?:[\s\S]*?(?:\r\n|\n|\r))?(?:---|\.\.\.)[ \t]*(?:\r\n|\n|\r|$)/.exec(text);
-  const start = fm?.[0].length ?? (text.startsWith("\uFEFF") ? 1 : 0);
+function scanMarkdown(text2, countSpan) {
+  const fm = /^\uFEFF?---[ \t]*(?:\r\n|\n|\r)(?:[\s\S]*?(?:\r\n|\n|\r))?(?:---|\.\.\.)[ \t]*(?:\r\n|\n|\r|$)/.exec(text2);
+  const start = fm?.[0].length ?? (text2.startsWith("\uFEFF") ? 1 : 0);
   const headings = [], fences = [], mask = [], listIndents = [];
   let fence, comment = false;
   const lines = /[^\r\n]*(?:\r\n|\n|\r|$)/g;
   lines.lastIndex = start;
-  for (let line; (line = lines.exec(text))?.[0]; ) {
+  for (let line; (line = lines.exec(text2))?.[0]; ) {
     const raw = line[0];
     const from = line.index, to = from + raw.length;
     const bare = raw.replace(/(?:\r\n|\n|\r)$/, "");
@@ -6682,27 +6754,27 @@ function scanMarkdown(text, countSpan) {
   }
   if (fence) {
     countSpan();
-    fences.push({ start: fence.start, end: text.length, info: fence.info });
+    fences.push({ start: fence.start, end: text2.length, info: fence.info });
   }
   return {
     start,
     fences,
     mask,
-    sections: headings.map((heading, i) => ({ ...heading, end: headings[i + 1]?.start ?? text.length })),
-    preamble: { start, end: headings[0]?.start ?? text.length }
+    sections: headings.map((heading, i) => ({ ...heading, end: headings[i + 1]?.start ?? text2.length })),
+    preamble: { start, end: headings[0]?.start ?? text2.length }
   };
 }
-function markdownLinks(text, scan, add) {
+function markdownLinks(text2, scan, add) {
   const spans = [...scan.fences, ...scan.mask].sort((a, b) => a.start - b.start || a.end - b.end);
   const parts = [];
   let cursor = scan.start;
   for (const span of spans) {
     if (span.end <= cursor) continue;
-    if (span.start > cursor) parts.push(text.slice(cursor, span.start));
-    parts.push(text.slice(Math.max(cursor, span.start), span.end).replace(/[^\r\n]/g, " "));
+    if (span.start > cursor) parts.push(text2.slice(cursor, span.start));
+    parts.push(text2.slice(Math.max(cursor, span.start), span.end).replace(/[^\r\n]/g, " "));
     cursor = span.end;
   }
-  parts.push(text.slice(cursor));
+  parts.push(text2.slice(cursor));
   const visible = parts.join("");
   const definitions = /* @__PURE__ */ new Map();
   const labelKey = (label) => label.trim().replace(/\s+/g, " ").toLowerCase();
@@ -6720,7 +6792,7 @@ function markdownLinks(text, scan, add) {
     if (match.index < lastConsumed) continue;
     const start = scan.start + match.index;
     let escape = start;
-    while (escape > scan.start && text[escape - 1] === "\\") escape--;
+    while (escape > scan.start && text2[escape - 1] === "\\") escape--;
     if ((start - escape) % 2) continue;
     let target, end = match.index + match[0].length;
     const embedded = match[1] === "!" || match[3] === "!" || !!match[7];
@@ -6756,11 +6828,14 @@ function markdownLinks(text, scan, add) {
     }
     lastConsumed = end;
     if (!embedded && (!imageLike.test(target || "") || remoteLink.test(target))) continue;
-    if (target?.length > 1024) invalid2 = "The image destination exceeds the supported path length.";
-    add({ start, end: scan.start + end, target: target?.slice(0, 1024) || "", syntax, embedded, invalid: invalid2 });
+    if (target?.length > 1024) {
+      invalid2 = "The image destination exceeds the supported path length. Its full value is preserved in the original Markdown.";
+      target = target.slice(0, 1023).replace(/[\uD800-\uDBFF]$/, "") + "…";
+    }
+    add({ start, end: scan.start + end, target: target || "", syntax, embedded, invalid: invalid2 });
   }
 }
-async function collectLibrarySnapshot(plugin, deps, { identify, signal, progress } = {}) {
+async function collectLibrarySnapshot(plugin, deps, { identify, signal, progress, reviewAttachmentOmissions = false } = {}) {
   const report = { warnings: [], errors: [], exclusions: [] };
   const records = { specialties: [], surgeons: [], cases: [], templates: [], references: [], resources: [], documents: [], assets: [], report };
   const vault = plugin?.app?.vault;
@@ -6828,22 +6903,35 @@ async function collectLibrarySnapshot(plugin, deps, { identify, signal, progress
       stop(`Review CST Notes glove settings before exporting. ${error.message}`, "", "invalid-glove-settings", error);
     }
   }
+  function protectedRoots() {
+    const paths = [
+      ".obsidian",
+      vault.configDir || ".obsidian",
+      plugin.p("Admin/Backups"),
+      "CST Recovery Archive",
+      deps.resetArchiveRoot ?? "CST Recovery Archive"
+    ];
+    if (paths.some((path) => !safePath2(path))) stop("Vault configuration or recovery paths are unsafe.", "", "unsafe-path");
+    return paths.map(fold2);
+  }
   active();
   const scope = roots(), scopeKey = canonicalJson(scope);
+  const protectedPaths = protectedRoots(), protectedKey = canonicalJson(protectedPaths);
+  const isProtected = (path) => protectedPaths.some((root) => within3(fold2(path), root));
   const gloveConfig = gloveSettings(), configKey = canonicalJson(gloveConfig);
-  const stamp = (stat) => canonicalJson([stat?.size ?? null, stat?.ctime ?? null, stat?.mtime ?? null]);
+  const stamp2 = (stat) => canonicalJson([stat?.size ?? null, stat?.ctime ?? null, stat?.mtime ?? null]);
   function inventory() {
     active();
     const entries2 = /* @__PURE__ */ new Map(), paths = /* @__PURE__ */ new Map();
     function add(path, item, role) {
-      if (!safePath2(path) || item && (item.path !== path || lookup(path) !== item)) {
+      if (!safePath2(path) || isProtected(path) || item && (item.path !== path || lookup(path) !== item)) {
         stop(`Unsafe or inconsistent library path "${path}". Verify its location before exporting.`, path, "unsafe-path");
       }
       const key4 = fold2(path);
       if (paths.has(key4)) stop(`Library paths "${paths.get(key4)}" and "${path}" conflict across devices. Resolve the names before exporting.`, path, "path-collision");
       if (entries2.size >= MAX_ENTRIES2) stop("Library scope exceeds the 10,000-entry limit. Reduce its inventory and retry.", path, "entry-limit");
       paths.set(key4, path);
-      entries2.set(path, { path, item, role, stamp: isFile(item) ? stamp(item.stat) : "", size: item?.stat?.size });
+      entries2.set(path, { path, item, role, stamp: isFile(item) ? stamp2(item.stat) : "", size: item?.stat?.size });
     }
     function walk(root, role, required = false) {
       const item = lookup(root);
@@ -6862,6 +6950,7 @@ async function collectLibrarySnapshot(plugin, deps, { identify, signal, progress
           if (typeof path !== "string" || parent3(path) !== folder.path || !(isFile(child) || isFolder(child))) {
             stop(`A library item under "${folder.path}" has an inconsistent path. Wait for Sync and retry.`, folder.path, "unsafe-path");
           }
+          if (isProtected(path)) continue;
           const name = leaf2(path);
           let type = "excluded";
           const hidden2 = name.startsWith(".") || role === "content" && depth <= 2 && isFolder(child) && name.startsWith("_") || role === "template" && name === "_Versions";
@@ -6901,7 +6990,7 @@ async function collectLibrarySnapshot(plugin, deps, { identify, signal, progress
   let inputBytes = 0;
   function assertItem(entry) {
     active();
-    if (lookup(entry.path) !== entry.item || entry.item?.path !== entry.path || stamp(entry.item.stat) !== entry.stamp) changed2(entry.path);
+    if (lookup(entry.path) !== entry.item || entry.item?.path !== entry.path || stamp2(entry.item.stat) !== entry.stamp) changed2(entry.path);
   }
   async function freshStat(entry) {
     if (typeof vault.adapter?.stat !== "function") return;
@@ -6962,9 +7051,9 @@ async function collectLibrarySnapshot(plugin, deps, { identify, signal, progress
   async function data(role, parse) {
     const entry = before.get(scope[role]);
     if (!entry.item) return null;
-    const text = decode2(await collect(entry), entry.path).replace(/^\uFEFF/, "");
+    const text2 = decode2(await collect(entry), entry.path).replace(/^\uFEFF/, "");
     try {
-      return parse(text);
+      return parse(text2);
     } catch (error) {
       stop(`Review "${entry.path}" before exporting. ${error.message}`, entry.path, "invalid-" + role, error);
     }
@@ -7009,15 +7098,15 @@ async function collectLibrarySnapshot(plugin, deps, { identify, signal, progress
   for (const entry of notes) reserve(entry);
   for (const role of ["registry", "resources", "migration"]) reserve(before.get(scope[role]));
   if (typeof vault.readBinary !== "function") warn("text-read-fallback", "", "This vault cannot read exact note bytes. Markdown will be encoded from fresh text reads.");
-  const registry = await data("registry", (text) => {
-    const block2 = /^```cst-registry-data[ \t]*\r?\n([\s\S]*?)\r?\n```[ \t]*$/m.exec(text);
+  const registry = await data("registry", (text2) => {
+    const block2 = /^```cst-registry-data[ \t]*\r?\n([\s\S]*?)\r?\n```[ \t]*$/m.exec(text2);
     const parsed = block2 && JSON.parse(block2[1]);
     if (!object2(parsed?.surgeons) || parsed.version !== void 0 && parsed.version !== 1) {
       throw new Error("Restore a supported surgeon registry with its complete cst-registry-data block.");
     }
     return parsed.surgeons;
   });
-  const migration = await data("migration", (text) => plugin.parseMigrationSessionText(text));
+  const migration = await data("migration", (text2) => plugin.parseMigrationSessionText(text2));
   const reviewStatus = /* @__PURE__ */ new Map();
   for (const path of migration?.order ?? []) {
     const status = migration.status?.[path] ?? "remaining";
@@ -7047,7 +7136,10 @@ async function collectLibrarySnapshot(plugin, deps, { identify, signal, progress
   for (const entry of entries) {
     if (entry.role === "excluded") exclude(entry.path, "Outside the managed note and image layout.");
   }
-  const byPath = /* @__PURE__ */ new Map(), byName = /* @__PURE__ */ new Map(), byStem = /* @__PURE__ */ new Map(), externalLookups = /* @__PURE__ */ new Map();
+  const byPath = /* @__PURE__ */ new Map(), byName = /* @__PURE__ */ new Map(), byStem = /* @__PURE__ */ new Map();
+  const stem = (path) => leaf2(path).replace(/\.[^.]+$/, "");
+  const allowedImagePath = (path) => safePath2(path) && !isProtected(path) && !path.split("/").some((part) => part.startsWith("."));
+  const inManagedRoot = (path) => [scope.content, scope.backend, scope.images].some((root) => within3(fold2(path), fold2(root)));
   function index(map, key4, entry) {
     const list = map.get(key4) ?? [];
     list.push(entry);
@@ -7055,22 +7147,25 @@ async function collectLibrarySnapshot(plugin, deps, { identify, signal, progress
   }
   for (const entry of entries) {
     if (entry.role !== "attachment" && !noteRoles.includes(entry.role)) continue;
+    if (!allowedImagePath(entry.path)) continue;
     byPath.set(fold2(entry.path), entry);
     index(byName, fold2(leaf2(entry.path)), entry);
-    if (supportedImage.test(entry.path)) index(byStem, fold2(leaf2(entry.path).replace(/\.[^.]+$/, "")), entry);
+    if (imageLike.test(entry.path)) index(byStem, fold2(stem(entry.path)), entry);
   }
-  function explicitImage(target) {
-    if (!supportedImage.test(target) || !safePath2(target) || target.split("/").some((part) => part.startsWith(".")) || [scope.content, scope.backend, scope.images, "CST Recovery Archive"].some((root) => within3(fold2(target), fold2(root)))) return null;
-    if (externalLookups.has(target)) return externalLookups.get(target);
-    const item = lookup(target);
-    if (item && (!isFile(item) || item.path !== target)) {
-      stop(`The explicit image path "${target}" does not identify a single file with that exact vault path.`, target, "unsafe-path");
+  const imageEntry = (path, item) => ({ path, item, size: item.stat?.size, stamp: stamp2(item.stat) });
+  function exactImage(path) {
+    if (!allowedImagePath(path)) return null;
+    const scoped = byPath.get(fold2(path));
+    if (scoped) return scoped;
+    if (inManagedRoot(path)) return null;
+    const item = lookup(path);
+    if (!item) return null;
+    if (!isFile(item) || item.path !== path) {
+      stop(`The explicit image path "${path}" does not identify a single file with that exact vault path.`, path, "unsafe-path");
     }
-    const entry = item ? { path: target, item, role: "attachment", size: item.stat?.size, stamp: stamp(item.stat) } : null;
-    externalLookups.set(target, entry);
-    return entry;
+    return imageEntry(path, item);
   }
-  function resolve(link, path) {
+  function decodeTarget(link) {
     if (link.invalid) return { status: "unsupported", detail: link.invalid };
     if (!link.target) return { status: "missing", detail: "The image link has no resolved destination." };
     let target;
@@ -7082,6 +7177,32 @@ async function collectLibrarySnapshot(plugin, deps, { identify, signal, progress
     if (remoteLink.test(target) || /[\\\x00-\x1f\x7f]/.test(target)) {
       return { status: "unsupported", detail: "Remote, inline, and non-vault image links are unsupported." };
     }
+    return { target };
+  }
+  const shortWikiTargets = /* @__PURE__ */ new Set();
+  function shortWikiIndex() {
+    const names = /* @__PURE__ */ new Map(), stems = /* @__PURE__ */ new Map(), resolutions = /* @__PURE__ */ new Map();
+    if (!shortWikiTargets.size || typeof vault.getFiles !== "function") return { names, stems, resolutions };
+    let candidates = 0;
+    for (const item of vault.getFiles()) {
+      const path = item?.path;
+      if (typeof path !== "string" || !imageLike.test(path)) continue;
+      const name = fold2(leaf2(path)), short = fold2(stem(path));
+      if (!shortWikiTargets.has(name) && !shortWikiTargets.has(short) || !allowedImagePath(path)) continue;
+      const scoped = byPath.get(fold2(path));
+      if (!scoped && inManagedRoot(path)) continue;
+      if (!isFile(item) || lookup(path) !== item || scoped && scoped.item !== item) changed2(path);
+      if (++candidates > MAX_ENTRIES2) stop("Image lookup exceeds the 10,000-candidate limit. Use more specific links.", scope.content, "entry-limit");
+      const entry = scoped ?? imageEntry(path, item);
+      if (shortWikiTargets.has(name)) index(names, name, entry);
+      if (shortWikiTargets.has(short)) index(stems, short, entry);
+    }
+    return { names, stems, resolutions };
+  }
+  function resolve(link, path, shortWiki2) {
+    const parsed = link.parsed;
+    if (parsed.status) return parsed;
+    const { target } = parsed;
     const pieces = target.startsWith("/") ? [] : parent3(path).split("/");
     for (const segment of target.replace(/^\//, "").split("/")) {
       if (segment === "..") {
@@ -7091,68 +7212,85 @@ async function collectLibrarySnapshot(plugin, deps, { identify, signal, progress
     }
     const relative = pieces.join("/");
     if (!safePath2(relative)) return { status: "unsupported", detail: "The image link has an unsafe path." };
-    const local = byPath.get(fold2(relative));
     const rootRelative = target.replace(/^\//, "");
-    const absolute = safePath2(rootRelative) && (byPath.get(fold2(rootRelative)) || (target.startsWith("/") || link.syntax === "wiki" && target.includes("/")) && explicitImage(rootRelative));
+    const explicit = /^\.{1,2}\//.test(target);
+    const rooted = target.startsWith("/");
+    const shortKey = link.syntax === "wiki" && !target.includes("/") ? fold2(target) : null;
+    if (shortKey !== null && shortWiki2.resolutions.has(shortKey)) return shortWiki2.resolutions.get(shortKey);
     let matches;
-    if (/^\.{1,2}\//.test(target)) matches = local ? [local] : [];
-    else if (target.startsWith("/")) matches = absolute ? [absolute] : [];
-    else if (target.includes("/")) {
-      matches = [...new Set([local, absolute].filter(Boolean))];
+    if (target.includes("/")) {
+      const paths = rooted ? [rootRelative] : [relative];
+      if (!explicit && !rooted && link.syntax === "wiki") paths.push(rootRelative);
+      matches = paths.map(exactImage).filter(Boolean);
+      if (!explicit && !rooted && link.syntax !== "wiki") {
+        const scoped = byPath.get(fold2(rootRelative));
+        if (scoped) matches.push(scoped);
+      }
       if (!matches.length && link.syntax === "wiki" && safePath2(target)) {
         const suffix = "/" + fold2(target);
-        matches = (byName.get(fold2(leaf2(target))) ?? []).filter((entry2) => fold2(entry2.path).endsWith(suffix));
+        matches = (byName.get(fold2(leaf2(target))) ?? []).filter((entry) => fold2(entry.path).endsWith(suffix));
       }
-    } else if (local) matches = [local];
-    else matches = byName.get(fold2(target)) ?? (link.syntax === "wiki" ? byStem.get(fold2(target)) : null) ?? [];
-    if (matches.length > 1) return { status: "ambiguous", detail: "Several scoped files match this image link. Use an explicit path." };
+      if (!matches.length && paths.some(allowedImagePath)) {
+        const host = plugin.app.metadataCache?.getFirstLinkpathDest?.(target, path);
+        if (isFile(host) && allowedImagePath(host.path) && lookup(host.path) === host && paths.some((candidate) => fold2(candidate) === fold2(host.path))) {
+          const scoped = byPath.get(fold2(host.path));
+          if (scoped || !inManagedRoot(host.path)) matches = [scoped ?? imageEntry(host.path, host)];
+        }
+      }
+    } else if (shortKey !== null) {
+      matches = [...byName.get(shortKey) ?? [], ...shortWiki2.names.get(shortKey) ?? []];
+      if (!matches.length) matches = [...byStem.get(shortKey) ?? [], ...shortWiki2.stems.get(shortKey) ?? []];
+    } else {
+      const local = exactImage(relative);
+      matches = local ? [local] : byName.get(fold2(target)) ?? [];
+    }
+    matches = [...new Map(matches.map((entry) => [entry.path, entry])).values()].sort((a, b) => ordered(a.path, b.path));
+    const resolution = classifyImage(matches, target);
+    if (shortKey !== null) shortWiki2.resolutions.set(shortKey, resolution);
+    return resolution;
+  }
+  function classifyImage(matches, target) {
+    if (matches.length > 1) return { status: "ambiguous", detail: "Several files match this image link. Use an explicit path.", matches };
     const [entry] = matches;
     if (!entry && /\.[a-z0-9]+$/i.test(target) && !supportedImage.test(target) || entry && !supportedImage.test(entry.path)) {
       const extension = /\.[a-z0-9]+$/i.exec(entry?.path || target)?.[0];
-      return { status: "unsupported", detail: `${extension ? extension + " attachments are" : "This attachment is"} unsupported. Use a local PNG, JPEG, GIF or WebP image.` };
+      return { status: "unsupported", detail: `${extension ? extension + " attachments are" : "This attachment is"} unsupported. Use a local PNG, JPEG, GIF or WebP image.`, entry };
     }
-    if (!entry) return { status: "missing", detail: "No matching image was found within the managed library roots." };
+    if (!entry) return { status: "missing", detail: "No matching image was found at a safe vault path." };
     return { status: "resolved", entry };
   }
   const pending2 = [], imageEntries = /* @__PURE__ */ new Map(), revisionHashes = /* @__PURE__ */ new Map();
   let scanned = 0, linkCount = 0, spanCount = 0;
   for (const entry of notes) {
     const raw = await collect(entry);
-    const text = decode2(raw, entry.path);
+    const text2 = decode2(raw, entry.path);
     let frontmatter, metadata;
     try {
-      frontmatter = deps.parseFrontmatterObject(text.replace(/^\uFEFF/, "")) || {};
+      frontmatter = deps.parseFrontmatterObject(text2.replace(/^\uFEFF/, "")) || {};
       metadata = canonicalJson(semanticMetadata(frontmatter));
     } catch (error) {
       stop(`Review the frontmatter in "${entry.path}". ${error.message}`, entry.path, "invalid-markdown", error);
     }
-    const scan = scanMarkdown(text, () => {
+    const scan = scanMarkdown(text2, () => {
       if (++spanCount > MAX_ENTRIES2 * 10) stop("Markdown structure exceeds the library export limit. Split or simplify the managed notes.", entry.path, "entry-limit");
     });
     const links = [];
-    markdownLinks(text, scan, (link) => {
+    markdownLinks(text2, scan, (link) => {
       if (++linkCount > MAX_ENTRIES2) stop("Library image references exceed the 10,000-entry limit. Reduce repeated images before exporting.", entry.path, "entry-limit");
-      const resolution = resolve(link, revisionOwner.get(entry.path) ?? entry.path);
-      if (resolution.entry) {
-        reserve(resolution.entry);
-        imageEntries.set(resolution.entry.path, resolution.entry);
-      } else {
-        block(
-          "image-" + resolution.status,
-          entry.path,
-          `${resolution.detail} Link: ${link.target.slice(0, 240) || "(empty)"} in "${entry.path}".`
-        );
+      const parsed = decodeTarget(link);
+      if (link.syntax === "wiki" && safePath2(parsed.target) && !parsed.target.includes("/")) {
+        shortWikiTargets.add(fold2(parsed.target));
       }
-      links.push({ ...link, ...resolution });
+      links.push({ ...link, parsed });
     });
     const semanticBody = [];
     let cursor = scan.start;
     for (const fence of scan.fences) {
       if (fence.info !== "cst-surgeon-header") continue;
-      semanticBody.push(text.slice(cursor, fence.start));
+      semanticBody.push(text2.slice(cursor, fence.start));
       cursor = fence.end;
     }
-    semanticBody.push(text.slice(cursor));
+    semanticBody.push(text2.slice(cursor));
     const body = stripResourceMarkers(semanticBody.join("")).replace(/<!-- cst-example-template: [^\r\n]*? -->/g, "").replace(/\r\n?/g, "\n").trim();
     const type = textOf(frontmatter.cst_type);
     const role = entry.role === "case" && type && type !== "case" ? "supplemental" : entry.role;
@@ -7169,18 +7307,41 @@ async function collectLibrarySnapshot(plugin, deps, { identify, signal, progress
     if (role === "version") revisionHashes.set(entry.path, raw.hash);
     progress?.({ phase: "collect", completed: ++scanned, total: notes.length });
   }
+  const shortWiki = shortWikiIndex();
+  for (const note of pending2) {
+    const sourcePath = revisionOwner.get(note.entry.path) ?? note.entry.path;
+    for (const link of note.links) {
+      const resolution = link.resolution = resolve(link, sourcePath, shortWiki);
+      if (resolution.status !== "resolved") continue;
+      const { entry } = resolution;
+      if (!Number.isSafeInteger(entry.size) || entry.size <= MAX_ENTRY) reserve(entry);
+      imageEntries.set(entry.path, entry);
+    }
+  }
   for (const entry of entries) {
     if (entry.role === "attachment" && !imageEntries.has(entry.path)) {
       exclude(entry.path, imageLike.test(entry.path) ? "Unreferenced image." : "Unreferenced non-image attachment.");
     }
   }
-  const imageAt = /* @__PURE__ */ new Map(), assets = /* @__PURE__ */ new Map();
+  const imageAt = /* @__PURE__ */ new Map(), imageFailures = /* @__PURE__ */ new Map(), assets = /* @__PURE__ */ new Map();
   for (const entry of [...imageEntries.values()].sort((a, b) => ordered(a.path, b.path))) {
+    if (entry.size > MAX_ENTRY) {
+      assertItem(entry);
+      await freshStat(entry);
+      imageFailures.set(entry.path, {
+        status: "too-large",
+        detail: `The required image "${entry.path}" exceeds the 12 MiB per-image limit.`
+      });
+      continue;
+    }
     const { bytes: bytes2, hash } = await collect(entry, true);
     const extension = getImageType(bytes2);
     const advertised = leaf2(entry.path).split(".").at(-1).toLowerCase().replace(/^jpeg$/, "jpg");
     if (!extension || extension !== advertised) {
-      block("image-unsupported", entry.path, `The required image "${entry.path}" does not match its file type. Replace it with a valid supported image.`);
+      imageFailures.set(entry.path, {
+        status: "unsupported",
+        detail: `The required image "${entry.path}" does not match its file type. Replace it with a valid supported image.`
+      });
       continue;
     }
     imageAt.set(entry.path, hash);
@@ -7195,6 +7356,41 @@ async function collectLibrarySnapshot(plugin, deps, { identify, signal, progress
     assets.set(hash, asset);
     records.assets.push(asset);
     files.set(path, bytes2);
+  }
+  let omissionBytes = 0;
+  for (const note of pending2) {
+    const sourcePath = note.entry.path;
+    const parts = within3(sourcePath, scope.content) ? sourcePath.slice(scope.content.length + 1).split("/") : [];
+    const specialty = parts.length > 1 ? parts[0] : "";
+    const surgeon = parts.length > 2 ? parts[1] : "";
+    note.attachments = note.links.map(({ start, end, target, syntax, embedded, resolution }) => {
+      const assetPath = resolution.entry?.path;
+      const failure = resolution.status === "resolved" ? imageFailures.get(assetPath) : resolution;
+      if (!failure) return { start, end, target, syntax, embedded, status: "resolved", assetId: imageAt.get(assetPath) };
+      const reason = failure.status;
+      const message = `${failure.detail} Link: ${target.slice(0, 240) || "(empty)"} in "${sourcePath}".`;
+      if (reviewAttachmentOmissions === true) {
+        const row = {
+          sourcePath,
+          specialty,
+          surgeon,
+          caseTitle: nameOf(sourcePath),
+          target,
+          start,
+          end,
+          reason,
+          message,
+          ...assetPath ? { assetPath } : {},
+          ...failure.matches ? { candidates: failure.matches.map((entry) => entry.path) } : {}
+        };
+        omissionBytes += encode2(canonicalJson(row)).byteLength + 1;
+        if (omissionBytes > MAX_ENTRY) stop("The attachment omission report exceeds 12 MiB. Use more specific image links.", sourcePath, "entry-limit");
+        (report.omittedAttachments ?? (report.omittedAttachments = [])).push(row);
+      } else {
+        block("image-" + (reason === "too-large" ? "oversized" : reason), sourcePath, message);
+      }
+      return { start, end, target, syntax, embedded, status: "omitted", assetId: null };
+    });
   }
   assertNoBlockers();
   const specialtyAt = /* @__PURE__ */ new Map(), surgeonAt = /* @__PURE__ */ new Map(), caseAt = /* @__PURE__ */ new Map(), templateAt = /* @__PURE__ */ new Map();
@@ -7252,12 +7448,11 @@ async function collectLibrarySnapshot(plugin, deps, { identify, signal, progress
   const byRole = ["template", "version", "specialty-note", "supplemental", "case", "reference"];
   for (const role of byRole) {
     for (const note of pending2.filter((item) => item.role === role)) {
-      const { entry, raw, frontmatter: fm, scan, links, bodyHash, metadataHash } = note;
+      const { entry, raw, frontmatter: fm, scan, attachments, bodyHash, metadataHash } = note;
       const path = entry.path;
       const sourceId = role === "version" ? "" : sourceIdOf(fm.cst_id);
       const title = nameOf(path);
-      const attachments = links.map(({ entry: entry2, start, end, target, syntax, embedded }) => ({ start, end, target, syntax, embedded, status: "resolved", assetId: imageAt.get(entry2.path) }));
-      const fingerprint = await digest({ bodyHash, metadataHash, assets: attachments.map(({ assetId }) => assetId) });
+      const fingerprint = await digest({ bodyHash, metadataHash, assets: attachments.map(({ status, assetId }) => status === "resolved" ? assetId : status) });
       const documentId = await entity("document", path, sourceId, fingerprint);
       const documentPath = `content/${documentId}.md`;
       records.documents.push({
@@ -7379,16 +7574,23 @@ async function collectLibrarySnapshot(plugin, deps, { identify, signal, progress
     stop("The library package may exceed the 10,000-entry or 64 MiB limit. Reduce the managed library before exporting.", "", "size-limit");
   }
   function assertInventory() {
-    if (canonicalJson(roots()) !== scopeKey || canonicalJson(gloveSettings()) !== configKey) changed2(scope.content);
+    if (canonicalJson(roots()) !== scopeKey || canonicalJson(gloveSettings()) !== configKey || canonicalJson(protectedRoots()) !== protectedKey) changed2(scope.content);
     const current = inventory();
     if (current.size !== before.size) changed2(scope.content);
     for (const [path, previous] of before) {
       const entry = current.get(path);
       if (!entry || entry.item !== previous.item || entry.role !== previous.role || entry.stamp !== previous.stamp) changed2(path);
     }
-    for (const [path, entry] of externalLookups) {
-      if (entry) assertItem(entry);
-      else if (lookup(path)) changed2(path);
+    const shortWiki2 = shortWikiIndex();
+    for (const note of pending2) {
+      const sourcePath = revisionOwner.get(note.entry.path) ?? note.entry.path;
+      for (const link of note.links) {
+        const previous = link.resolution;
+        const current2 = resolve(link, sourcePath, shortWiki2);
+        const was = previous.matches ?? (previous.entry ? [previous.entry] : []);
+        const now = current2.matches ?? (current2.entry ? [current2.entry] : []);
+        if (previous.status !== current2.status || was.length !== now.length || was.some((entry, i) => entry.path !== now[i].path || entry.item !== now[i].item || entry.stamp !== now[i].stamp)) changed2(sourcePath);
+      }
     }
   }
   async function assertCurrent() {
@@ -7396,6 +7598,9 @@ async function collectLibrarySnapshot(plugin, deps, { identify, signal, progress
     assertInventory();
     for (const { entry, hash, binary } of readSet.values()) {
       if ((await read(entry, binary)).hash !== hash) changed2(entry.path);
+    }
+    for (const entry of imageEntries.values()) {
+      if (entry.size > MAX_ENTRY) await freshStat(entry);
     }
     assertInventory();
   }
@@ -7413,8 +7618,8 @@ var keyOf = (kind, key4) => JSON.stringify([kind, key4]);
 function encodeIdentity(ledger) {
   return header + canonicalJson(ledger) + footer;
 }
-function decodeIdentity(text) {
-  const normalized = text.replace(/\r\n/g, "\n");
+function decodeIdentity(text2) {
+  const normalized = text2.replace(/\r\n/g, "\n");
   if (!normalized.startsWith(header) || !normalized.endsWith(footer) || normalized.length > 8 * 1024 * 1024) {
     throw new Error("The portability identity record is damaged. Restore the previous record before exporting.");
   }
@@ -7495,12 +7700,630 @@ function newIdentity() {
   return { version, libraryId: globalThis.crypto.randomUUID(), entries: [] };
 }
 
+// src/library-attachment-report.mjs
+var reportRoot = "Admin/Export Reports";
+function safeVaultPath(path) {
+  return typeof path === "string" && path.length > 0 && path.length <= 1024 && path.split("/").every((segment) => segment && segment !== "." && segment !== ".." && !/[\\:\u0000-\u001f\u007f]/.test(segment));
+}
+var text = (value) => String(value ?? "").replace(/[\u0000-\u001f\u007f]/g, " ").replace(/[\\`*_{}\[\]<>#!|]/g, "\\$&");
+function noteLink(folder, target, label) {
+  const from = folder.split("/");
+  const to = target.split("/");
+  let common = 0;
+  while (common < from.length && common < to.length - 1 && from[common] === to[common]) common++;
+  const tail = to.slice(common).map((part) => encodeURIComponent(part)).join("/");
+  return `[${text(label)}](<${"../".repeat(from.length - common)}${tail}>)`;
+}
+function attachmentRecoveryMarkdown(folder, omissions, { packageId, createdAt, exists }) {
+  const lines = [
+    "# Attachment recovery",
+    "",
+    "Export package " + text(packageId),
+    text(createdAt),
+    "",
+    "Use these entries to locate the images omitted from the export.",
+    ""
+  ];
+  for (const [index, row] of omissions.entries()) {
+    const source = row.sourcePath;
+    const caseTitle = row.caseTitle || (typeof source === "string" ? source.split("/").at(-1).replace(/\.md$/i, "") : "Source note");
+    const name = row.target || "Unnamed reference";
+    const canLink = (path) => safeVaultPath(path) && exists(path);
+    let image2 = text(name);
+    if (row.assetPath && canLink(row.assetPath)) image2 = noteLink(folder, row.assetPath, name);
+    else if (row.reason === "missing") image2 = "Missing " + image2;
+    lines.push(
+      "## " + (index + 1) + ". Attachment",
+      "",
+      "- **Specialty** " + text(row.specialty || "—"),
+      "- **Surgeon** " + text(row.surgeon || "—"),
+      "- **Case title** " + (canLink(source) ? noteLink(folder, source, caseTitle) : text(caseTitle)),
+      "- **Image** " + image2,
+      "- **Reason** " + text(row.reason === "too-large" ? "Above the per-image size limit" : row.reason === "ambiguous" ? "More than one matching image" : row.reason === "unsupported" ? "Unsupported format or image data" : "Original could not be located")
+    );
+    if (row.reason === "ambiguous" && Array.isArray(row.candidates)) {
+      for (const candidate of row.candidates) {
+        if (canLink(candidate)) lines.push("  - " + noteLink(folder, candidate, candidate));
+      }
+    }
+    lines.push("");
+  }
+  return lines.join("\n");
+}
+async function createAttachmentRecoveryNote(plugin, { TFile: TFile2, TFolder: TFolder2, validatePortableVaultPath: validatePortableVaultPath2 }, omissions, metadata, assertActive) {
+  const vault = plugin.app.vault;
+  const lookup = (path2) => vault.getAbstractFileByPath(path2);
+  const folder = plugin.p(reportRoot);
+  const path = folder + "/Attachment Recovery " + metadata.createdAt.slice(0, 10) + " " + metadata.packageId + ".md";
+  if (!safeVaultPath(folder) || !safeVaultPath(path) || folder === plugin.contentRoot || folder.startsWith(plugin.contentRoot + "/")) {
+    throw new Error("The attachment recovery folder overlaps the clinical library.");
+  }
+  validatePortableVaultPath2?.(path, "Attachment recovery note");
+  assertActive();
+  const parent4 = await plugin.ensureFolder(folder);
+  assertActive();
+  if (plugin.p(reportRoot) !== folder || !(parent4 instanceof TFolder2) || lookup(folder) !== parent4 || lookup(path)) {
+    throw new Error("The attachment recovery note location changed. Review the library again.");
+  }
+  const contents = attachmentRecoveryMarkdown(folder, omissions, {
+    ...metadata,
+    exists: (target) => {
+      const file2 = lookup(target);
+      return file2 instanceof TFile2 && file2.path === target;
+    }
+  });
+  const file = await vault.create(path, contents);
+  if (!(file instanceof TFile2) || file.path !== path || await vault.read(file) !== contents || lookup(path) !== file) {
+    throw new Error("The attachment recovery note could not be verified.");
+  }
+  return file;
+}
+
+// src/library-resource-recovery.mjs
+var indexRelative = "_Data/Resource Library.md";
+var backupRelative = "Admin/Backups/Resource Library";
+var manifestHeader = "# Resource backup\n\n";
+var rebuildWarning = "Rebuilding uses current eligible case notes. It cannot recover curated aliases, hidden resources, or historical sources.";
+var indexLimit = 16e6;
+var manifestLimit = 16384;
+var backupChoiceLimit = 5;
+var encodeBytes = (text2) => new TextEncoder().encode(text2);
+var within4 = (path, root) => typeof path === "string" && (path === root || path.startsWith(root + "/"));
+var stale = () => new Error("Recovery evidence changed. Wait for Sync to settle and preview again.");
+var stamp = (file) => [file.stat?.ctime, file.stat?.mtime, file.stat?.size].join("/");
+var editorText = (text2) => text2.replace(/^\uFEFF/, "").replace(/\r\n/g, "\n");
+var bytesEqual = (left, right) => left.length === right.length && left.every((byte, index) => byte === right[index]);
+function checkedPath(path) {
+  if (typeof path !== "string" || /[\\:\u0000-\u001f]/.test(path) || path.split("/").some((part) => !part || part === "." || part === "..")) {
+    throw new Error("Invalid resource recovery path.");
+  }
+  return path;
+}
+function createLibraryResourceRecovery(plugin, deps) {
+  const { TFile: TFile2, TFolder: TFolder2, id: id2, parseFrontmatterObject: parseFrontmatterObject2 } = deps;
+  const { vault, workspace } = plugin.app;
+  const lookup = (path) => vault.getAbstractFileByPath(path) || null;
+  const plans = /* @__PURE__ */ new WeakMap();
+  let applying = false;
+  function roots() {
+    const backend = checkedPath(plugin.p());
+    const content = checkedPath(plugin.contentRoot);
+    const session = checkedPath(plugin.migrationSessionPath());
+    if (within4(backend, content) || within4(content, backend) || !session.startsWith(backend + "/") || plugin.p(indexRelative) !== backend + "/" + indexRelative || plugin.p(backupRelative) !== backend + "/" + backupRelative) {
+      throw new Error("Resource recovery requires separate, configured CST Notes case and Backend folders.");
+    }
+    return { backend, content, session, index: plugin.p(indexRelative), backups: plugin.p(backupRelative) };
+  }
+  function checkAvailable({ signal, isCurrent } = {}, previewing = false) {
+    signal?.throwIfAborted();
+    if (isCurrent && !isCurrent()) throw new DOMException("Recovery view closed.", "AbortError");
+    if (plugin.unloading || plugin.settings?.resetNeedsReview || plugin.adminWorkspace?.resetNeedsReview || previewing && plugin.featureMutationActive) {
+      throw new Error("Resource recovery is unavailable during a CST Notes operation or pending reset review.");
+    }
+  }
+  function watch(scope, rebuild, ignoredCreates = /* @__PURE__ */ new Set()) {
+    let changed2 = false;
+    const targets = [scope.index, scope.backups, ...rebuild ? [scope.content, scope.session] : []];
+    const refs = ["create", "modify", "delete", "rename"].map((event) => vault.on(event, (file, oldPath) => {
+      if (event === "create" && ignoredCreates.has(file.path)) return;
+      if ([file.path, oldPath].some((path) => targets.some((target) => within4(path, target) || file instanceof TFolder2 && event !== "modify" && within4(target, path)))) changed2 = true;
+    }));
+    return {
+      check() {
+        if (changed2) throw stale();
+      },
+      close() {
+        for (const ref of refs) vault.offref(ref);
+      }
+    };
+  }
+  function assertEntry(entry) {
+    if (lookup(entry.path) !== entry.file || entry.file && (entry.file.path !== entry.path || stamp(entry.file) !== entry.stamp)) throw stale();
+  }
+  async function readText(path, file = lookup(path), limit = indexLimit) {
+    if (file && !(file instanceof TFile2)) throw new Error("Expected a file at " + path + ".");
+    const entry = { path, file, stamp: file && stamp(file), text: null };
+    assertEntry(entry);
+    if (file) {
+      if (file.stat?.size > limit) throw new Error("Recovery input exceeds its size limit: " + path);
+      entry.text = await vault.read(file);
+      if (entry.text.length > limit) throw new Error("Recovery input exceeds its size limit: " + path);
+    }
+    assertEntry(entry);
+    return entry;
+  }
+  async function readBytes(entry) {
+    assertEntry(entry);
+    if (entry.file.stat?.size > indexLimit) throw new Error("The resource index exceeds the recovery size limit.");
+    const bytes2 = new Uint8Array(await vault.readBinary(entry.file));
+    assertEntry(entry);
+    if (bytes2.length > indexLimit) throw new Error("The resource index exceeds the recovery size limit.");
+    return bytes2;
+  }
+  function assertSavedEditors(entries) {
+    const byPath = new Map(entries.map((entry) => [entry.path, entry]));
+    for (const leaf3 of workspace?.getLeavesOfType?.("markdown") || []) {
+      const view = leaf3.view;
+      const entry = byPath.get(view?.file?.path);
+      if (!entry || !view.editor?.getValue) continue;
+      if (view.file !== entry.file || editorText(view.editor.getValue()) !== editorText(entry.text)) {
+        throw new Error("Save or close the unsaved editor before resource recovery: " + entry.path);
+      }
+    }
+  }
+  async function scanBackups(scope, check) {
+    const base = lookup(scope.backups);
+    if (base && !(base instanceof TFolder2)) throw new Error("The resource backup folder is occupied by a file.");
+    const choices = [];
+    let rejected = 0;
+    const folders = [];
+    for (const folder of [...base?.children || []]) {
+      check();
+      const path = folder.path;
+      if (!(folder instanceof TFolder2) || !path.startsWith(scope.backups + "/") || !/^[A-Za-z0-9_-]{1,100}$/.test(path.slice(scope.backups.length + 1))) continue;
+      if (lookup(path) !== folder) throw stale();
+      const manifestFile = lookup(path + "/Manifest.md");
+      if (!(manifestFile instanceof TFile2) || manifestFile.stat?.size > manifestLimit) {
+        rejected++;
+        continue;
+      }
+      const originalFile = lookup(path + "/Original.md");
+      const timestamp = [manifestFile.stat?.ctime, manifestFile.stat?.mtime, originalFile?.stat?.ctime, originalFile?.stat?.mtime].find((value) => Number.isFinite(value) && value > 0) || null;
+      folders.push({ path, manifestFile, originalFile, timestamp });
+    }
+    folders.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0) || a.path.localeCompare(b.path));
+    for (const { path, manifestFile, originalFile, timestamp } of folders) {
+      check();
+      const manifest = await readText(path + "/Manifest.md", manifestFile, manifestLimit);
+      let data;
+      const normalized = manifest.text.replace(/\r\n/g, "\n");
+      if (normalized.startsWith(manifestHeader)) {
+        try {
+          data = JSON.parse(normalized.slice(manifestHeader.length));
+        } catch {
+        }
+      }
+      if (data?.version !== 1 || typeof data.originalPath !== "string") {
+        rejected++;
+        continue;
+      }
+      if (data.originalPath !== scope.index) continue;
+      if (!(originalFile instanceof TFile2) || originalFile.stat?.size > indexLimit) {
+        rejected++;
+        continue;
+      }
+      const original = await readText(path + "/Original.md", originalFile);
+      const inspected = inspectResourceIndex(original.text);
+      if (inspected.status !== "valid") {
+        rejected++;
+        continue;
+      }
+      const digest2 = await sha256(encodeBytes(original.text));
+      assertEntry(manifest);
+      assertEntry(original);
+      choices.push({
+        info: Object.freeze({ path, timestamp, revision: inspected.state.revision }),
+        manifest,
+        original: { ...original, text: null },
+        digest: digest2
+      });
+      if (choices.length === backupChoiceLimit) break;
+    }
+    check();
+    if (lookup(scope.backups) !== base) throw stale();
+    return { base, choices, rejected };
+  }
+  function sameBackups(first, second) {
+    return first.base === second.base && first.rejected === second.rejected && first.choices.length === second.choices.length && first.choices.every((item, index) => {
+      const other = second.choices[index];
+      return item.info.path === other.info.path && item.digest === other.digest && item.manifest.file === other.manifest.file && item.manifest.text === other.manifest.text && item.manifest.stamp === other.manifest.stamp && item.original.file === other.original.file && item.original.stamp === other.original.stamp;
+    });
+  }
+  function remember(details, internal) {
+    const preview2 = Object.freeze(details);
+    plans.set(preview2, internal);
+    return preview2;
+  }
+  async function preview(options) {
+    checkAvailable(options, true);
+    const scope = roots(), monitor = watch(scope, false);
+    const check = () => {
+      checkAvailable(options, true);
+      monitor.check();
+    };
+    try {
+      const file = lookup(scope.index);
+      if (!file) return { status: "missing", indexPath: scope.index };
+      if (!(file instanceof TFile2)) return { status: "occupied", indexPath: scope.index };
+      if (file.stat?.size > indexLimit) {
+        return { status: "unsupported", indexPath: scope.index, reason: "The index exceeds the 16 MB recovery size limit." };
+      }
+      const index = await readText(scope.index, file);
+      const inspected = inspectResourceIndex(index.text);
+      if ((await readText(scope.index, file)).text !== index.text) throw stale();
+      check();
+      if (inspected.status !== "invalid") return { status: inspected.status, indexPath: scope.index, reason: inspected.reason };
+      const bytes2 = await readBytes(index);
+      let raw;
+      try {
+        raw = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes2);
+      } catch {
+        return { status: "unsupported", indexPath: scope.index };
+      }
+      if (raw !== index.text && raw.replace(/^\uFEFF/, "") !== index.text) throw stale();
+      const backups = await scanBackups(scope, check);
+      assertEntry(index);
+      check();
+      assertSavedEditors([index]);
+      return remember({
+        status: "invalid",
+        indexPath: scope.index,
+        reason: inspected.reason,
+        rejected: backups.rejected,
+        canRebuild: inspected.canRebuild,
+        backups: Object.freeze(backups.choices.map((item) => item.info))
+      }, { scope, backend: lookup(scope.backend), index, bytes: bytes2, backups, canRebuild: inspected.canRebuild });
+    } catch (error) {
+      checkAvailable(options, true);
+      return { status: "sync", indexPath: scope.index, reason: error.message };
+    } finally {
+      monitor.close();
+    }
+  }
+  function caseFiles(scope) {
+    const root = lookup(scope.content);
+    if (!(root instanceof TFolder2)) throw new Error("The configured case folder is unavailable. Wait for Sync before rebuilding.");
+    const files = plugin.allCaseFiles().map((file) => {
+      const path = checkedPath(file?.path);
+      if (!(file instanceof TFile2) || !path.startsWith(scope.content + "/") || path.slice(scope.content.length + 1).split("/").length !== 3 || !plugin.caseContext(file) || !plugin.isCasePath(path) || lookup(path) !== file) throw stale();
+      return file;
+    });
+    return { root, files };
+  }
+  function checkScope(plan) {
+    if (JSON.stringify(roots()) !== JSON.stringify(plan.scope) || !(plan.backend instanceof TFolder2) || lookup(plan.scope.backend) !== plan.backend) throw stale();
+    assertEntry(plan.index);
+  }
+  async function checkIndex(plan) {
+    checkScope(plan);
+    if ((await readText(plan.index.path)).text !== plan.index.text || !bytesEqual(await readBytes(plan.index), plan.bytes)) throw stale();
+  }
+  function checkCaseInventory(scope, rebuild) {
+    const { root, files } = caseFiles(scope);
+    const expected = rebuild.files;
+    const current = new Set(files);
+    if (root !== rebuild.root || files.length !== expected.length || current.size !== files.length || expected.some((file) => !current.has(file))) throw stale();
+  }
+  async function previewRebuild(preview2, options) {
+    const plan = plans.get(preview2);
+    if (!plan || plan.rebuild || plan.backups.choices.length) throw new Error("Preview an index with no valid backup before planning a rebuild.");
+    if (!plan.canRebuild) throw new Error("The damaged index does not establish schema version 1. Keep the original for manual review.");
+    checkAvailable(options, true);
+    const { scope } = plan, monitor = watch(scope, true);
+    const check = () => {
+      checkAvailable(options, true);
+      monitor.check();
+      checkScope(plan);
+    };
+    try {
+      await checkIndex(plan);
+      if (!sameBackups(plan.backups, await scanBackups(scope, check))) throw stale();
+      const session = await readText(scope.session);
+      const review = resourceReviewPaths(plugin, session.text);
+      const { root, files } = caseFiles(scope), cases = [];
+      const identities = /* @__PURE__ */ new Map();
+      let characters = 0, duplicates = 0;
+      for (const file of files) {
+        check();
+        if (review.has(file.path)) continue;
+        const entry = await readText(file.path, file);
+        characters += entry.text.length;
+        if (characters > 32e6) throw new Error("The case library exceeds the safe size for an in-app resource rebuild.");
+        cases.push(entry);
+        const identity = resourceCaseIdentity(plugin, parseFrontmatterObject2, file, entry.text, review);
+        if (!identity) continue;
+        const matches = identities.get(identity.id) || [];
+        matches.push(entry);
+        identities.set(identity.id, matches);
+      }
+      const collector = new ResourceCollector();
+      for (const [id3, matches] of identities) {
+        check();
+        if (matches.length !== 1) {
+          duplicates += matches.length;
+          continue;
+        }
+        const { path, text: text2 } = matches[0];
+        collector.observe({ id: id3, path, text: text2, fingerprint: await resourceFingerprint(text2) });
+      }
+      for (const id3 of collector.notes.keys()) {
+        if (!collector.commit(collector.prepare(id3))) throw new Error("Resource rebuild validation failed.");
+      }
+      const snapshot = collector.snapshot();
+      const next = encodeResourceIndex({ version: 1, revision: 0, aliases: [], hidden: [], ...snapshot });
+      if (encodeBytes(next).length > indexLimit) throw new Error("The rebuilt index exceeds the recovery size limit.");
+      decodeResourceIndex(next);
+      const rebuild = { session, cases, files, root, next };
+      checkCaseInventory(scope, rebuild);
+      const entries = [plan.index, session, ...cases];
+      entries.forEach(assertEntry);
+      assertSavedEditors(entries);
+      check();
+      return remember({
+        status: "rebuild",
+        indexPath: scope.index,
+        scanned: files.length,
+        eligible: snapshot.notes.length,
+        duplicates,
+        resources: snapshot.catalog.length,
+        warning: rebuildWarning
+      }, { ...plan, rebuild });
+    } finally {
+      monitor.close();
+    }
+  }
+  async function archiveIndex(plan, check, ignoredCreates, setPath) {
+    const { scope, bytes: bytes2 } = plan;
+    for (const path2 of [scope.backend + "/Admin", scope.backend + "/Admin/Backups", scope.backups]) {
+      if (!lookup(path2)) {
+        ignoredCreates.add(path2);
+        const created2 = await vault.createFolder(path2);
+        if (created2 && lookup(path2) !== created2) throw stale();
+      }
+      if (!(lookup(path2) instanceof TFolder2)) throw new Error("The recovery archive path is occupied: " + path2);
+      check();
+    }
+    const token = id2("resource");
+    if (!/^[A-Za-z0-9_-]{1,100}$/.test(token)) throw new Error("Invalid resource backup identity.");
+    const path = scope.backups + "/" + token;
+    const originalPath = path + "/Original.md", manifestPath = path + "/Manifest.md";
+    if (lookup(path)) throw stale();
+    for (const item of [path, originalPath, manifestPath]) ignoredCreates.add(item);
+    const created = await vault.createFolder(path);
+    setPath(path);
+    const folder = lookup(path);
+    if (!(folder instanceof TFolder2) || created && folder !== created) throw stale();
+    check();
+    const assertFolder = () => {
+      checkAvailable();
+      if (plugin.p() !== scope.backend || lookup(scope.backend) !== plan.backend || lookup(path) !== folder) throw stale();
+    };
+    const original = await vault.createBinary(originalPath, bytes2.slice().buffer);
+    assertFolder();
+    const manifestText = manifestHeader + JSON.stringify({ originalPath: scope.index, version: 1 }) + "\n";
+    const manifest = await vault.create(manifestPath, manifestText);
+    const archivedOriginal = { path: originalPath, file: original, stamp: stamp(original) };
+    const archivedManifest = await readText(manifestPath, manifest, manifestLimit);
+    if (!bytesEqual(await readBytes(archivedOriginal), bytes2) || archivedManifest.text !== manifestText || lookup(path) !== folder) throw new Error("The original resource archive could not be verified.");
+    return { path, entries: [archivedOriginal, archivedManifest] };
+  }
+  async function apply(preview2, { backupPath, confirmed, ...options } = {}) {
+    if (confirmed !== true) throw new Error("Confirm the resource recovery preview before applying it.");
+    const plan = plans.get(preview2);
+    if (!plan) throw new Error("Use a fresh resource recovery preview.");
+    const choice = plan.backups.choices.find((item) => item.info.path === backupPath);
+    if (plan.rebuild ? backupPath !== void 0 : !choice) throw new Error("Choose the backup shown in the restore preview.");
+    const guard = deps.withAdminMutation || plugin.withFeatureMutation;
+    if (typeof guard !== "function" || typeof vault.process !== "function") {
+      throw new Error("Resource recovery requires the host mutation guard and atomic vault updates.");
+    }
+    checkAvailable(options, true);
+    if (applying) throw new Error("Resource recovery is already running.");
+    plans.delete(preview2);
+    applying = true;
+    let archivePath, replaced = false;
+    try {
+      return await guard.call(plugin, async () => {
+        checkAvailable(options);
+        const { scope, rebuild, index } = plan;
+        const ignoredCreates = /* @__PURE__ */ new Set(), monitor = watch(scope, !!rebuild, ignoredCreates);
+        const check = () => {
+          checkAvailable(options);
+          monitor.check();
+          checkScope(plan);
+        };
+        const runtime = plugin.resourceFeatures;
+        let token;
+        try {
+          if (runtime) {
+            token = runtime.pause("Resource index recovery");
+            await runtime.drain();
+          }
+          await checkIndex(plan);
+          if (!sameBackups(plan.backups, await scanBackups(scope, check))) throw stale();
+          const entries = [index];
+          let next;
+          if (rebuild) {
+            checkCaseInventory(scope, rebuild);
+            for (const entry of [rebuild.session, ...rebuild.cases]) {
+              check();
+              assertEntry(entry);
+              if ((await readText(entry.path)).text !== entry.text) throw stale();
+              entries.push(entry);
+            }
+            next = rebuild.next;
+          } else {
+            const original = await readText(choice.original.path, choice.original.file);
+            if (await sha256(encodeBytes(original.text)) !== choice.digest) throw stale();
+            entries.push(choice.manifest, original);
+            next = original.text;
+          }
+          decodeResourceIndex(next);
+          check();
+          assertSavedEditors(entries);
+          const archive = await archiveIndex(plan, check, ignoredCreates, (path) => {
+            archivePath = path;
+          });
+          await checkIndex(plan);
+          await vault.process(index.file, (current) => {
+            check();
+            if (current !== index.text) throw stale();
+            if (rebuild) checkCaseInventory(scope, rebuild);
+            entries.forEach(assertEntry);
+            archive.entries.forEach(assertEntry);
+            assertSavedEditors(entries);
+            replaced = true;
+            return next;
+          });
+          const readback = await readText(index.path, index.file);
+          if (readback.text !== next || !bytesEqual(await readBytes(readback), encodeBytes(next))) {
+            throw new Error("The recovered index failed readback. Check the index after Sync settles.");
+          }
+          decodeResourceIndex(readback.text);
+          return { mode: rebuild ? "rebuild" : "restore", indexPath: index.path, archivePath: archive.path, backupPath };
+        } finally {
+          monitor.close();
+          if (token !== void 0) await runtime.resume(token, { preserveIndex: replaced });
+        }
+      });
+    } catch (error) {
+      if (archivePath) throw new Error(error.message + " Check the retained archive at " + archivePath + ".", { cause: error });
+      throw error;
+    } finally {
+      applying = false;
+    }
+  }
+  return Object.freeze({ preview, previewRebuild, apply });
+}
+function renderLibraryResourceRecovery(el, service, { onComplete } = {}) {
+  el.empty();
+  el.createEl("h3", { text: "Resource index recovery" });
+  el.createEl("p", { text: "Review a damaged resource index and look for a valid local backup." });
+  const controls = el.createDiv({ cls: "cst-admin-action-grid" });
+  const status = el.createEl("p", { attr: { role: "status", "aria-live": "polite" } });
+  const result = el.createDiv();
+  result.style.overflowWrap = "anywhere";
+  let operation;
+  function button(parent4, label, handler) {
+    const control = parent4.createEl("button", { text: label, attr: { type: "button" } });
+    control.onclick = handler;
+    return control;
+  }
+  const previewButton = button(controls, "Preview resource index recovery", () => run(async (options) => {
+    status.textContent = "Checking the index and its scoped backups…";
+    show(await service.preview(options));
+  }));
+  const cancel = button(controls, "Cancel recovery operation", () => operation?.abort());
+  cancel.hidden = true;
+  async function run(task) {
+    if (operation) return;
+    operation = new AbortController();
+    previewButton.disabled = true;
+    cancel.hidden = false;
+    result.empty();
+    try {
+      await task({ signal: operation.signal, isCurrent: () => el.isConnected !== false });
+    } catch (error) {
+      const cancelled = error.name === "AbortError" || error.cause?.name === "AbortError";
+      status.textContent = cancelled ? "Recovery cancelled. " + (error.cause ? error.message : "Preview again to continue.") : error.message;
+    } finally {
+      operation = null;
+      previewButton.disabled = false;
+      cancel.hidden = true;
+    }
+  }
+  function confirm(preview, backup) {
+    result.empty();
+    const rebuild = preview.status === "rebuild";
+    status.textContent = rebuild ? "Confirm rebuild from current cases" : "Confirm restore from the selected backup";
+    if (backup) result.createEl("p", { text: "Selected backup: " + backup.path + " · revision " + backup.revision });
+    if (rebuild) {
+      const summary = preview.resources ? preview.resources + " resources will be built from " + preview.eligible + " eligible cases." : "This preview found no resources. Confirming will write an empty resource catalog.";
+      result.createEl("p", { text: summary + " " + preview.warning });
+    }
+    result.createEl("p", { text: "CST Notes will archive and verify the damaged original before replacing the index." });
+    const actions = result.createDiv({ cls: "cst-admin-action-grid" });
+    button(actions, "Cancel confirmation", () => {
+      show(preview);
+      status.textContent = "Confirmation cancelled. The index was left as it was.";
+    });
+    button(actions, rebuild ? "Confirm rebuild" : "Confirm restore", () => run(async (options) => {
+      status.textContent = "Verifying and recovering the resource index…";
+      const recovered = await service.apply(preview, { ...options, backupPath: backup?.path, confirmed: true });
+      status.textContent = (rebuild ? "Resource index rebuilt." : "Resource index restored.") + " Damaged original archived in " + recovered.archivePath + ".";
+      try {
+        await onComplete?.(recovered);
+      } catch (error) {
+        status.textContent += " The export panel could not refresh. " + error.message;
+      }
+    }));
+  }
+  function show(preview) {
+    result.empty();
+    const messages = {
+      missing: "The resource index is missing. Wait for Sync to finish and check again.",
+      occupied: "The resource index path is occupied by a folder.",
+      valid: "The resource index is readable and needs no recovery.",
+      unsupported: "This resource index format, schema, or encoding is unsupported. Open it with a compatible CST Notes version or keep it for manual review.",
+      sync: "The index or recovery evidence could not be read consistently. Save open editors and wait for Sync before previewing again.",
+      invalid: "The generated resource index is damaged.",
+      rebuild: "Rebuild preview is ready for review."
+    };
+    status.textContent = messages[preview.status];
+    if (preview.reason) result.createEl("p", { text: preview.reason });
+    if (preview.status === "rebuild") {
+      result.createEl("p", { text: preview.eligible + " eligible of " + preview.scanned + " case notes · " + preview.duplicates + " cases excluded for duplicate identity · " + preview.resources + " resources." });
+      result.createEl("p", { text: preview.warning });
+      button(result, "Review rebuild confirmation", () => confirm(preview));
+      return;
+    }
+    if (preview.status !== "invalid") return;
+    if (preview.rejected) result.createEl("p", { text: preview.rejected + " checked backup folders had missing, oversized, or invalid recovery records." });
+    if (!preview.backups.length) {
+      if (!preview.canRebuild) {
+        result.createEl("p", { text: "No valid backup was found, and the damaged index does not establish schema version 1. Keep the original for manual review." });
+        return;
+      }
+      result.createEl("p", { text: "No valid backup was found. " + rebuildWarning });
+      button(result, "Preview rebuild from cases", () => run(async (options) => {
+        status.textContent = "Scanning current cases for a rebuild preview…";
+        show(await service.previewRebuild(preview, options));
+      }));
+      return;
+    }
+    result.createEl("p", { text: "Choose a backup to review. Up to five valid backups are shown, ordered by newest recorded timestamp." });
+    const list = result.createDiv();
+    list.setAttribute("role", "region");
+    list.setAttribute("aria-label", "Available resource backups");
+    list.tabIndex = 0;
+    list.style.maxHeight = "min(45vh, 22rem)";
+    list.style.overflowY = "auto";
+    for (const backup of preview.backups) {
+      const row = list.createDiv();
+      const date = backup.timestamp ? new Date(backup.timestamp).toLocaleString() : "Timestamp unavailable";
+      row.createEl("p", { text: date + " · revision " + backup.revision + " · " + backup.path });
+      button(row, "Review restore", () => confirm(preview, backup)).setAttribute("aria-label", "Review restore from " + backup.path);
+    }
+  }
+}
+
 // src/library-portability.mjs
 var identityRelativePath = "_Data/Portability Identity.md";
 var inside = (path, root) => typeof path === "string" && !!root && (path === root || path.startsWith(root + "/"));
-var editorText = (text) => text.replace(/\r\n/g, "\n");
+var editorText2 = (text2) => text2.replace(/\r\n/g, "\n");
 var sizeText = (bytes2) => bytes2 < 1024 * 1024 ? Math.ceil(bytes2 / 1024) + " KiB" : (bytes2 / (1024 * 1024)).toFixed(1) + " MiB";
-function createLibraryPortability(plugin, { TFile: TFile2, TFolder: TFolder2 }) {
+function createLibraryPortability(plugin, deps) {
+  const { TFile: TFile2, TFolder: TFolder2 } = deps;
   const vault = plugin.app.vault;
   const lookup = (path) => vault.getAbstractFileByPath(path);
   const renames = /* @__PURE__ */ new Map();
@@ -7531,7 +8354,7 @@ function createLibraryPortability(plugin, { TFile: TFile2, TFolder: TFolder2 }) 
       const path = file?.path;
       if (!path || !scoped(path) || !view.editor?.getValue) continue;
       const saved = await vault.read(file);
-      if (leaf3.view !== view || view.file !== file || lookup(path) !== file || editorText(view.editor.getValue()) !== editorText(saved)) {
+      if (leaf3.view !== view || view.file !== file || lookup(path) !== file || editorText2(view.editor.getValue()) !== editorText2(saved)) {
         throw new Error("Save or close the unsaved editor before exporting: " + path);
       }
     }
@@ -7545,25 +8368,25 @@ function createLibraryPortability(plugin, { TFile: TFile2, TFolder: TFolder2 }) 
       return { path, file: null, text: "", ledger: newIdentity() };
     }
     if (file.stat?.size > 8 * 1024 * 1024) throw new Error("The portability identity record exceeds the supported size.");
-    const text = await vault.read(file);
+    const text2 = await vault.read(file);
     if (lookup(path) !== file || file.path !== path) throw new Error("The portability identity changed during review.");
-    return { path, file, text, ledger: decodeIdentity(text) };
+    return { path, file, text: text2, ledger: decodeIdentity(text2) };
   }
   async function commitIdentity(basis, ledger) {
-    const { path, file, text } = basis;
+    const { path, file, text: text2 } = basis;
     if (path !== plugin.p(identityRelativePath) || (lookup(path) || null) !== file) {
       throw new Error("The portability identity changed. Review the library again.");
     }
     const next = encodeIdentity(ledger);
     decodeIdentity(next);
-    if (next === text) {
-      if (await vault.read(file) !== text || lookup(path) !== file) throw new Error("The portability identity changed. Review again.");
+    if (next === text2) {
+      if (await vault.read(file) !== text2 || lookup(path) !== file) throw new Error("The portability identity changed. Review again.");
       return;
     }
     const identity = file || await vault.create(path, next);
     if (file) {
       await vault.process(file, (current) => {
-        if (current !== text || lookup(path) !== file || file.path !== path) {
+        if (current !== text2 || lookup(path) !== file || file.path !== path) {
           throw new Error("The portability identity changed. Review the library again.");
         }
         return next;
@@ -7573,23 +8396,32 @@ function createLibraryPortability(plugin, { TFile: TFile2, TFolder: TFolder2 }) 
       throw new Error("The saved portability identity could not be verified.");
     }
   }
-  async function review({ allowNew, signal, choices, progress }, deps) {
+  async function review({ allowNew, signal, choices, progress }, deps2) {
     await assertNoUnsaved();
     signal.throwIfAborted();
     const basis = await readIdentity(allowNew);
     const observed = new Map([...renames].filter(([path, move]) => lookup(path) === move.item).map(([path, move]) => [path, move.from]));
     const draft = createIdentityDraft(basis.ledger, { exists: (path) => !!lookup(path), renames: observed, choices });
-    const snapshot = await collectLibrarySnapshot(plugin, deps, { identify: draft.identify, signal, progress });
+    const snapshot = await collectLibrarySnapshot(plugin, deps2, {
+      identify: draft.identify,
+      signal,
+      progress,
+      reviewAttachmentOmissions: true
+    });
     signal.throwIfAborted();
     await assertNoUnsaved();
     return { snapshot, basis, ledger: draft.ledger(), observed };
   }
-  async function prepare(plan, signal, assertActive = () => signal.throwIfAborted()) {
+  async function prepare(plan, signal, assertActive = () => signal.throwIfAborted(), { acceptAttachmentOmissions = false } = {}) {
     if (preparing) throw new Error("Another library export is being prepared.");
     preparing = true;
     try {
       signal.throwIfAborted();
       await assertNoUnsaved();
+      const omissions = plan.snapshot.records.report.omittedAttachments ?? [];
+      if (omissions.length && !acceptAttachmentOmissions) {
+        throw new Error("Review the attachment omissions and choose Create recovery note and continue export.");
+      }
       const createdAt = (/* @__PURE__ */ new Date()).toISOString();
       const packageId = globalThis.crypto.randomUUID();
       const packageData = await writeLibraryPackage(plan.snapshot, {
@@ -7603,6 +8435,13 @@ function createLibraryPortability(plugin, { TFile: TFile2, TFolder: TFolder2 }) 
       await assertNoUnsaved();
       await plan.snapshot.assertCurrent();
       assertActive();
+      let recoveryNote;
+      if (omissions.length) {
+        recoveryNote = await createAttachmentRecoveryNote(plugin, deps, omissions, { packageId, createdAt }, assertActive);
+        await assertNoUnsaved();
+        await plan.snapshot.assertCurrent();
+        assertActive();
+      }
       await commitIdentity(plan.basis, plan.ledger);
       for (const { key: key4 } of plan.ledger.entries) {
         const move = renames.get(key4);
@@ -7611,6 +8450,7 @@ function createLibraryPortability(plugin, { TFile: TFile2, TFolder: TFolder2 }) 
       signal.throwIfAborted();
       return {
         ...packageData,
+        recoveryNote,
         name: "CST Notes Library " + createdAt.slice(0, 10) + " " + packageId + ".cstpack"
       };
     } finally {
@@ -7647,6 +8487,7 @@ function createLibraryPortability(plugin, { TFile: TFile2, TFolder: TFolder2 }) 
 }
 function installLibraryPortability(plugin, deps) {
   const service = createLibraryPortability(plugin, deps);
+  const resourceRecovery = createLibraryResourceRecovery(plugin, deps);
   plugin.registerEvent(plugin.app.vault.on("rename", service.observeRename));
   const views = /* @__PURE__ */ new WeakMap();
   plugin.renderLibraryPortability = (hostEl) => {
@@ -7671,6 +8512,7 @@ function installLibraryPortability(plugin, deps) {
     cancel.disabled = true;
     const status = el.createEl("p", { attr: { role: "status", "aria-live": "polite" } });
     const result = el.createDiv();
+    const recovery = el.createEl("button", { text: "Review resource recovery", attr: { type: "button" } });
     const choices = /* @__PURE__ */ new Map();
     let operation;
     function button(parent4, label, handler) {
@@ -7684,9 +8526,10 @@ function installLibraryPortability(plugin, deps) {
     function showReport(report) {
       const details = result.createEl("details");
       details.createEl("summary", { text: "Export report" });
+      const labels = { warnings: "Warnings", errors: "Errors", exclusions: "Excluded items", omittedAttachments: "Images omitted if you continue" };
       for (const [heading, messages] of Object.entries(report || {})) {
         if (!Array.isArray(messages) || !messages.length) continue;
-        details.createEl("h4", { text: heading });
+        details.createEl("h4", { text: labels[heading] || heading });
         const list = details.createEl("ul");
         for (const item of messages) {
           list.createEl("li", { text: typeof item === "string" ? item : item.message || item.reason || JSON.stringify(item) });
@@ -7714,6 +8557,7 @@ function installLibraryPortability(plugin, deps) {
       operation = controller;
       views.set(hostEl, controller);
       review.disabled = true;
+      recovery.disabled = true;
       cancel.disabled = false;
       const live = () => {
         if (status.isConnected === false || plugin.unloading) controller.abort();
@@ -7729,10 +8573,14 @@ function installLibraryPortability(plugin, deps) {
         if (!controller.signal.aborted) {
           if (error instanceof IdentityReview) showIdentityReview(error);
           if (error.report) showReport(error.report);
+          if (error.report?.errors?.some((item) => item.code === "invalid-resources")) {
+            result.createEl("p", { text: "Review resource recovery to check for a verified backup." });
+          }
         }
       } finally {
         operation = null;
         review.disabled = false;
+        recovery.disabled = false;
         cancel.disabled = true;
       }
     }
@@ -7740,7 +8588,19 @@ function installLibraryPortability(plugin, deps) {
       const doc = el.ownerDocument || document;
       const host = doc.defaultView || globalThis;
       const file = new host.File([artifact.bytes], artifact.name, { type: "application/zip" });
-      status.setText("Package validated. " + sizeText(file.size) + " ready to save or share.");
+      const omittedCount = artifact.manifest.attachmentOmissionCount;
+      status.setText("Package validated. " + sizeText(file.size) + " ready to save or share." + (omittedCount ? " Image references omitted: " + omittedCount + "." : ""));
+      if (artifact.recoveryNote) {
+        const path = artifact.recoveryNote.path;
+        button(result, "Open recovery note", () => {
+          const file2 = plugin.app.vault.getAbstractFileByPath(path);
+          if (file2 !== artifact.recoveryNote) {
+            status.setText("The recovery note moved or was replaced.");
+            return;
+          }
+          return plugin.navigateFromUI("Open recovery note", () => plugin.openFile(file2));
+        });
+      }
       function download(name) {
         try {
           canExport();
@@ -7789,6 +8649,21 @@ function installLibraryPortability(plugin, deps) {
         }
       });
     }
+    recovery.onclick = async () => {
+      if (operation) return;
+      result.empty();
+      status.setText("");
+      const panel = result.createDiv();
+      try {
+        await renderLibraryResourceRecovery(panel, resourceRecovery, {
+          onComplete: () => {
+            status.setText("Resource index recovered. Select Review library to retry the export.");
+          }
+        });
+      } catch (error) {
+        status.setText(error.message);
+      }
+    };
     cancel.onclick = () => operation?.abort();
     review.onclick = () => run(async (signal, live) => {
       status.setText("Reading library…");
@@ -7799,9 +8674,13 @@ function installLibraryPortability(plugin, deps) {
       const bytes2 = [...files.values()].reduce((total, value) => total + value.byteLength, 0) + new TextEncoder().encode(JSON.stringify(records)).byteLength;
       status.setText(counts + " · Estimated " + sizeText(bytes2) + " plus ZIP and integrity metadata.");
       showReport(records.report);
-      button(result, "Prepare export", () => run(async (signal2, live2) => {
+      const omittedCount = records.report.omittedAttachments?.length ?? 0;
+      if (omittedCount) result.createEl("p", {
+        text: `Continuing will omit ${omittedCount} image reference${omittedCount === 1 ? "" : "s"} and create a recovery note with links to the affected notes.`
+      });
+      button(result, omittedCount ? "Create recovery note and continue export" : "Prepare export", () => run(async (signal2, live2) => {
         status.setText("Building and validating package…");
-        const artifact = await service.prepare(plan, signal2, live2);
+        const artifact = await service.prepare(plan, signal2, live2, { acceptAttachmentOmissions: omittedCount > 0 });
         live2();
         showSave(artifact);
       }));
@@ -8305,10 +9184,10 @@ async function previewOnboardingCleanup(plugin, deps) {
     throw new Error("The owned example surgeon folder and registry identity are not both available. Existing content was preserved; retry after Sync finishes.");
   }
   const readEntry = async (file) => {
-    const path = file.path, text = await vault.read(file);
+    const path = file.path, text2 = await vault.read(file);
     plugin.assertVaultFilePath(file, path, "An example file moved or was replaced.");
     assertContext();
-    return { file, path, text };
+    return { file, path, text: text2 };
   };
   const cases = [];
   let ownedExampleCount = 0;
@@ -8342,7 +9221,7 @@ async function previewOnboardingCleanup(plugin, deps) {
   const candidates = cases.filter((entry) => !archivedPaths.has(entry.path) && !receipts.some((receipt) => receipt.path === entry.path || entry.caseId && receipt.caseId === entry.caseId));
   const exampleCount = candidates.filter((entry) => entry.example).length;
   const marker = templateMarker(owned.token);
-  const hasMarker = (text) => text.replace(/\r\n/g, "\n").startsWith(marker + "\n");
+  const hasMarker = (text2) => text2.replace(/\r\n/g, "\n").startsWith(marker + "\n");
   const revisions = plugin.templateVersionFilesReadOnly(owned.templatePath).map((entry) => entry.file);
   const backendPaths = [
     plugin.surgeonGraphPath("General", "Dr. Example"),
@@ -8423,10 +9302,10 @@ async function cleanOwnedExamples(plugin, deps, confirmed) {
   };
   const verifyEntry = async (entry) => {
     plugin.assertVaultFilePath(entry.file, entry.path, "Example cleanup paused because a file moved or was replaced.");
-    const text = await vault.read(entry.file);
+    const text2 = await vault.read(entry.file);
     await assertState();
     plugin.assertVaultFilePath(entry.file, entry.path, "Example cleanup paused because a file moved or was replaced.");
-    if (text !== entry.text) throw changed();
+    if (text2 !== entry.text) throw changed();
   };
   await assertState();
   const canRetireSurgeon = surgeonRemoved || folder.children.every((file) => candidates.some((entry) => entry.file === file));
@@ -8543,15 +9422,15 @@ async function migrateExampleTemplate(plugin, deps) {
   const expected = `${templateMarker(owned.token)}
 
 ${EXAMPLE_BODY}`;
-  const text = await vault.read(file);
+  const text2 = await vault.read(file);
   plugin.assertVaultFilePath(file, owned.templatePath, "Example template moved during migration.");
-  if (text.replace(/\r\n/g, "\n") !== expected) return false;
+  if (text2.replace(/\r\n/g, "\n") !== expected) return false;
   await plugin.snapshotFiles("Onboarding template update", [file]);
   await plugin.ensureTemplateVersion(file, false, owned.templatePath);
   if (plugin.settings.onboardingExample !== owned || !canCleanOwnedExamples(plugin) || plugin.settings.resetNeedsReview || plugin.unloading) throw changed();
   await plugin.replaceFileTextExpected(
     file,
-    text,
+    text2,
     `${templateMarker(owned.token)}
 
 ${EXAMPLE_TEMPLATE_BODY}`,
@@ -8699,7 +9578,7 @@ var {
   setIcon,
   addIcon
 } = require("obsidian");
-var PLUGIN_VERSION = "0.1.18";
+var PLUGIN_VERSION = "0.1.19";
 var Modal = class extends ObsidianModal {
   constructor(...args) {
     super(...args);
@@ -8792,8 +9671,8 @@ function versionAtLeast(value, minimum) {
   }
   return true;
 }
-function frontmatterBlock(text) {
-  const value = String(text || "");
+function frontmatterBlock(text2) {
+  const value = String(text2 || "");
   const match = /^\uFEFF?---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/.exec(value);
   return match ? { text: match[0], end: match[0].length } : null;
 }
@@ -8802,8 +9681,8 @@ function frontmatterScalar(value) {
   if (typeof value === "number" && Number.isFinite(value)) return String(value);
   return yamlString(value);
 }
-function setFrontmatterScalars(text, fields, removeKeys = []) {
-  const value = String(text || "");
+function setFrontmatterScalars(text2, fields, removeKeys = []) {
+  const value = String(text2 || "");
   const block = frontmatterBlock(value);
   const newline = (block?.text || value).includes("\r\n") ? "\r\n" : "\n";
   const bom = value.startsWith("\uFEFF") ? "\uFEFF" : "";
@@ -8833,8 +9712,8 @@ function setFrontmatterScalars(text, fields, removeKeys = []) {
   }
   return `${bom}---${newline}${lines.join(newline)}${lines.length ? newline : ""}---${newline}${tail}`;
 }
-function frontmatterTopLevelScalar(text, key4) {
-  const block = frontmatterBlock(text);
+function frontmatterTopLevelScalar(text2, key4) {
+  const block = frontmatterBlock(text2);
   if (!block) return "";
   for (const line of block.text.replace(/^\uFEFF?---\r?\n/, "").split(/\r?\n/)) {
     const match = /^([A-Za-z0-9_-]+)\s*:\s*(.*?)\s*$/.exec(line);
@@ -8863,8 +9742,8 @@ function fallbackYamlScalar(value) {
   }
   return raw.replace(/\s+#.*$/, "").trim();
 }
-function parseFrontmatterObject(text) {
-  const block = frontmatterBlock(text);
+function parseFrontmatterObject(text2) {
+  const block = frontmatterBlock(text2);
   if (!block) return {};
   const yaml = block.text.replace(/^\uFEFF?---\r?\n/, "").replace(/\r?\n---(?:\r?\n|$)$/, "");
   if (typeof parseYaml === "function") {
@@ -8889,8 +9768,8 @@ function parseFrontmatterObject(text) {
   }
   return parsed;
 }
-async function copyText(text) {
-  const value = String(text ?? "");
+async function copyText(text2) {
+  const value = String(text2 ?? "");
   try {
     if (globalThis.navigator?.clipboard?.writeText) {
       await globalThis.navigator.clipboard.writeText(value);
@@ -9029,8 +9908,8 @@ function wireTextareaSearch(input, editor, button, status) {
   };
   button.onclick = jump;
 }
-function addOption(select, value, text = value) {
-  const option = select.createEl("option", { text: String(text) });
+function addOption(select, value, text2 = value) {
+  const option = select.createEl("option", { text: String(text2) });
   option.value = String(value);
   return option;
 }
@@ -9041,9 +9920,9 @@ function canonicalPersonName(name) {
   if (!s) return "";
   return s.split(" ").map((p) => p ? p[0].toUpperCase() + p.slice(1) : "").join(" ");
 }
-function shortHash(text) {
+function shortHash(text2) {
   let h = 5381;
-  for (let i = 0; i < text.length; i++) h = (h << 5) + h ^ text.charCodeAt(i);
+  for (let i = 0; i < text2.length; i++) h = (h << 5) + h ^ text2.charCodeAt(i);
   return `v-${(h >>> 0).toString(16).padStart(8, "0")}`;
 }
 function normalizeGloves2(input, settings = {}) {
@@ -9147,8 +10026,8 @@ function defaultTemplates() {
     })
   };
 }
-function upgradeTemplateBodyV016(templatePath, text) {
-  const source = String(text || "");
+function upgradeTemplateBodyV016(templatePath, text2) {
+  const source = String(text2 || "");
   const newline = source.includes("\r\n") ? "\r\n" : "\n";
   const normalized = source.replace(/\r\n/g, "\n");
   const hadFinalNewline = normalized.endsWith("\n");
@@ -9205,10 +10084,10 @@ function upgradeTemplateBodyV016(templatePath, text) {
   const output = updated.flatMap((section) => section.heading ? [section.heading, ...section.lines] : section.lines).join("\n");
   return (output + (hadFinalNewline ? "\n" : "")).replace(/\n/g, newline);
 }
-function generalPAFirst(templatePath, text) {
-  if (!/(?:^|\/)General\.md$/i.test(templatePath)) return text;
-  const newline = text.includes("\r\n") ? "\r\n" : "\n";
-  const normalized = text.replace(/\r\n/g, "\n");
+function generalPAFirst(templatePath, text2) {
+  if (!/(?:^|\/)General\.md$/i.test(templatePath)) return text2;
+  const newline = text2.includes("\r\n") ? "\r\n" : "\n";
+  const normalized = text2.replace(/\r\n/g, "\n");
   const fm = normalized.match(/^---\n[\s\S]*?\n---(?:\n|$)/)?.[0] || "";
   const lines = normalized.slice(fm.length).split("\n");
   const kept = [], content = [];
@@ -9331,14 +10210,14 @@ var CSTNotesPlugin = class extends Plugin {
       if (section.lineStart !== 0) {
         const file = this.app.vault.getAbstractFileByPath(path);
         if (!(file instanceof TFile)) return;
-        const stamp = `${file.stat?.mtime}:${file.stat?.size}`;
+        const stamp2 = `${file.stat?.mtime}:${file.stat?.size}`;
         this.homeNavSourceCache || (this.homeNavSourceCache = /* @__PURE__ */ new WeakMap());
         let cached = this.homeNavSourceCache.get(file);
-        if (!cached || cached.stamp !== stamp) {
-          const text = (await this.app.vault.cachedRead(file)).replace(/\r\n/g, "\n");
+        if (!cached || cached.stamp !== stamp2) {
+          const text2 = (await this.app.vault.cachedRead(file)).replace(/\r\n/g, "\n");
           if (file.path !== path || this.app.vault.getAbstractFileByPath(path) !== file) return;
-          const prefix = /^(?:\uFEFF)?(?:---[ \t]*\n[\s\S]*?\n---[ \t]*(?:\n|$))?(?:(?:[ \t]*\n)|(?:[ \t]*<!--[\s\S]*?-->[ \t]*(?:\n|$)))*[ \t]*/.exec(text)?.[0] || "";
-          cached = { stamp, firstLine: prefix.split("\n").length - 1 };
+          const prefix = /^(?:\uFEFF)?(?:---[ \t]*\n[\s\S]*?\n---[ \t]*(?:\n|$))?(?:(?:[ \t]*\n)|(?:[ \t]*<!--[\s\S]*?-->[ \t]*(?:\n|$)))*[ \t]*/.exec(text2)?.[0] || "";
+          cached = { stamp: stamp2, firstLine: prefix.split("\n").length - 1 };
           this.homeNavSourceCache.set(file, cached);
         }
         if (cached.firstLine < section.lineStart || cached.firstLine > (section.lineEnd ?? section.lineStart)) return;
@@ -9520,15 +10399,15 @@ var CSTNotesPlugin = class extends Plugin {
     let found = null;
     for (const file of this.allCaseFiles()) {
       const path = file.path;
-      let text;
+      let text2;
       try {
-        text = await this.app.vault.read(file);
+        text2 = await this.app.vault.read(file);
       } catch (error) {
         if (this.app.vault.getAbstractFileByPath(path) !== file) continue;
         throw error;
       }
       if (file.path !== path || this.app.vault.getAbstractFileByPath(path) !== file) continue;
-      const fm = parseFrontmatterObject(text);
+      const fm = parseFrontmatterObject(text2);
       if (fm.cst_example === true && ["cst-example-general-v1", "cst-example-lumbar-v1"].includes(fm.cst_id) && this.isCasePath(file.path)) {
         found = file;
         break;
@@ -9610,15 +10489,15 @@ var CSTNotesPlugin = class extends Plugin {
     const template = this.isTemplatePath(file.path);
     if (!template && !this.caseContext(file)) return;
     const path = file.path;
-    const text = await this.app.vault.read(file);
+    const text2 = await this.app.vault.read(file);
     if (file.path !== path || !this.exampleCase() || this.app.vault.getAbstractFileByPath && this.app.vault.getAbstractFileByPath(path) !== file) return;
-    const body = this.stripFrontmatter(text).replace(/<!--[\s\S]*?-->/g, "");
+    const body = this.stripFrontmatter(text2).replace(/<!--[\s\S]*?-->/g, "");
     this.onboardingCaseBodies || (this.onboardingCaseBodies = /* @__PURE__ */ new Map());
     const previous = this.onboardingCaseBodies.get(path);
     if (previous !== void 0 && previous !== body && modified && !((this.ignoreModifyUntil?.get(path) || 0) > Date.now())) {
       if (template) this.completeOnboarding("templateEdit");
       else {
-        const fm = parseFrontmatterObject(text);
+        const fm = parseFrontmatterObject(text2);
         if (this.settings.onboardingCreatedCases?.includes(fm.cst_id)) this.completeOnboarding("caseEdit");
       }
     }
@@ -10635,16 +11514,16 @@ Machine-managed installation information.
 \`\`\`
 `);
     }
-    const text = await this.app.vault.read(file);
-    if (!text.includes(marker)) {
-      const next = `${text.replace(/\s*$/, "")}
+    const text2 = await this.app.vault.read(file);
+    if (!text2.includes(marker)) {
+      const next = `${text2.replace(/\s*$/, "")}
 
 ${marker}
 \`\`\`
 `;
       await this.replaceFileTextExpected(
         file,
-        text,
+        text2,
         next,
         "Launcher update stopped because the note changed or moved in another window or device.",
         path
@@ -10693,11 +11572,11 @@ ${marker}
       return { file, n: Number(/^v(\d+)\.md$/.exec(file.name)[1]) };
     }).filter((x) => Number.isSafeInteger(x.n) && x.n > 0).sort((a, b) => a.n - b.n);
   }
-  async pruneTemplateVersions(file, version2, text) {
+  async pruneTemplateVersions(file, version2, text2) {
     const path = file.path;
     const { pruneTemplateRevisions: pruneTemplateRevisions2 } = await Promise.resolve().then(() => (init_template_lifecycle(), template_lifecycle_exports));
     this.assertVaultFilePath(file, path, "Template moved before revision cleanup.");
-    return pruneTemplateRevisions2(this, file, version2, text);
+    return pruneTemplateRevisions2(this, file, version2, text2);
   }
   async caseTemplateProvenance(file) {
     const { describeTemplateProvenance: describeTemplateProvenance2 } = await Promise.resolve().then(() => (init_template_lifecycle(), template_lifecycle_exports));
@@ -10918,8 +11797,8 @@ ${body}
 \`\`\`
 `;
   }
-  parseSurgeonRegistryText(text) {
-    const match = /```cst-registry-data\s*\r?\n([\s\S]*?)\r?\n```/m.exec(String(text || ""));
+  parseSurgeonRegistryText(text2) {
+    const match = /```cst-registry-data\s*\r?\n([\s\S]*?)\r?\n```/m.exec(String(text2 || ""));
     if (!match) return { registry: this.defaultRegistry(), invalid: true, error: "the cst-registry-data block is missing or incomplete" };
     try {
       const registry = JSON.parse(match[1]);
@@ -10962,9 +11841,9 @@ ${body}
       file = await this.registryBootstrapPromise;
     }
     this.assertVaultFilePath(file, path, "CST surgeon registry read refused because the registry moved or was replaced.");
-    const text = await this.app.vault.read(file);
+    const text2 = await this.app.vault.read(file);
     this.assertVaultFilePath(file, path, "CST surgeon registry read refused because the registry moved or was replaced.");
-    const parsed = this.parseSurgeonRegistryText(text);
+    const parsed = this.parseSurgeonRegistryText(text2);
     if (parsed.invalid) console.error("CST surgeon registry parse error", parsed.error);
     return { file, ...parsed };
   }
@@ -11711,23 +12590,23 @@ ${t.body.trim()}
     await this.ensureSurgeonGraphNode(ctx.specialty, surgeon, surgeonId, ensured.data);
     if (isNew) await this.ensureCaseHeaderAnchor(file);
   }
-  findCaseTitle(text) {
+  findCaseTitle(text2) {
     const re = /^[ \t]{0,3}#\s+([^#\n].*)$/gm;
     let m;
-    while (m = re.exec(text)) {
+    while (m = re.exec(text2)) {
       const label = String(m[1] || "").trim().replace(/:$/, "");
       if (/^(gloves|tips|md|pa)$/i.test(label)) continue;
       return { index: m.index, end: m.index + m[0].length, text: m[0] };
     }
     return null;
   }
-  parseLegacyGloveRegion(text) {
-    const title = this.findCaseTitle(text);
+  parseLegacyGloveRegion(text2) {
+    const title = this.findCaseTitle(text2);
     if (!title) return null;
-    const rest = text.slice(title.end);
+    const rest = text2.slice(title.end);
     const lineRe = /.*(?:\n|$)/g;
     let m, offset = title.end;
-    let gloveStart = -1, gloveEnd = -1, mdStart = -1, mdEnd = -1, mdRaw = "", regionEnd = text.length;
+    let gloveStart = -1, gloveEnd = -1, mdStart = -1, mdEnd = -1, mdRaw = "", regionEnd = text2.length;
     let seenGloves = false;
     while (m = lineRe.exec(rest)) {
       const raw = m[0];
@@ -11759,48 +12638,48 @@ ${t.body.trim()}
     if (!seenGloves || mdStart < 0) return null;
     return { title, mdRaw, gloveStart, gloveEnd, mdStart, mdEnd, regionEnd, tipsStart: regionEnd };
   }
-  removeLegacyMdGlovePreamble(text, legacy = null) {
-    legacy = legacy || this.parseLegacyGloveRegion(text);
-    if (!legacy) return text;
+  removeLegacyMdGlovePreamble(text2, legacy = null) {
+    legacy = legacy || this.parseLegacyGloveRegion(text2);
+    if (!legacy) return text2;
     const removals = [[legacy.gloveStart, legacy.gloveEnd], [legacy.mdStart, legacy.mdEnd]].sort((a, b) => b[0] - a[0]);
-    let out = String(text);
+    let out = String(text2);
     for (const [a, b] of removals) out = out.slice(0, a) + out.slice(b);
     return out.replace(/\n{4,}/g, "\n\n\n");
   }
-  caseTextWithHeaderAnchor(file, text) {
-    if (!(file instanceof TFile)) return String(text || "");
-    text = String(text || "");
-    if (text.includes("```" + CASE_HEADER_LANG)) return text;
-    let title = this.findCaseTitle(text);
+  caseTextWithHeaderAnchor(file, text2) {
+    if (!(file instanceof TFile)) return String(text2 || "");
+    text2 = String(text2 || "");
+    if (text2.includes("```" + CASE_HEADER_LANG)) return text2;
+    let title = this.findCaseTitle(text2);
     if (!title) {
-      const fm = frontmatterBlock(text);
+      const fm = frontmatterBlock(text2);
       const at = fm?.end || 0;
-      const prefix = text.slice(0, at);
-      const suffix = text.slice(at).replace(/^\s+/, "");
-      text = `${prefix}${prefix && !prefix.endsWith("\n") ? "\n" : ""}# ${file.basename}
+      const prefix = text2.slice(0, at);
+      const suffix = text2.slice(at).replace(/^\s+/, "");
+      text2 = `${prefix}${prefix && !prefix.endsWith("\n") ? "\n" : ""}# ${file.basename}
 
 ${CASE_HEADER_BLOCK}
 
 ${suffix}`;
     } else {
-      text = `${text.slice(0, title.end).replace(/\s*$/, "")}
+      text2 = `${text2.slice(0, title.end).replace(/\s*$/, "")}
 
 ${CASE_HEADER_BLOCK}
 
-${text.slice(title.end).replace(/^\s+/, "")}`;
+${text2.slice(title.end).replace(/^\s+/, "")}`;
     }
-    return text;
+    return text2;
   }
   async ensureCaseHeaderAnchor(file) {
     if (!(file instanceof TFile)) return false;
     const path = normalizePath(file.path);
     const original = await this.app.vault.read(file);
-    const text = this.caseTextWithHeaderAnchor(file, original);
-    if (text === original) return false;
+    const text2 = this.caseTextWithHeaderAnchor(file, original);
+    if (text2 === original) return false;
     await this.replaceFileTextExpected(
       file,
       original,
-      text,
+      text2,
       `Live-header insertion stopped because ${path} changed in another window or device. It may also have moved or been replaced.`,
       path
     );
@@ -12049,11 +12928,11 @@ Diagnostic persistence also failed: ${diagnosticError?.stack || diagnosticError}
     const affected = /* @__PURE__ */ new Map();
     const invalidGlovePaths = [];
     for (const file of cases) {
-      const text = await this.app.vault.read(file);
-      const legacy = this.parseLegacyGloveRegion(text);
-      const headerCount = (text.match(/```cst-surgeon-header\s*\n?```/g) || []).length;
+      const text2 = await this.app.vault.read(file);
+      const legacy = this.parseLegacyGloveRegion(text2);
+      const headerCount = (text2.match(/```cst-surgeon-header\s*\n?```/g) || []).length;
       const hasAnchor = headerCount === 1;
-      const fm = parseFrontmatterObject(text);
+      const fm = parseFrontmatterObject(text2);
       const c = this.caseContext(file);
       if (!c) continue;
       let canonical = null;
@@ -12064,7 +12943,7 @@ Diagnostic persistence also failed: ${diagnosticError?.stack || diagnosticError}
           invalidGlovePaths.push(file.path);
         }
       }
-      casePlans.push({ file, path: file.path, text, legacy, hasAnchor, canonical, context: c, frontmatter: fm });
+      casePlans.push({ file, path: file.path, text: text2, legacy, hasAnchor, canonical, context: c, frontmatter: fm });
       if (legacy || !hasAnchor || fm.surgeon_profile) affected.set(file.path, file);
       if (canonical) {
         const key4 = `${c.specialty}\0${c.surgeon}`;
@@ -12281,9 +13160,9 @@ ${conflicts.length ? conflicts.map((x) => `- ${x}`).join("\n") : "None"}
     const invalidLegacyGlovePaths = [];
     for (const f of jsonFiles) affected.set(f.path, f);
     for (const f of cases) {
-      const text = await this.app.vault.read(f);
-      const headerCount = (text.match(/```cst-surgeon-header\s*\n?```/g) || []).length;
-      const legacy = this.parseLegacyGloveRegion(text);
+      const text2 = await this.app.vault.read(f);
+      const headerCount = (text2.match(/```cst-surgeon-header\s*\n?```/g) || []).length;
+      const legacy = this.parseLegacyGloveRegion(text2);
       let legacyGloves = "";
       if (legacy) {
         try {
@@ -12292,10 +13171,10 @@ ${conflicts.length ? conflicts.map((x) => `- ${x}`).join("\n") : "None"}
           invalidLegacyGlovePaths.push(f.path);
         }
       }
-      const fm = parseFrontmatterObject(text);
+      const fm = parseFrontmatterObject(text2);
       const context = this.caseContext(f);
       const needsRepair = !!context && (headerCount !== 1 || !!legacy || !!fm.surgeon_profile || !!fm.gloves || !!fm.gown || fm.cst_type !== "case" || !fm.cst_id || fm.specialty !== context.specialty || fm.surgeon !== context.surgeon || !fm.surgeon_id || !fm.created || !fm.last_verified || Number(fm.schema_version || 0) < SCHEMA_VERSION);
-      if (context && needsRepair) casePlans.push({ file: f, path: f.path, original: text, frontmatter: fm, context, legacy, legacyGloves, headerCount });
+      if (context && needsRepair) casePlans.push({ file: f, path: f.path, original: text2, frontmatter: fm, context, legacy, legacyGloves, headerCount });
       if (needsRepair) affected.set(f.path, f);
     }
     if (invalidLegacyGlovePaths.length) {
@@ -12359,33 +13238,33 @@ ${conflicts.length ? conflicts.map((x) => `- ${x}`).join("\n") : "None"}
         const registry = await this.getRegistrySurgeon(context.specialty, context.surgeon, { create: false });
         const surgeonRecord = this.adminRegistryRecord(registry.data, context.specialty, context.surgeon);
         if (!surgeonRecord) throw new Error(`v0.1.2 migration cannot route ${file.path} without a surgeon registry record.`);
-        let text = plan.original;
+        let text2 = plan.original;
         if (plan.legacy) {
-          text = this.removeLegacyMdGlovePreamble(text, plan.legacy);
+          text2 = this.removeLegacyMdGlovePreamble(text2, plan.legacy);
           removedLegacy++;
         }
-        text = text.replace(/\n?```cst-surgeon-header\s*\n?```\n?/g, "\n");
-        const title = this.findCaseTitle(text);
+        text2 = text2.replace(/\n?```cst-surgeon-header\s*\n?```\n?/g, "\n");
+        const title = this.findCaseTitle(text2);
         if (title) {
-          text = `${text.slice(0, title.end).replace(/\s*$/, "")}
+          text2 = `${text2.slice(0, title.end).replace(/\s*$/, "")}
 
 ${CASE_HEADER_BLOCK}
 
-${text.slice(title.end).replace(/^\s+/, "")}`;
+${text2.slice(title.end).replace(/^\s+/, "")}`;
         } else {
-          const fmBlock = frontmatterBlock(text);
+          const fmBlock = frontmatterBlock(text2);
           const at = fmBlock?.end || 0;
-          text = `${text.slice(0, at)}# ${file.basename}
+          text2 = `${text2.slice(0, at)}# ${file.basename}
 
 ${CASE_HEADER_BLOCK}
 
-${text.slice(at).replace(/^\s+/, "")}`;
+${text2.slice(at).replace(/^\s+/, "")}`;
         }
-        if (text !== plan.original) repairedHeaders++;
+        if (text2 !== plan.original) repairedHeaders++;
         const graphNode = this.surgeonGraphPath(context.specialty, context.surgeon).replace(/\.md$/, "");
         const created = frontmatter.created || new Date(file.stat?.ctime || file.stat?.mtime || Date.now()).toISOString();
         const lastVerified = frontmatter.last_verified || verificationISO(file.stat?.mtime || Date.now());
-        const next = setFrontmatterScalars(text, {
+        const next = setFrontmatterScalars(text2, {
           cst_type: "case",
           cst_id: frontmatter.cst_id || id("case"),
           specialty: context.specialty,
@@ -12726,9 +13605,9 @@ Surgeon glove/gown data now uses the Markdown registry at \`${this.surgeonRegist
     const malformed = [];
     for (const file of files || []) {
       if (!(file instanceof TFile)) continue;
-      const text = await this.app.vault.read(file);
-      const exact = (text.match(/```cst-surgeon-header\s*\n?```/g) || []).length;
-      const starts = (text.match(/```cst-surgeon-header\b/g) || []).length;
+      const text2 = await this.app.vault.read(file);
+      const exact = (text2.match(/```cst-surgeon-header\s*\n?```/g) || []).length;
+      const starts = (text2.match(/```cst-surgeon-header\b/g) || []).length;
       if (exact !== starts) malformed.push(file.path);
     }
     if (malformed.length) {
@@ -12741,11 +13620,11 @@ Surgeon glove/gown data now uses the Markdown registry at \`${this.surgeonRegist
   async scanLiveHeaders() {
     const details = [];
     for (const file of this.allCaseFiles()) {
-      const text = await this.app.vault.read(file);
-      const exact = (text.match(/```cst-surgeon-header\s*\n?```/g) || []).length;
-      const anyStart = (text.match(/```cst-surgeon-header\b/g) || []).length;
-      const legacy = this.parseLegacyGloveRegion(text);
-      const title = this.findCaseTitle(text);
+      const text2 = await this.app.vault.read(file);
+      const exact = (text2.match(/```cst-surgeon-header\s*\n?```/g) || []).length;
+      const anyStart = (text2.match(/```cst-surgeon-header\b/g) || []).length;
+      const legacy = this.parseLegacyGloveRegion(text2);
+      const title = this.findCaseTitle(text2);
       const needs = exact !== 1 || anyStart !== 1 || !!legacy || !title;
       if (needs) details.push({ file, exact, anyStart, legacy: !!legacy, hasTitle: !!title });
     }
@@ -13037,10 +13916,10 @@ ${next.slice(at).replace(/^\s+/, "")}`;
     });
   }
   async snapshotFiles(label, files) {
-    const stamp = moment().format("YYYYMMDD-HHmmss-SSS");
+    const stamp2 = moment().format("YYYYMMDD-HHmmss-SSS");
     const readable = (safeFileName(label) || "snapshot").slice(0, 24);
     const labelHash = shortHash(String(label || "snapshot")).replace(/[^A-Za-z0-9]/g, "").slice(0, 10);
-    const base = this.p(`Admin/Backups/${stamp}-${readable}-${labelHash}`);
+    const base = this.p(`Admin/Backups/${stamp2}-${readable}-${labelHash}`);
     const sourceFiles = [...new Map((files || []).filter((file) => file instanceof TFile).map((file) => {
       const originalPath = normalizePath(file.path);
       return [originalPath, {
@@ -13162,7 +14041,7 @@ ${JSON.stringify(manifest, null, 2)}
 `;
     await this.appendFileTextAtPath(file, path, line, "Audit log moved or was replaced before it could be updated.");
   }
-  async addPendingReview(text) {
+  async addPendingReview(text2) {
     const path = this.p("Admin/Data/Pending Review.md");
     let file = this.app.vault.getAbstractFileByPath(path);
     if (!(file instanceof TFile)) file = await this.ensureTextFile(path, "# Pending CST Reviews\n\n");
@@ -13171,15 +14050,15 @@ ${JSON.stringify(manifest, null, 2)}
       path,
       `## ${nowISO()}
 
-${text}
+${text2}
 
 `,
       "Pending Review log moved or was replaced before it could be updated."
     );
   }
   async createDiagnostic(action, error, extra = {}) {
-    const stamp = moment().format("YYYYMMDD-HHmmss");
-    const diagnosticId = `CST-${stamp}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+    const stamp2 = moment().format("YYYYMMDD-HHmmss");
+    const diagnosticId = `CST-${stamp2}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
     const err = error instanceof Error ? error : new Error(String(error || "Unknown CST error"));
     let health = null;
     try {
@@ -13214,7 +14093,7 @@ ${text}
     if (migrationReadErrors.length) {
       findings.push(`Migration-state collection was unavailable: ${migrationReadErrors.join(" | ")}`);
     }
-    const text = [
+    const text2 = [
       "CST Notes diagnostic request",
       "",
       "Please diagnose this CST Notes plugin failure and give me the safest fix. Do not assume the case bodies should be manually edited unless the diagnostic requires it.",
@@ -13270,7 +14149,7 @@ ${text}
 ## ChatGPT diagnostic
 
 \`\`\`text
-${text.replace(/\`\`\`/g, "~~~")}
+${text2.replace(/\`\`\`/g, "~~~")}
 \`\`\`
 `;
       await this.ensureTextFile(path, report);
@@ -13282,7 +14161,7 @@ ${text.replace(/\`\`\`/g, "~~~")}
     } catch (logError) {
       console.error("CST could not persist diagnostic log", logError);
     }
-    return { id: diagnosticId, path: savedPath, text, summary: err.message || String(err) };
+    return { id: diagnosticId, path: savedPath, text: text2, summary: err.message || String(err) };
   }
   async runAdminAction(action, fn, extra = {}) {
     try {
@@ -13680,9 +14559,9 @@ Diagnostic persistence also failed: ${diagnosticError?.stack || diagnosticError}
     remove.onclick = () => this.navigateFromUI("Delete case", async () => {
       if (!confirmation) {
         const path = file.path;
-        const text = await this.app.vault.read(file);
+        const text2 = await this.app.vault.read(file);
         this.assertVaultFilePath(file, path, "Case moved before confirmation.");
-        confirmation = { file, path, text, until: Date.now() + 1e4 };
+        confirmation = { file, path, text: text2, until: Date.now() + 1e4 };
         remove.textContent = "Are you sure?";
         remove.setAttribute?.("data-confirming", "true");
         return;
@@ -14001,9 +14880,9 @@ Diagnostic persistence also failed: ${diagnosticError?.stack || diagnosticError}
         if (el.dataset.cstSpecialty === specialty && el.dataset.cstSurgeon === surgeon) {
           const row = el.querySelector(".cst-live-header-row");
           if (row) row.textContent = `${surgeon} · ${gloves} · ${gown}`;
-          const syncLine = (selector, text, className) => {
+          const syncLine = (selector, text2, className) => {
             let line = el.querySelector(selector);
-            if (!text) {
+            if (!text2) {
               line?.remove();
               return;
             }
@@ -14012,7 +14891,7 @@ Diagnostic persistence also failed: ${diagnosticError?.stack || diagnosticError}
               line.className = className;
               el.insertBefore(line, el.querySelector(".cst-actions"));
             }
-            line.textContent = text;
+            line.textContent = text2;
           };
           syncLine(".cst-live-header-glove-key", legend, "cst-live-header-meta cst-live-header-glove-key");
           syncLine(".cst-live-header-music", music ? `Music: ${music}` : "", "cst-live-header-meta cst-live-header-music");
@@ -14686,12 +15565,12 @@ Diagnostic persistence also failed: ${diagnosticError?.stack || diagnosticError}
   }
   async captureAdminCasePreimages(files) {
     return await Promise.all((files || []).map(async (file) => {
-      const text = await this.app.vault.read(file);
-      const missing = ["cst_id", "created", "last_verified"].filter((key4) => !frontmatterTopLevelScalar(text, key4));
+      const text2 = await this.app.vault.read(file);
+      const missing = ["cst_id", "created", "last_verified"].filter((key4) => !frontmatterTopLevelScalar(text2, key4));
       if (missing.length) {
         throw new Error(`Admin stopped because ${file.path} is missing persistent metadata (${missing.join(", ")}). Run Initialize / Repair before moving surgeon cases.`);
       }
-      return { name: file.name, oldPath: file.path, text };
+      return { name: file.name, oldPath: file.path, text: text2 };
     }));
   }
   async routeAdminCases(preimages, folderPath, changedTexts, surgeonData = null) {
@@ -15160,12 +16039,12 @@ Diagnostic persistence also failed: ${diagnosticError?.stack || diagnosticError}
     if (/\b(thoracic|t(?:[1-9]|1[0-2])(?:\s*[-/]\s*t?(?:[1-9]|1[0-2]))?)\b/i.test(name)) hit.push("Thoracic");
     return [...new Set(hit)].length === 1 ? [...new Set(hit)][0] : "";
   }
-  parseCaseSections(text) {
-    const legacy = this.parseLegacyGloveRegion(text);
-    if (legacy) text = this.removeLegacyMdGlovePreamble(text, legacy);
-    const title = this.findCaseTitle(text);
+  parseCaseSections(text2) {
+    const legacy = this.parseLegacyGloveRegion(text2);
+    if (legacy) text2 = this.removeLegacyMdGlovePreamble(text2, legacy);
+    const title = this.findCaseTitle(text2);
     if (!title) return { title: "", sections: /* @__PURE__ */ new Map(), unknown: [] };
-    let body = text.slice(title.end);
+    let body = text2.slice(title.end);
     body = body.replace(/```cst-surgeon-header\s*\n?```/g, "");
     const heads = [];
     const re = /^(#{1,6})\s+(.+?)\s*:?[ \t]*$/gm;
@@ -15243,13 +16122,13 @@ ${content}`.trim());
     }
     return { safe, ambiguous, current };
   }
-  stripFrontmatter(text) {
-    const value = String(text || "");
+  stripFrontmatter(text2) {
+    const value = String(text2 || "");
     const front = frontmatterBlock(value);
     return front ? value.slice(front.end) : value;
   }
-  normalizeComparable(text) {
-    return String(text || "").toLowerCase().replace(/```[\s\S]*?```/g, (m) => m.toLowerCase()).replace(/\s+/g, " ").replace(/[“”]/g, '"').replace(/[‘’]/g, "'").trim();
+  normalizeComparable(text2) {
+    return String(text2 || "").toLowerCase().replace(/```[\s\S]*?```/g, (m) => m.toLowerCase()).replace(/\s+/g, " ").replace(/[“”]/g, '"').replace(/[‘’]/g, "'").trim();
   }
   migrationTemplateHeadings(templateBody) {
     const out = [];
@@ -15318,8 +16197,8 @@ ${content}`.trim());
 
 ` : "";
   }
-  parseLegacyMigrationBlocks(text, templateBody = "") {
-    let body = this.stripFrontmatter(text);
+  parseLegacyMigrationBlocks(text2, templateBody = "") {
+    let body = this.stripFrontmatter(text2);
     const legacyGloves = this.parseLegacyGloveRegion(body);
     if (legacyGloves) body = this.removeLegacyMdGlovePreamble(body, legacyGloves);
     body = body.replace(/```cst-surgeon-header\s*\n?[\s\S]*?```/g, "");
@@ -15401,8 +16280,8 @@ ${CASE_HEADER_BLOCK}
 ${String(templateBody || "").trim()}
 `;
   }
-  normalizeMigrationDestinationHeader(text, fallbackTitle) {
-    let body = String(text || "");
+  normalizeMigrationDestinationHeader(text2, fallbackTitle) {
+    let body = String(text2 || "");
     body = body.replace(/\n?```cst-surgeon-header\b[\s\S]*?```\n?/g, "\n");
     let title = this.findCaseTitle(body);
     if (!title) {
@@ -15418,34 +16297,34 @@ ${CASE_HEADER_BLOCK}
 
 ${body.slice(title.end).replace(/^\s+/, "")}`.replace(/\n{4,}/g, "\n\n\n");
   }
-  migrationSectionContent(text, heading) {
-    text = String(text || "");
+  migrationSectionContent(text2, heading) {
+    text2 = String(text2 || "");
     const escaped = String(heading).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const re = new RegExp(`^(#{2,6})\\s+${escaped}\\s*$`, "mi");
-    const m = re.exec(text);
+    const m = re.exec(text2);
     if (!m) return "";
     const level = m[1].length;
     const startAt = m.index + m[0].length;
-    const rest = text.slice(startAt);
+    const rest = text2.slice(startAt);
     const headRe = /^(#{1,6})\s+.+$/gm;
-    let hm, endAt = text.length;
+    let hm, endAt = text2.length;
     while (hm = headRe.exec(rest)) {
       if (hm[1].length <= level) {
         endAt = startAt + hm.index;
         break;
       }
     }
-    return text.slice(startAt, endAt).trim();
+    return text2.slice(startAt, endAt).trim();
   }
-  insertMigrationSection(text, heading, content) {
-    text = String(text || "");
+  insertMigrationSection(text2, heading, content) {
+    text2 = String(text2 || "");
     const body = String(content || "").replace(/^\s*\n/, "").replace(/\s*$/, "");
-    if (!body) return text;
+    if (!body) return text2;
     const escaped = String(heading).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const re = new RegExp(`^(#{2,6})\\s+${escaped}\\s*$`, "mi");
-    const m = re.exec(text);
+    const m = re.exec(text2);
     if (!m) {
-      return `${text.replace(/\s*$/, "")}
+      return `${text2.replace(/\s*$/, "")}
 
 ## ${heading}
 
@@ -15454,24 +16333,24 @@ ${body}
     }
     const level = m[1].length;
     const startAt = m.index + m[0].length;
-    const rest = text.slice(startAt);
+    const rest = text2.slice(startAt);
     const headRe = /^(#{1,6})\s+.+$/gm;
-    let hm, endAt = text.length;
+    let hm, endAt = text2.length;
     while (hm = headRe.exec(rest)) {
       if (hm[1].length <= level) {
         endAt = startAt + hm.index;
         break;
       }
     }
-    const existing = text.slice(startAt, endAt).trim();
+    const existing = text2.slice(startAt, endAt).trim();
     const merged = existing ? `${existing}
 
 ${body}` : body;
-    return `${text.slice(0, startAt)}
+    return `${text2.slice(0, startAt)}
 
 ${merged}
 
-${text.slice(endAt).replace(/^\s+/, "")}`;
+${text2.slice(endAt).replace(/^\s+/, "")}`;
   }
   moveMigrationBlock(destination, block, target) {
     const heading = target || block?.suggested || "Notes";
@@ -15597,9 +16476,9 @@ ${JSON.stringify(state, null, 2)}
       enumerable: false
     });
   }
-  parseMigrationSessionText(text) {
+  parseMigrationSessionText(text2) {
     const re = new RegExp("```" + MIGRATION_STATE_LANG + "\\s*\\r?\\n([\\s\\S]*?)\\r?\\n```", "m");
-    const match = re.exec(String(text || ""));
+    const match = re.exec(String(text2 || ""));
     if (!match) throw new Error("the legacy migration session block is missing or incomplete.");
     try {
       const state = JSON.parse(match[1]);
@@ -15650,10 +16529,10 @@ ${JSON.stringify(state, null, 2)}
       let file = this.app.vault.getAbstractFileByPath(path);
       if (!(file instanceof TFile)) {
         reconciled.revision = 1;
-        const text = this.migrationSessionText(reconciled);
+        const text2 = this.migrationSessionText(reconciled);
         this.markInternalCreate(path);
         try {
-          file = await this.app.vault.create(path, text);
+          file = await this.app.vault.create(path, text2);
         } catch (error) {
           this.ignoreCreateUntil.delete(normalizePath(path));
           const raced = this.app.vault.getAbstractFileByPath(path);
@@ -16517,37 +17396,37 @@ created: ${yamlString(nowISO())}
     }
     return file;
   }
-  extractSection(text, heading) {
+  extractSection(text2, heading) {
     const escaped = heading.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const re = new RegExp(`^##\\s+${escaped}\\s*$`, "mi");
-    const m = re.exec(text);
+    const m = re.exec(text2);
     if (!m) return "";
     const start = m.index + m[0].length;
-    const rest = text.slice(start);
+    const rest = text2.slice(start);
     const next = /^##\s+/m.exec(rest);
     return (next ? rest.slice(0, next.index) : rest).trim();
   }
   insertSection(editor, heading, content) {
-    let text = editor.getValue();
+    let text2 = editor.getValue();
     const escaped = heading.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const re = new RegExp(`^##\\s+${escaped}\\s*$`, "mi");
-    const m = re.exec(text);
+    const m = re.exec(text2);
     if (!m) {
-      text = text.replace(/\s*$/, "") + `
+      text2 = text2.replace(/\s*$/, "") + `
 
 ## ${heading}
 
 ${content.trim()}
 `;
-      editor.setValue(text);
+      editor.setValue(text2);
       return;
     }
     const start = m.index + m[0].length;
-    const rest = text.slice(start);
+    const rest = text2.slice(start);
     const next = /^##\s+/m.exec(rest);
-    const end = next ? start + next.index : text.length;
-    const before = text.slice(0, end).replace(/\s*$/, "");
-    const after = text.slice(end).replace(/^\s*/, "");
+    const end = next ? start + next.index : text2.length;
+    const before = text2.slice(0, end).replace(/\s*$/, "");
+    const after = text2.slice(end).replace(/^\s*/, "");
     editor.setValue(`${before}
 
 ${content.trim()}
@@ -16707,8 +17586,8 @@ var CSTSidebarView = class extends ItemView {
     this.contentEl.empty();
     this.shellReady = false;
   }
-  makeAction(parent4, text, fn, primary = false) {
-    const b = parent4.createEl("button", { text });
+  makeAction(parent4, text2, fn, primary = false) {
+    const b = parent4.createEl("button", { text: text2 });
     if (primary) b.addClass("mod-cta");
     b.onclick = fn;
     return b;
@@ -17659,8 +18538,8 @@ var ImportSectionModal = class extends Modal {
         if (!f) return;
         const source = await this.plugin.caseIdentityStatus(f);
         if (!source?.usable) throw new Error("The source case changed or moved during preview. Review it after Sync.");
-        const text = await this.plugin.app.vault.read(f);
-        const body = this.plugin.extractSection(text, sec.value);
+        const text2 = await this.plugin.app.vault.read(f);
+        const body = this.plugin.extractSection(text2, sec.value);
         if (!body) {
           new Notice(`No content found under "${sec.value}" in source case.`);
           return;
@@ -17983,9 +18862,9 @@ var LegacyTemplateMigrationModal = class extends Modal {
   }
   setDraftStatus(state, message = "") {
     this.draftState = state;
-    const text = message || this.draftStatusMessage(state);
+    const text2 = message || this.draftStatusMessage(state);
     if (!this.draftStatus?.isConnected) return;
-    this.draftStatus.setText(text);
+    this.draftStatus.setText(text2);
     this.draftStatus.setAttribute("data-state", state);
     this.draftStatus.setAttribute("aria-live", state === "error" ? "assertive" : "polite");
   }

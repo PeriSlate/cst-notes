@@ -17,7 +17,7 @@ PeriSlate authorizes the Obsidian Community directory to access the private sour
 
 ## Release asset verification
 
-The private source repository includes a pinned deterministic JavaScript bundler and release verification checks. A clean build of the private 0.1.18 source produced the exact public `main.js`. Source files themselves are not individual release assets.
+The private source repository includes a pinned deterministic JavaScript bundler and release verification checks. A clean build of the private 0.1.19 source reproduced the distribution `main.js`.
 
 Version 0.1.12 uses the normal version-tagged release workflow. Earlier 0.1.11 silent assets have commit-bound attestations rather than matching the original unchanged tag. The retained onboarding correction is reproducible from its recorded source revision and attested public commit `479acf3b781e3168ae7a312f9e79ea3f89f8f3f6`; the glove/input correction is included in 0.1.12. Historical tags are not rewritten.
 
@@ -38,7 +38,7 @@ Local resource collection reads eligible CST case notes and stores provenance an
 
 Copy diagnostic and Copy package buttons write reviewed text to the system clipboard only after a user clicks them. Import from clipboard reads text only after its button is clicked, validates the portable package, and requires destination/profile review before import. Save package creates a self-contained .cst.json file; clipboard transport carries the same package as text, not a native file attachment. File import and manual paste are available if clipboard access is unavailable. Review diagnostic output before sharing it.
 
-Library export in 0.1.18 reads the active CST Notes library, configured image folders, and explicitly referenced supported assets within the vault. It runs locally after the user reviews the scope and confirms permission. Preparation writes an export identity record for repeatable snapshots. The user chooses whether to save or share the unencrypted package. Any external transfer is handled by the selected host save or share destination.
+Library export reads the active CST Notes library, configured image folders, and referenced supported assets within the vault. To resolve short image links, it checks vault filename metadata for matching names before reading a referenced image. Preparation runs locally after review and writes an export identity record for repeatable snapshots. If the user continues with image omissions, CST Notes writes a recovery note in Backend and records the omissions in the package. Resource index recovery runs only after confirmation and archives the damaged bytes before restoring or rebuilding the index. The selected host save or share destination handles any transfer of the unencrypted package.
 
 Supported Obsidian-owned settings configure CST Notes mobile shortcuts, the editing toolbar, and community-plugin update checks once per device/policy revision. Capability checks and readback retain fallback Home navigation when shortcuts cannot be verified. Later user setting changes are respected; no automatic plugin installation or update is performed.
 

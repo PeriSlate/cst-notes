@@ -32,9 +32,11 @@ GitHub releases attach these files:
 
 `versions.json` is tracked in the repository for version compatibility metadata. This repository intentionally does not contain user vault data, local settings, source code, or build tooling.
 
-## New in 0.1.18
+## Library export
 
 **Admin → Export / Data Portability** prepares a single offline `.cstpack` for PeriSlate Cards. It includes original notes, surgeon profiles, templates, references, and supported images. Review the scope and warnings before preparing the package. Packages are unencrypted and can contain sensitive information. See the [release notes](RELEASE-NOTES.md) and [CSTPACK format specification](docs/CSTPACK-1.md).
+
+Use **Review resource recovery** if a damaged resource index blocks export. When an image is unavailable, **Create recovery note and continue export** lists the affected cases in a note and records the omissions in the package.
 
 ## Support
 
